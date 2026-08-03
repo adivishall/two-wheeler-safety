@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Traffic Fine Checker</title>
+
+    <style>
+
+        body {
+            font-family: Arial;
+            background: linear-gradient(to right, #1e3c72, #2a5298);
+            color: white;
+            text-align: center;
+            padding: 30px;
+        }
+
+        input {
+            padding: 12px;
+            width: 250px;
+            border-radius: 8px;
+            border: none;
+        }
+
+        button {
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            background: #00c6ff;
+        }
+
+        .card {
+            background: white;
+            color: black;
+            margin: 20px auto;
+            width: 90%;
+            max-width: 1000px;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #2a5298;
+            color: white;
+            padding: 10px;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        img {
+            width: 150px;
+            border-radius: 10px;
+            border: 2px solid #ccc;
+        }
+
+        .total {
+            font-size: 24px;
+            color: red;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <h1>🚦 Traffic Fine Checker</h1>
+
+    <input
+        type="text"
+        id="plate"
+        placeholder="Enter Plate Number">
+
+    <button onclick="search()">
+        Check
+    </button>
+
+    <div id="result"></div>
+
+    <script>
+
+        async function search() {
+
+            let plate =
+                document.getElementById("plate").value;
+
+            let response =
+                await fetch(
+                    `http://127.0.0.1:5000/get_fines/${plate}`
+                );
+
+            let data =
+                await response.json();
+
+            let html =
+                `<div class="card">`;
+
+            if (data.fines.length === 0) {
+
+                html += `
+                    <h2>No Fines Found ✅</h2>
+                `;
+
+            } else {
+
+                html += `
+                <h2>Violation Records</h2>
+
+                <table>
+
+                    <tr>
+                        <th>Violation</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Time</th>
+                        <th>Evidence</th>
+                    </tr>
+                `;
+
+                data.fines.forEach(f => {
+
+                    html += `
+                    <tr>
+
+                        <td>${f.violation}</td>
+
+                        <td>₹${f.amount}</td>
+
+                        <td>${f.status}</td>
+
+                        <td>${f.time}</td>
+
+                        <td>
+
+                            <img
+                                src="http://127.0.0.1:5000${f.image}"
+                            >
+
+                        </td>
+
+                    </tr>
+                    `;
+                });
+
+                html += `
+                </table>
+
+                <div class="total">
+                    Total Due: ₹${data.total}
+                </div>
+                `;
+            }
+
+            html += `</div>`;
+
+            document.getElementById(
+                "result"
+            ).innerHTML = html;
+        }
+
+    </script>
+
+</body>
+</html>

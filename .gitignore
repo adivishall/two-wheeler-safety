@@ -1,0 +1,36 @@
+# ===== macOS =====
+.DS_Store
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ===== Large datasets (regenerate / download separately) =====
+master_traffic_violation_dataset/
+data/test/
+data/train/
+data/val/
+
+# ===== Model weights (download pretrained / re-train) =====
+yolov8n.pt
+*.pt
+
+# ===== Training outputs =====
+runs/
+
+# ===== Big archives =====
+*.zip
+
+# ===== Runtime-generated data =====
+traffic.db
+evidence/
+output/
+
+# ===== Env / secrets =====
+.env
+*.log
