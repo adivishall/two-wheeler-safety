@@ -1,21 +1,68 @@
+import os
 import cv2
-import time
-import pandas as pd
+import requests
 from ultralytics import YOLO
 from modules.plate_ocr import read_plate
 from modules.speed import SpeedEstimator
+from utils.tracker import CentroidTracker
 
-# Load YOLO model
+# =====================================
+# SETTINGS
+# =====================================
+
+API_URL = "http://127.0.0.1:5000/detect"
+SPEED_LIMIT_KMH = 40
+
+os.makedirs("evidence", exist_ok=True)
+
+# =====================================
+# LOAD MODEL + TRACKING
+# =====================================
+
 model = YOLO("yolov8n.pt")
 
-# Initialize speed estimator
+tracker = CentroidTracker()
 speed_estimator = SpeedEstimator()
 
-# Open video
-cap = cv2.VideoCapture("test_video.mp4")
+# (track_id, violation) pairs already reported this run, so the same
+# bike isn't fined again on every single frame it stays in view.
+reported = set()
 
-# Log file
-log_file = "output/logs.csv"
+# =====================================
+# REPORT A VIOLATION
+# =====================================
+
+def report_violation(track_id, violation, plate, frame, box):
+    key = (track_id, violation)
+
+    if key in reported or not plate:
+        return
+
+    reported.add(key)
+
+    x1, y1, x2, y2 = box
+    evidence_file = f"evidence/{plate}_{violation}.jpg"
+    cv2.imwrite(evidence_file, frame[y1:y2, x1:x2])
+
+    try:
+        response = requests.post(
+            API_URL,
+            json={
+                "plate": plate,
+                "violation": violation,
+                "image_path": evidence_file
+            }
+        )
+        print("Sent:", violation, "for", plate, "-", response.text)
+
+    except requests.exceptions.ConnectionError:
+        print(f"Could not reach {API_URL} — is app.py running?")
+
+# =====================================
+# MAIN LOOP
+# =====================================
+
+cap = cv2.VideoCapture("test_video.mp4")
 
 while True:
     ret, frame = cap.read()
@@ -26,7 +73,6 @@ while True:
 
     persons = []
     bikes = []
-    plates = []
 
     for box in results.boxes:
         cls = int(box.cls[0])
@@ -40,11 +86,14 @@ while True:
         # Draw boxes
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0,255,0), 2)
 
-    # ------------------------
-    # TRIPLE RIDING DETECTION
-    # ------------------------
-    for bike in bikes:
+    tracked_bikes = tracker.update(bikes)
+
+    for track_id, bike in tracked_bikes.items():
         bx1, by1, bx2, by2 = bike
+
+        # ------------------------
+        # TRIPLE RIDING DETECTION
+        # ------------------------
         rider_count = 0
 
         for person in persons:
@@ -54,31 +103,41 @@ while True:
             if px1 < bx2 and px2 > bx1 and py1 < by2 and py2 > by1:
                 rider_count += 1
 
-        if rider_count > 2:
+        is_triple_riding = rider_count > 2
+
+        if is_triple_riding:
             cv2.putText(frame, "Triple Riding!", (bx1, by1-10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
 
-    # ------------------------
-    # SPEED ESTIMATION
-    # ------------------------
-    speed = speed_estimator.calculate_speed(bikes)
+        # ------------------------
+        # SPEED ESTIMATION
+        # ------------------------
+        speed = speed_estimator.calculate_speed(track_id, bike)
+        is_overspeed = speed > SPEED_LIMIT_KMH
 
-    if speed > 40:
-        cv2.putText(frame, f"Speed: {speed} km/h", (50,50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+        if is_overspeed:
+            cv2.putText(frame, f"Speed: {speed} km/h", (bx1, by1-30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2)
 
-    # ------------------------
-    # PLATE OCR
-    # ------------------------
-    for bike in bikes:
-        x1, y1, x2, y2 = bike
-        crop = frame[y1:y2, x1:x2]
-
+        # ------------------------
+        # PLATE OCR
+        # ------------------------
+        crop = frame[by1:by2, bx1:bx2]
         plate_text = read_plate(crop)
 
         if plate_text:
-            cv2.putText(frame, plate_text, (x1, y2+20),
+            plate_text = "".join(ch for ch in plate_text if ch.isalnum()).upper()
+            cv2.putText(frame, plate_text, (bx1, by2+20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,0), 2)
+
+        # ------------------------
+        # REPORT VIOLATIONS (once per tracked bike)
+        # ------------------------
+        if is_triple_riding:
+            report_violation(track_id, "triple_riding", plate_text, frame, bike)
+
+        if is_overspeed:
+            report_violation(track_id, "overspeed", plate_text, frame, bike)
 
     cv2.imshow("Output", frame)
 

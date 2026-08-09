@@ -185,4 +185,7 @@ def all_fines():
 # =====================================
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Set FLASK_DEBUG=0 before any real deployment — the debugger
+    # allows arbitrary code execution if the server is exposed.
+    debug_mode = os.environ.get("FLASK_DEBUG", "1") != "0"
+    app.run(debug=debug_mode)

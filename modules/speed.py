@@ -1,30 +1,28 @@
 import time
 
 class SpeedEstimator:
-    def __init__(self):
-        self.prev_time = time.time()
-        self.prev_positions = []
+    """Frame-to-frame pixel displacement speed estimate, tracked per object
+    ID so multiple bikes don't get compared against each other's positions."""
 
-    def calculate_speed(self, bikes):
-        current_time = time.time()
+    def __init__(self, scale_factor=0.1):
+        self.scale_factor = scale_factor
+        self.prev = {}  # track_id -> (center_x, timestamp)
 
-        if not bikes:
-            return 0
+    def calculate_speed(self, track_id, box):
+        x1, y1, x2, y2 = box
+        center_x = (x1 + x2) // 2
+        now = time.time()
 
         speed = 0
 
-        for bike in bikes:
-            x1, y1, x2, y2 = bike
-            center = (x1 + x2) // 2
+        if track_id in self.prev:
+            prev_x, prev_time = self.prev[track_id]
+            time_diff = now - prev_time
 
-            if self.prev_positions:
-                distance = abs(center - self.prev_positions[0])
-                time_diff = current_time - self.prev_time
+            if time_diff > 0:
+                distance = abs(center_x - prev_x)
+                speed = int((distance / time_diff) * self.scale_factor)
 
-                if time_diff > 0:
-                    speed = int((distance / time_diff) * 0.1)  # scale factor
-
-        self.prev_positions = [center]
-        self.prev_time = current_time
+        self.prev[track_id] = (center_x, now)
 
         return speed
