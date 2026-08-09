@@ -95,7 +95,7 @@ if len(plate_text) > 0:
         r'[^A-Za-z0-9]',
         '',
         plate_number
-    )
+    ).upper()
 
     print(
         "Clean Plate:",
@@ -146,23 +146,29 @@ if plate_number and len(violations) > 0:
 
     for violation in violations:
 
-        response = requests.post(
-            API_URL,
-            json={
-                "plate": plate_number,
-                "violation": violation,
-                "image_path": evidence_file
-            }
-        )
+        try:
+            response = requests.post(
+                API_URL,
+                json={
+                    "plate": plate_number,
+                    "violation": violation,
+                    "image_path": evidence_file
+                }
+            )
 
-        print(
-            "Sent:",
-            violation
-        )
+            print(
+                "Sent:",
+                violation
+            )
 
-        print(
-            response.text
-        )
+            print(
+                response.text
+            )
+
+        except requests.exceptions.ConnectionError:
+            print(
+                f"Could not reach {API_URL} — is app.py running?"
+            )
 
 else:
 

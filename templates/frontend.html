@@ -93,11 +93,11 @@
         async function search() {
 
             let plate =
-                document.getElementById("plate").value;
+                document.getElementById("plate").value.trim();
 
             let response =
                 await fetch(
-                    `http://127.0.0.1:5000/get_fines/${plate}`
+                    `/get_fines/${encodeURIComponent(plate)}`
                 );
 
             let data =
@@ -144,7 +144,7 @@
                         <td>
 
                             <img
-                                src="http://127.0.0.1:5000${f.image}"
+                                src="${f.image}"
                             >
 
                         </td>

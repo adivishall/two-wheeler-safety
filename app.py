@@ -1,7 +1,10 @@
+import os
 from flask import Flask, request, jsonify, render_template, send_from_directory
 import sqlite3
 
 app = Flask(__name__)
+
+os.makedirs("evidence", exist_ok=True)
 
 # =====================================
 # DATABASE SETUP
@@ -44,8 +47,6 @@ def home():
 @app.route('/evidence/<path:filename>')
 def evidence(filename):
 
-    import os
-
     evidence_folder = os.path.join(
         app.root_path,
         "evidence"
@@ -63,9 +64,14 @@ def evidence(filename):
 @app.route("/detect", methods=["POST"])
 def detect():
 
-    data = request.json
+    data = request.get_json(silent=True) or {}
 
-    plate = data["plate"]
+    if not all(k in data for k in ("plate", "violation", "image_path")):
+        return jsonify({
+            "error": "plate, violation, and image_path are required"
+        }), 400
+
+    plate = data["plate"].strip().upper()
     violation = data["violation"]
     image_path = data["image_path"]
 
@@ -112,6 +118,8 @@ def detect():
 
 @app.route("/get_fines/<plate>")
 def get_fines(plate):
+
+    plate = plate.strip().upper()
 
     conn = sqlite3.connect("traffic.db")
     c = conn.cursor()

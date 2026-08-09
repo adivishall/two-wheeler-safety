@@ -50,8 +50,8 @@ while True:
         for person in persons:
             px1, py1, px2, py2 = person
 
-            # simple overlap check
-            if px1 < bx2 and px2 > bx1:
+            # bounding-box overlap check (both axes, not just x)
+            if px1 < bx2 and px2 > bx1 and py1 < by2 and py2 > by1:
                 rider_count += 1
 
         if rider_count > 2:
