@@ -1,5 +1,6 @@
 import re
 import os
+import time
 import cv2
 import requests
 import easyocr
@@ -14,6 +15,10 @@ IMAGE_PATH = "plate8.jpeg"
 MODEL_PATH = "runs/detect/traffic_model-2/weights/best.pt"
 
 API_URL = "http://127.0.0.1:5000/detect"
+
+# Must match DETECT_API_KEY on the server if it has one set; empty is
+# fine when the server has no key configured.
+API_KEY = os.environ.get("DETECT_API_KEY", "")
 
 # ---------------------------------
 # LOAD MODEL
@@ -124,8 +129,10 @@ if "TripleRiding" in detected_classes:
 
 if plate_number:
 
+    # timestamped so re-scanning the same plate later doesn't silently
+    # overwrite an earlier fine's evidence photo
     evidence_file = (
-        f"evidence/{plate_number}.jpg"
+        f"evidence/{plate_number}_{int(time.time())}.jpg"
     )
 
     cv2.imwrite(
@@ -153,7 +160,8 @@ if plate_number and len(violations) > 0:
                     "plate": plate_number,
                     "violation": violation,
                     "image_path": evidence_file
-                }
+                },
+                headers={"X-API-Key": API_KEY}
             )
 
             print(

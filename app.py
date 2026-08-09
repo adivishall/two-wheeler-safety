@@ -6,6 +6,11 @@ app = Flask(__name__)
 
 os.makedirs("evidence", exist_ok=True)
 
+# If set, /detect requires this value in the X-API-Key header — without
+# it, anyone who can reach the server can write arbitrary fines for any
+# plate. Unset by default so local dev/demo usage is unaffected.
+DETECT_API_KEY = os.environ.get("DETECT_API_KEY")
+
 # =====================================
 # DATABASE SETUP
 # =====================================
@@ -63,6 +68,9 @@ def evidence(filename):
 
 @app.route("/detect", methods=["POST"])
 def detect():
+
+    if DETECT_API_KEY and request.headers.get("X-API-Key") != DETECT_API_KEY:
+        return jsonify({"error": "invalid or missing API key"}), 401
 
     data = request.get_json(silent=True) or {}
 
@@ -172,13 +180,36 @@ def all_fines():
     conn = sqlite3.connect("traffic.db")
     c = conn.cursor()
 
-    c.execute("SELECT * FROM fines")
+    c.execute("""
+    SELECT
+        id,
+        plate,
+        violation,
+        amount,
+        image_path,
+        timestamp,
+        status
+    FROM fines
+    """)
 
     rows = c.fetchall()
 
     conn.close()
 
-    return jsonify(rows)
+    fines = [
+        {
+            "id": row[0],
+            "plate": row[1],
+            "violation": row[2],
+            "amount": row[3],
+            "image_path": row[4],
+            "timestamp": row[5],
+            "status": row[6]
+        }
+        for row in rows
+    ]
+
+    return jsonify(fines)
 
 # =====================================
 # RUN
