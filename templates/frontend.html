@@ -1,72 +1,344 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Traffic Fine Checker</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
 
+        :root {
+            --blue-1: #1e3c72;
+            --blue-2: #2a5298;
+            --accent: #00c6ff;
+            --danger: #e63946;
+            --success: #1e8e3e;
+            --radius: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial;
-            background: linear-gradient(to right, #1e3c72, #2a5298);
+            margin: 0;
+            font-family: 'Poppins', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--blue-1), var(--blue-2));
+            background-attachment: fixed;
             color: white;
+            min-height: 100vh;
+            padding: 40px 20px 60px;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .hero {
             text-align: center;
-            padding: 30px;
+            max-width: 640px;
+            margin: 0 auto 30px;
         }
 
-        input {
-            padding: 12px;
-            width: 250px;
-            border-radius: 8px;
+        .hero h1 {
+            font-size: clamp(28px, 5vw, 40px);
+            margin: 0 0 8px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .hero .badge {
+            display: inline-block;
+            font-size: 44px;
+            animation: wobble 2.4s ease-in-out infinite;
+        }
+
+        .hero p {
+            margin: 0;
+            opacity: 0.85;
+            font-size: 15px;
+        }
+
+        @keyframes wobble {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-8deg); }
+            75% { transform: rotate(8deg); }
+        }
+
+        .search-card {
+            max-width: 480px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.18);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius);
+            padding: 20px;
+            display: flex;
+            gap: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .search-card.shake {
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+
+        .search-card input {
+            flex: 1;
+            min-width: 0;
+            padding: 14px 16px;
+            border-radius: 12px;
             border: none;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: inherit;
+            outline: none;
+            transition: box-shadow 0.2s ease;
         }
 
-        button {
-            padding: 12px 20px;
-            border-radius: 8px;
+        .search-card input:focus {
+            box-shadow: 0 0 0 3px var(--accent);
+        }
+
+        .search-card input::placeholder {
+            text-transform: none;
+            letter-spacing: normal;
+            color: #999;
+        }
+
+        .search-card button {
+            padding: 0 22px;
+            border-radius: 12px;
             border: none;
             cursor: pointer;
-            background: #00c6ff;
+            background: var(--accent);
+            color: #06304a;
+            font-weight: 600;
+            font-size: 15px;
+            font-family: inherit;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .search-card button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,198,255,0.4);
+        }
+
+        .search-card button:active {
+            transform: translateY(0);
+        }
+
+        #result {
+            max-width: 1000px;
+            margin: 30px auto 0;
+        }
+
+        .spinner {
+            width: 34px;
+            height: 34px;
+            margin: 30px auto;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-msg {
+            text-align: center;
+            background: rgba(230, 57, 70, 0.15);
+            border: 1px solid rgba(230, 57, 70, 0.4);
+            padding: 16px;
+            border-radius: 12px;
+            max-width: 480px;
+            margin: 20px auto 0;
         }
 
         .card {
             background: white;
-            color: black;
-            margin: 20px auto;
-            width: 90%;
-            max-width: 1000px;
-            border-radius: 12px;
-            padding: 20px;
+            color: #1c1c1c;
+            margin: 0 auto;
+            border-radius: var(--radius);
+            padding: 26px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+            animation: fadeInUp 0.4s ease;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .clean {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        .clean .icon {
+            font-size: 56px;
+            display: block;
+            margin-bottom: 10px;
+            animation: pop 0.5s ease;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0.4); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .clean h2 {
+            margin: 0 0 6px;
+        }
+
+        .clean p {
+            margin: 0;
+            color: #666;
+        }
+
+        .card h2 {
+            margin-top: 0;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 6px;
         }
 
         th {
-            background: #2a5298;
+            background: var(--blue-2);
             color: white;
-            padding: 10px;
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
         }
+
+        th:first-child { border-radius: 10px 0 0 10px; }
+        th:last-child { border-radius: 0 10px 10px 0; }
 
         td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
+            padding: 12px 10px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+            vertical-align: middle;
         }
 
-        img {
-            width: 150px;
+        tbody tr {
+            animation: fadeInUp 0.35s ease;
+        }
+
+        tbody tr:hover {
+            background: #f6f9ff;
+        }
+
+        .violation-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #fdecea;
+            color: var(--danger);
+            text-transform: capitalize;
+            white-space: nowrap;
+        }
+
+        .status-pill {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: capitalize;
+            white-space: nowrap;
+        }
+
+        .status-pill.unpaid {
+            background: #fdecea;
+            color: var(--danger);
+        }
+
+        .status-pill.paid {
+            background: #e8f8ee;
+            color: var(--success);
+        }
+
+        img.evidence {
+            width: 100px;
             border-radius: 10px;
-            border: 2px solid #ccc;
+            border: 2px solid #eee;
+            cursor: zoom-in;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: block;
+        }
+
+        img.evidence:hover {
+            transform: scale(1.8);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 5;
         }
 
         .total {
-            font-size: 24px;
-            color: red;
+            font-size: 22px;
+            color: var(--danger);
             margin-top: 20px;
-            font-weight: bold;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            opacity: 0.6;
+            font-size: 12px;
+        }
+
+        @media (max-width: 520px) {
+            .search-card {
+                flex-direction: column;
+            }
+
+            .search-card button {
+                padding: 14px;
+            }
+
+            .total {
+                text-align: center;
+            }
         }
 
     </style>
@@ -75,33 +347,101 @@
 
 <body>
 
-    <h1>🚦 Traffic Fine Checker</h1>
+    <div class="hero">
+        <h1><span class="badge">🚦</span> Traffic Fine Checker</h1>
+        <p>Enter a number plate to instantly check for recorded violations.</p>
+    </div>
 
-    <input
-        type="text"
-        id="plate"
-        placeholder="Enter Plate Number">
+    <form class="search-card" id="searchCard" onsubmit="return handleSubmit(event)">
 
-    <button onclick="search()">
-        Check
-    </button>
+        <label for="plate" class="sr-only">Number plate</label>
+
+        <input
+            type="text"
+            id="plate"
+            placeholder="e.g. MH12AB1234"
+            autocomplete="off"
+            autofocus>
+
+        <button type="submit">
+            Check
+        </button>
+
+    </form>
 
     <div id="result"></div>
 
+    <footer>Ride safe. Wear a helmet. Follow the speed limit. 🛵</footer>
+
     <script>
+
+        const input = document.getElementById("plate");
+        const searchCard = document.getElementById("searchCard");
+        const result = document.getElementById("result");
+
+        function handleSubmit(event) {
+            event.preventDefault();
+            search();
+            return false;
+        }
+
+        function shakeCard() {
+            searchCard.classList.remove("shake");
+            void searchCard.offsetWidth; // restart animation
+            searchCard.classList.add("shake");
+        }
+
+        function formatTime(raw) {
+            // SQLite CURRENT_TIMESTAMP is naive UTC ("YYYY-MM-DD HH:MM:SS"),
+            // which Safari can't parse directly — convert to ISO 8601 first.
+            const parsed = new Date(raw.replace(" ", "T") + "Z");
+
+            if (isNaN(parsed)) {
+                return raw;
+            }
+
+            return parsed.toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short"
+            });
+        }
 
         async function search() {
 
-            let plate =
-                document.getElementById("plate").value.trim();
+            const plate = input.value.trim();
 
-            let response =
-                await fetch(
-                    `/get_fines/${encodeURIComponent(plate)}`
-                );
+            if (!plate) {
+                shakeCard();
+                return;
+            }
 
-            let data =
-                await response.json();
+            result.innerHTML = `<div class="spinner"></div>`;
+
+            let data;
+
+            try {
+
+                let response =
+                    await fetch(
+                        `/get_fines/${encodeURIComponent(plate)}`
+                    );
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}`);
+                }
+
+                data = await response.json();
+
+            } catch (err) {
+
+                result.innerHTML = `
+                    <div class="error-msg">
+                        Couldn't reach the server. Please try again.
+                    </div>
+                `;
+
+                return;
+            }
 
             let html =
                 `<div class="card">`;
@@ -109,7 +449,11 @@
             if (data.fines.length === 0) {
 
                 html += `
-                    <h2>No Fines Found ✅</h2>
+                    <div class="clean">
+                        <span class="icon">✅</span>
+                        <h2>No Fines Found</h2>
+                        <p>This plate has a clean record.</p>
+                    </div>
                 `;
 
             } else {
@@ -117,6 +461,7 @@
                 html += `
                 <h2>Violation Records</h2>
 
+                <div class="table-wrap">
                 <table>
 
                     <tr>
@@ -130,21 +475,26 @@
 
                 data.fines.forEach(f => {
 
+                    const statusClass = f.status === "unpaid" ? "unpaid" : "paid";
+                    const violationLabel = f.violation.replace(/_/g, " ");
+
                     html += `
                     <tr>
 
-                        <td>${f.violation}</td>
+                        <td><span class="violation-tag">${violationLabel}</span></td>
 
                         <td>₹${f.amount}</td>
 
-                        <td>${f.status}</td>
+                        <td><span class="status-pill ${statusClass}">${f.status}</span></td>
 
-                        <td>${f.time}</td>
+                        <td>${formatTime(f.time)}</td>
 
                         <td>
 
                             <img
+                                class="evidence"
                                 src="${f.image}"
+                                alt="Evidence for ${violationLabel}"
                             >
 
                         </td>
@@ -155,6 +505,7 @@
 
                 html += `
                 </table>
+                </div>
 
                 <div class="total">
                     Total Due: ₹${data.total}
@@ -164,9 +515,7 @@
 
             html += `</div>`;
 
-            document.getElementById(
-                "result"
-            ).innerHTML = html;
+            result.innerHTML = html;
         }
 
     </script>
