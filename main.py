@@ -2,8 +2,8 @@ import cv2
 import time
 import pandas as pd
 from ultralytics import YOLO
-from plate_ocr import read_plate
-from speed import SpeedEstimator
+from modules.plate_ocr import read_plate
+from modules.speed import SpeedEstimator
 
 # Load YOLO model
 model = YOLO("yolov8n.pt")

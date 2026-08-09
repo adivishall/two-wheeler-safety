@@ -46,6 +46,11 @@ Python, Ultralytics YOLOv8, EasyOCR, OpenCV, Flask, SQLite, pandas.
 
 ## Running
 
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
 Start the web app:
 ```bash
 python app.py          # http://127.0.0.1:5000

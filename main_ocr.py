@@ -43,6 +43,7 @@ img = cv2.imread(IMAGE_PATH)
 detected_classes = []
 
 plate_number = None
+plate_text = []
 
 # ---------------------------------
 # PROCESS DETECTIONS
