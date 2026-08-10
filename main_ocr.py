@@ -1,6 +1,7 @@
 import re
 import os
 import time
+import argparse
 import cv2
 import requests
 import easyocr
@@ -10,23 +11,29 @@ from ultralytics import YOLO
 # SETTINGS
 # ---------------------------------
 
-IMAGE_PATH = "plate8.jpeg"
-
-MODEL_PATH = "runs/detect/traffic_model-2/weights/best.pt"
-
-API_URL = "http://127.0.0.1:5000/detect"
+DEFAULT_IMAGE_PATH = "plate8.jpeg"
+DEFAULT_MODEL_PATH = "runs/detect/traffic_model-2/weights/best.pt"
+DEFAULT_API_URL = "http://127.0.0.1:5000/detect"
 
 # Must match DETECT_API_KEY on the server if it has one set; empty is
 # fine when the server has no key configured.
 API_KEY = os.environ.get("DETECT_API_KEY", "")
 
 # ---------------------------------
-# LOAD MODEL
+# CLI ARGS
 # ---------------------------------
 
-model = YOLO(MODEL_PATH)
-
-reader = easyocr.Reader(['en'])
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Detect two-wheeler violations in a single image and report them to the fine checker API."
+    )
+    parser.add_argument("--image", default=DEFAULT_IMAGE_PATH,
+                         help=f"image file to scan (default: {DEFAULT_IMAGE_PATH})")
+    parser.add_argument("--model", default=DEFAULT_MODEL_PATH,
+                         help="path to the YOLO weights file")
+    parser.add_argument("--api-url", default=DEFAULT_API_URL,
+                         help="Flask /detect endpoint to report violations to")
+    return parser.parse_args()
 
 # ---------------------------------
 # HELPERS
@@ -49,175 +56,186 @@ def iou(box_a, box_b):
 
     return inter_area / float(area_a + area_b - inter_area)
 
-# ---------------------------------
-# CREATE EVIDENCE FOLDER
-# ---------------------------------
 
-os.makedirs("evidence", exist_ok=True)
+def main():
+    args = parse_args()
 
-# ---------------------------------
-# RUN DETECTION
-# ---------------------------------
+    os.makedirs("evidence", exist_ok=True)
 
-results = model.predict(
-    source=IMAGE_PATH,
-    conf=0.25
-)
+    model = YOLO(args.model)
+    reader = easyocr.Reader(['en'])
 
-img = cv2.imread(IMAGE_PATH)
+    # ---------------------------------
+    # RUN DETECTION
+    # ---------------------------------
 
-detected_classes = []
-without_helmet_boxes = []
-with_helmet_boxes = []
-
-plate_number = None
-plate_text = []
-
-# ---------------------------------
-# PROCESS DETECTIONS
-# ---------------------------------
-
-for r in results:
-
-    for box in r.boxes:
-
-        cls = int(box.cls[0])
-
-        label = model.names[cls]
-
-        print("Detected:", label)
-
-        detected_classes.append(label)
-
-        if label == "WithoutHelmet":
-            without_helmet_boxes.append(tuple(map(int, box.xyxy[0])))
-        elif label == "WithHelmet":
-            with_helmet_boxes.append(tuple(map(int, box.xyxy[0])))
-
-        # -------------------------
-        # OCR ON PLATE
-        # -------------------------
-
-        if label == "Plate":
-
-            x1, y1, x2, y2 = map(
-                int,
-                box.xyxy[0]
-            )
-
-            plate_crop = img[
-                y1:y2,
-                x1:x2
-            ]
-
-            plate_text = reader.readtext(
-                plate_crop,
-                detail=0
-            )
-
-            print(
-                "Plate Number:",
-                plate_text
-            )
-
-if len(plate_text) > 0:
-
-    plate_number = "".join(plate_text)
-
-    plate_number = re.sub(
-        r'[^A-Za-z0-9]',
-        '',
-        plate_number
-    ).upper()
-
-    print(
-        "Clean Plate:",
-        plate_number
+    results = model.predict(
+        source=args.image,
+        conf=0.25
     )
 
-# ---------------------------------
-# BUILD VIOLATION LIST
-# ---------------------------------
+    img = cv2.imread(args.image)
 
-violations = []
+    if img is None:
+        print(f"Could not read image: {args.image}")
+        return
 
-# A WithoutHelmet box that overlaps a WithHelmet box is the model
-# contradicting itself on the same rider — tested against a real photo
-# where the *higher-confidence* box was the wrong one, so the safe move
-# is to trust neither rather than guess. Only report no_helmet if at
-# least one WithoutHelmet detection has no such contradiction.
-no_helmet_confirmed = any(
-    not any(iou(whb, wb) > 0.1 for wb in with_helmet_boxes)
-    for whb in without_helmet_boxes
-)
+    detected_classes = []
+    without_helmet_boxes = []
+    with_helmet_boxes = []
 
-if no_helmet_confirmed:
-    violations.append(
-        "no_helmet"
+    plate_number = None
+    plate_text = []
+
+    # ---------------------------------
+    # PROCESS DETECTIONS
+    # ---------------------------------
+
+    for r in results:
+
+        for box in r.boxes:
+
+            cls = int(box.cls[0])
+
+            label = model.names[cls]
+
+            print("Detected:", label)
+
+            detected_classes.append(label)
+
+            if label == "WithoutHelmet":
+                without_helmet_boxes.append(tuple(map(int, box.xyxy[0])))
+            elif label == "WithHelmet":
+                with_helmet_boxes.append(tuple(map(int, box.xyxy[0])))
+
+            # -------------------------
+            # OCR ON PLATE
+            # -------------------------
+
+            if label == "Plate":
+
+                x1, y1, x2, y2 = map(
+                    int,
+                    box.xyxy[0]
+                )
+
+                plate_crop = img[
+                    y1:y2,
+                    x1:x2
+                ]
+
+                plate_text = reader.readtext(
+                    plate_crop,
+                    detail=0
+                )
+
+                print(
+                    "Plate Number:",
+                    plate_text
+                )
+
+    if len(plate_text) > 0:
+
+        plate_number = "".join(plate_text)
+
+        plate_number = re.sub(
+            r'[^A-Za-z0-9]',
+            '',
+            plate_number
+        ).upper()
+
+        print(
+            "Clean Plate:",
+            plate_number
+        )
+
+    # ---------------------------------
+    # BUILD VIOLATION LIST
+    # ---------------------------------
+
+    violations = []
+
+    # A WithoutHelmet box that overlaps a WithHelmet box is the model
+    # contradicting itself on the same rider — tested against a real photo
+    # where the *higher-confidence* box was the wrong one, so the safe move
+    # is to trust neither rather than guess. Only report no_helmet if at
+    # least one WithoutHelmet detection has no such contradiction.
+    no_helmet_confirmed = any(
+        not any(iou(whb, wb) > 0.1 for wb in with_helmet_boxes)
+        for whb in without_helmet_boxes
     )
 
-if "TripleRiding" in detected_classes:
-    violations.append(
-        "triple_riding"
-    )
+    if no_helmet_confirmed:
+        violations.append(
+            "no_helmet"
+        )
 
-# ---------------------------------
-# SAVE EVIDENCE IMAGE
-# ---------------------------------
+    if "TripleRiding" in detected_classes:
+        violations.append(
+            "triple_riding"
+        )
 
-if plate_number:
+    # ---------------------------------
+    # SAVE EVIDENCE IMAGE
+    # ---------------------------------
 
-    # timestamped so re-scanning the same plate later doesn't silently
-    # overwrite an earlier fine's evidence photo
-    evidence_file = (
-        f"evidence/{plate_number}_{int(time.time())}.jpg"
-    )
+    if plate_number:
 
-    cv2.imwrite(
-        evidence_file,
-        img
-    )
+        # timestamped so re-scanning the same plate later doesn't silently
+        # overwrite an earlier fine's evidence photo
+        evidence_file = (
+            f"evidence/{plate_number}_{int(time.time())}.jpg"
+        )
 
-    print(
-        "Evidence Saved:",
-        evidence_file
-    )
+        cv2.imwrite(
+            evidence_file,
+            img
+        )
 
-# ---------------------------------
-# SEND TO WEBSITE
-# ---------------------------------
+        print(
+            "Evidence Saved:",
+            evidence_file
+        )
 
-if plate_number and len(violations) > 0:
+    # ---------------------------------
+    # SEND TO WEBSITE
+    # ---------------------------------
 
-    for violation in violations:
+    if plate_number and len(violations) > 0:
 
-        try:
-            response = requests.post(
-                API_URL,
-                json={
-                    "plate": plate_number,
-                    "violation": violation,
-                    "image_path": evidence_file
-                },
-                headers={"X-API-Key": API_KEY}
-            )
+        for violation in violations:
 
-            print(
-                "Sent:",
-                violation
-            )
+            try:
+                response = requests.post(
+                    args.api_url,
+                    json={
+                        "plate": plate_number,
+                        "violation": violation,
+                        "image_path": evidence_file
+                    },
+                    headers={"X-API-Key": API_KEY}
+                )
 
-            print(
-                response.text
-            )
+                print(
+                    "Sent:",
+                    violation
+                )
 
-        except requests.exceptions.ConnectionError:
-            print(
-                f"Could not reach {API_URL} — is app.py running?"
-            )
+                print(
+                    response.text
+                )
 
-else:
+            except requests.exceptions.ConnectionError:
+                print(
+                    f"Could not reach {args.api_url} — is app.py running?"
+                )
 
-    print(
-        "No valid violation found."
-    )
+    else:
+
+        print(
+            "No valid violation found."
+        )
+
+
+if __name__ == "__main__":
+    main()

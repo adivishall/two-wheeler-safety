@@ -46,16 +46,13 @@ def parse_args():
                               "also works on a headless server)")
     parser.add_argument("--max-frames", type=int, default=None,
                          help="stop after N frames, useful for a quick test run")
+    parser.add_argument("--pixels-per-meter", type=float, default=None,
+                         help="camera calibration for speed estimation -- pixel distance in frame "
+                              "divided by the real-world meters it spans (see "
+                              "modules/speed.calibrate_pixels_per_meter). Without this, speed "
+                              "estimation and overspeed detection are skipped entirely rather than "
+                              "reporting an uncalibrated, physically meaningless number.")
     return parser.parse_args()
-
-# =====================================
-# LOAD MODEL + TRACKING
-# =====================================
-
-model = YOLO(MODEL_PATH)
-
-tracker = CentroidTracker()
-speed_estimator = SpeedEstimator()
 
 # (track_id, violation) pairs already reported this run, so the same
 # vehicle isn't fined again on every single frame it stays in view.
@@ -179,6 +176,16 @@ def report_violation(track_id, violation, plate, frame, box):
 def main():
     args = parse_args()
 
+    model = YOLO(MODEL_PATH)
+    tracker = CentroidTracker()
+
+    speed_estimator = None
+    if args.pixels_per_meter:
+        speed_estimator = SpeedEstimator(pixels_per_meter=args.pixels_per_meter)
+    else:
+        print("No --pixels-per-meter given: speed estimation and overspeed "
+              "detection are disabled (an uncalibrated speed isn't a real speed).")
+
     source = int(args.source) if args.source.isdigit() else args.source
     cap = cv2.VideoCapture(source)
 
@@ -251,14 +258,15 @@ def main():
                 cv2.putText(frame, plate_text, (px1, py2 + 20),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
-            speed = speed_estimator.calculate_speed(track_id, plate_box)
+            if speed_estimator is not None:
+                speed = speed_estimator.calculate_speed(track_id, plate_box)
 
-            if speed > SPEED_LIMIT_KMH:
-                cv2.putText(frame, f"Speed: {speed} km/h", (px1, py1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                seen_this_frame.add((track_id, "overspeed"))
-                if confirmed(track_id, "overspeed"):
-                    report_violation(track_id, "overspeed", plate_text, frame, plate_box)
+                if speed > SPEED_LIMIT_KMH:
+                    cv2.putText(frame, f"Speed: {speed} km/h", (px1, py1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                    seen_this_frame.add((track_id, "overspeed"))
+                    if confirmed(track_id, "overspeed"):
+                        report_violation(track_id, "overspeed", plate_text, frame, plate_box)
 
         # ------------------------
         # NO HELMET / TRIPLE RIDING: associate to nearest tracked plate

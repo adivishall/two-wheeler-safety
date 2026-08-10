@@ -9,6 +9,7 @@ __pycache__/
 venv/
 env/
 .ipynb_checkpoints/
+.pytest_cache/
 
 # ===== Large datasets (regenerate / download separately) =====
 master_traffic_violation_dataset/

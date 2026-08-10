@@ -11,13 +11,15 @@ os.makedirs("evidence", exist_ok=True)
 # plate. Unset by default so local dev/demo usage is unaffected.
 DETECT_API_KEY = os.environ.get("DETECT_API_KEY")
 
+DB_PATH = os.environ.get("TRAFFIC_DB_PATH", "traffic.db")
+
 # =====================================
 # DATABASE SETUP
 # =====================================
 
 def init_db():
 
-    conn = sqlite3.connect("traffic.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("""
@@ -93,7 +95,7 @@ def detect():
         300
     )
 
-    conn = sqlite3.connect("traffic.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("""
@@ -129,7 +131,7 @@ def get_fines(plate):
 
     plate = plate.strip().upper()
 
-    conn = sqlite3.connect("traffic.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("""
@@ -177,7 +179,7 @@ def get_fines(plate):
 @app.route("/fines")
 def all_fines():
 
-    conn = sqlite3.connect("traffic.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
     c.execute("""
