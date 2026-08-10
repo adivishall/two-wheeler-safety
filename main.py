@@ -100,6 +100,32 @@ def clean_plate(text):
     return "".join(ch for ch in text if ch.isalnum()).upper()
 
 
+def iou(box_a, box_b):
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+
+    inter_x1, inter_y1 = max(ax1, bx1), max(ay1, by1)
+    inter_x2, inter_y2 = min(ax2, bx2), min(ay2, by2)
+    inter_w, inter_h = max(0, inter_x2 - inter_x1), max(0, inter_y2 - inter_y1)
+    inter_area = inter_w * inter_h
+
+    if inter_area == 0:
+        return 0.0
+
+    area_a = (ax2 - ax1) * (ay2 - ay1)
+    area_b = (bx2 - bx1) * (by2 - by1)
+
+    return inter_area / float(area_a + area_b - inter_area)
+
+
+def is_contradicted(box, other_boxes, iou_threshold=0.1):
+    """A WithoutHelmet box overlapping a WithHelmet box is the model
+    contradicting itself on the same rider — tested against a real photo
+    where the *higher-confidence* box was the wrong one, so the safe move
+    is to trust neither rather than guess."""
+    return any(iou(box, other) > iou_threshold for other in other_boxes)
+
+
 def confirmed(track_id, violation):
     """True once a violation has been seen on STREAK_THRESHOLD consecutive
     frames for this track. Caller is responsible for resetting streaks
@@ -184,6 +210,7 @@ def main():
 
         plates = []
         without_helmet = []
+        with_helmet = []
         triple_riding = []
 
         for box in results.boxes:
@@ -201,6 +228,7 @@ def main():
                 triple_riding.append((x1, y1, x2, y2))
                 color = (0, 0, 255)
             else:  # WithHelmet
+                with_helmet.append((x1, y1, x2, y2))
                 color = (0, 255, 0)
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
@@ -236,6 +264,11 @@ def main():
         # NO HELMET / TRIPLE RIDING: associate to nearest tracked plate
         # ------------------------
         for box in without_helmet:
+            if is_contradicted(box, with_helmet):
+                cv2.putText(frame, "Ambiguous helmet status", (box[0], box[1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 255), 2)
+                continue
+
             cv2.putText(frame, "No Helmet!", (box[0], box[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 

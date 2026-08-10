@@ -29,6 +29,27 @@ model = YOLO(MODEL_PATH)
 reader = easyocr.Reader(['en'])
 
 # ---------------------------------
+# HELPERS
+# ---------------------------------
+
+def iou(box_a, box_b):
+    ax1, ay1, ax2, ay2 = box_a
+    bx1, by1, bx2, by2 = box_b
+
+    inter_x1, inter_y1 = max(ax1, bx1), max(ay1, by1)
+    inter_x2, inter_y2 = min(ax2, bx2), min(ay2, by2)
+    inter_w, inter_h = max(0, inter_x2 - inter_x1), max(0, inter_y2 - inter_y1)
+    inter_area = inter_w * inter_h
+
+    if inter_area == 0:
+        return 0.0
+
+    area_a = (ax2 - ax1) * (ay2 - ay1)
+    area_b = (bx2 - bx1) * (by2 - by1)
+
+    return inter_area / float(area_a + area_b - inter_area)
+
+# ---------------------------------
 # CREATE EVIDENCE FOLDER
 # ---------------------------------
 
@@ -46,6 +67,8 @@ results = model.predict(
 img = cv2.imread(IMAGE_PATH)
 
 detected_classes = []
+without_helmet_boxes = []
+with_helmet_boxes = []
 
 plate_number = None
 plate_text = []
@@ -65,6 +88,11 @@ for r in results:
         print("Detected:", label)
 
         detected_classes.append(label)
+
+        if label == "WithoutHelmet":
+            without_helmet_boxes.append(tuple(map(int, box.xyxy[0])))
+        elif label == "WithHelmet":
+            with_helmet_boxes.append(tuple(map(int, box.xyxy[0])))
 
         # -------------------------
         # OCR ON PLATE
@@ -113,7 +141,17 @@ if len(plate_text) > 0:
 
 violations = []
 
-if "WithoutHelmet" in detected_classes:
+# A WithoutHelmet box that overlaps a WithHelmet box is the model
+# contradicting itself on the same rider — tested against a real photo
+# where the *higher-confidence* box was the wrong one, so the safe move
+# is to trust neither rather than guess. Only report no_helmet if at
+# least one WithoutHelmet detection has no such contradiction.
+no_helmet_confirmed = any(
+    not any(iou(whb, wb) > 0.1 for wb in with_helmet_boxes)
+    for whb in without_helmet_boxes
+)
+
+if no_helmet_confirmed:
     violations.append(
         "no_helmet"
     )
