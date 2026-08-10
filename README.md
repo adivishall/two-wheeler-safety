@@ -23,9 +23,13 @@ classes instead of hand-written heuristics.
   the nearest tracked plate. That association is a best-effort nearest-neighbor
   heuristic — reliable with one vehicle in frame, but it can mis-attribute a
   violation when several vehicles are close together, since the model detects plate
-  and violation boxes independently rather than as one linked vehicle instance.
-  Each (plate, violation) pair is only reported once per time the vehicle is in
-  view, to avoid spamming a fine on every frame.
+  and violation boxes independently rather than as one linked vehicle instance. A
+  violation must hold for `STREAK_THRESHOLD` (5) consecutive frames before it's
+  trusted, and each (track, violation) pair is only reported once while that
+  vehicle stays in view — both exist because single-frame model misfires are
+  common (see "Known limitation" below).
+  Runs headless by default (writes annotated output via `--output`, no window) —
+  pass `--display` for a live preview if you have one. See `python main.py --help`.
 - **`modules/plate_ocr.py`** — EasyOCR plate reader helper.
 - **`modules/speed.py`** — `SpeedEstimator`, per-tracked-object frame-to-frame speed estimate.
 - **`utils/tracker.py`** — `CentroidTracker`, a minimal greedy nearest-centroid multi-object tracker.
@@ -76,6 +80,27 @@ Run detection on an image (writes evidence + posts violations to the running app
 ```bash
 python main_ocr.py     # edit IMAGE_PATH / MODEL_PATH at the top
 ```
+
+Run detection on a video:
+```bash
+python main.py --source your_video.mp4 --output annotated.mp4   # headless, saves an annotated copy
+python main.py --source your_video.mp4 --display                # live preview window instead
+python main.py --source your_video.mp4 --max-frames 300          # quick test on the first N frames
+```
+No video ships in the repo (`*.mp4`/`*.mov`/`*.avi`/`*.mkv` are gitignored — too large to track) —
+point `--source` at your own footage, or a webcam index like `--source 0`.
+
+### Known limitation: helmet-classification noise
+Testing against real video surfaced a real accuracy problem in the trained model
+weights themselves (`traffic_model-2`), not a code bug: on footage stylistically
+different from its training set, it can flicker between `WithHelmet` and
+`WithoutHelmet` for the same continuously-helmeted rider frame to frame, and the
+`WithoutHelmet` box is sometimes poorly localized (covering the whole rider instead
+of just the head). The `STREAK_THRESHOLD` consecutive-frame check in `main.py`
+filters out most single-frame flicker, but it doesn't fix misclassifications the
+model holds steadily for several frames — only retraining with more/better-annotated
+data would. Treat `no_helmet` fines from unfamiliar footage as needing review, not
+as ground truth.
 
 ## Configuration (environment variables)
 

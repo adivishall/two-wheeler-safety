@@ -31,6 +31,12 @@ traffic.db
 evidence/
 output/
 
+# ===== Test/sample videos (large, download separately) =====
+*.mp4
+*.mov
+*.avi
+*.mkv
+
 # ===== Env / secrets =====
 .env
 *.log

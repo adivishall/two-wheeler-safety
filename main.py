@@ -1,3 +1,4 @@
+import argparse
 import os
 import time
 import math
@@ -16,11 +17,36 @@ MODEL_PATH = "runs/detect/traffic_model-2/weights/best.pt"
 API_URL = "http://127.0.0.1:5000/detect"
 SPEED_LIMIT_KMH = 40
 
+# A violation must be detected on this many consecutive frames before it's
+# trusted. Single-frame model misfires are common (e.g. a helmeted rider
+# briefly flickering to "WithoutHelmet") — requiring a short streak filters
+# most of that out without needing a longer, laggier dwell time.
+STREAK_THRESHOLD = 5
+
 # Must match DETECT_API_KEY on the server if it has one set; empty is
 # fine when the server has no key configured.
 API_KEY = os.environ.get("DETECT_API_KEY", "")
 
 os.makedirs("evidence", exist_ok=True)
+
+# =====================================
+# CLI ARGS
+# =====================================
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Detect two-wheeler violations in a video and report them to the fine checker API."
+    )
+    parser.add_argument("--source", default="test_video.mp4",
+                         help="video file path or camera index (default: test_video.mp4)")
+    parser.add_argument("--output", default=None,
+                         help="path to save an annotated copy of the video (optional)")
+    parser.add_argument("--display", action="store_true",
+                         help="show a live preview window (needs a display — off by default so this "
+                              "also works on a headless server)")
+    parser.add_argument("--max-frames", type=int, default=None,
+                         help="stop after N frames, useful for a quick test run")
+    return parser.parse_args()
 
 # =====================================
 # LOAD MODEL + TRACKING
@@ -34,6 +60,9 @@ speed_estimator = SpeedEstimator()
 # (track_id, violation) pairs already reported this run, so the same
 # vehicle isn't fined again on every single frame it stays in view.
 reported = set()
+
+# (track_id, violation) -> consecutive-frame count, for the streak check
+violation_streak = {}
 
 # =====================================
 # HELPERS
@@ -71,11 +100,26 @@ def clean_plate(text):
     return "".join(ch for ch in text if ch.isalnum()).upper()
 
 
+def confirmed(track_id, violation):
+    """True once a violation has been seen on STREAK_THRESHOLD consecutive
+    frames for this track. Caller is responsible for resetting streaks
+    that weren't seen in the current frame (see `decay_streaks`)."""
+    key = (track_id, violation)
+    violation_streak[key] = violation_streak.get(key, 0) + 1
+    return violation_streak[key] >= STREAK_THRESHOLD
+
+
+def decay_streaks(seen_this_frame):
+    for key in list(violation_streak):
+        if key not in seen_this_frame:
+            violation_streak[key] = 0
+
+
 def report_violation(track_id, violation, plate, frame, box):
     key = (track_id, violation)
 
     if key in reported or not plate:
-        return
+        return False
 
     reported.add(key)
 
@@ -100,88 +144,145 @@ def report_violation(track_id, violation, plate, frame, box):
     except requests.exceptions.ConnectionError:
         print(f"Could not reach {API_URL} — is app.py running?")
 
+    return True
+
 # =====================================
 # MAIN LOOP
 # =====================================
 
-cap = cv2.VideoCapture("test_video.mp4")
+def main():
+    args = parse_args()
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
+    source = int(args.source) if args.source.isdigit() else args.source
+    cap = cv2.VideoCapture(source)
 
-    results = model(frame)[0]
+    if not cap.isOpened():
+        print(f"Could not open video source: {args.source}")
+        return
 
-    plates = []
-    without_helmet = []
-    triple_riding = []
+    writer = None
+    if args.output:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(args.output, fourcc, fps, (width, height))
 
-    for box in results.boxes:
-        cls = int(box.cls[0])
-        label = model.names[cls]
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
+    frame_count = 0
+    start_time = time.time()
 
-        if label == "Plate":
-            plates.append((x1, y1, x2, y2))
-            color = (0, 255, 0)
-        elif label == "WithoutHelmet":
-            without_helmet.append((x1, y1, x2, y2))
-            color = (0, 0, 255)
-        elif label == "TripleRiding":
-            triple_riding.append((x1, y1, x2, y2))
-            color = (0, 0, 255)
-        else:  # WithHelmet
-            color = (0, 255, 0)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        frame_count += 1
+        if args.max_frames and frame_count > args.max_frames:
+            break
 
-    tracked_plates = tracker.update(plates)
-    plate_text_by_id = {}
+        results = model(frame, verbose=False)[0]
 
-    # ------------------------
-    # PER-PLATE: OCR + SPEED
-    # ------------------------
-    for track_id, plate_box in tracked_plates.items():
-        px1, py1, px2, py2 = plate_box
+        plates = []
+        without_helmet = []
+        triple_riding = []
 
-        crop = frame[py1:py2, px1:px2]
-        plate_text = clean_plate(read_plate(crop))
-        plate_text_by_id[track_id] = plate_text
+        for box in results.boxes:
+            cls = int(box.cls[0])
+            label = model.names[cls]
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-        if plate_text:
-            cv2.putText(frame, plate_text, (px1, py2 + 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            if label == "Plate":
+                plates.append((x1, y1, x2, y2))
+                color = (0, 255, 0)
+            elif label == "WithoutHelmet":
+                without_helmet.append((x1, y1, x2, y2))
+                color = (0, 0, 255)
+            elif label == "TripleRiding":
+                triple_riding.append((x1, y1, x2, y2))
+                color = (0, 0, 255)
+            else:  # WithHelmet
+                color = (0, 255, 0)
 
-        speed = speed_estimator.calculate_speed(track_id, plate_box)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-        if speed > SPEED_LIMIT_KMH:
-            cv2.putText(frame, f"Speed: {speed} km/h", (px1, py1 - 10),
+        tracked_plates = tracker.update(plates)
+        plate_text_by_id = {}
+        seen_this_frame = set()
+
+        # ------------------------
+        # PER-PLATE: OCR + SPEED
+        # ------------------------
+        for track_id, plate_box in tracked_plates.items():
+            px1, py1, px2, py2 = plate_box
+
+            crop = frame[py1:py2, px1:px2]
+            plate_text = clean_plate(read_plate(crop))
+            plate_text_by_id[track_id] = plate_text
+
+            if plate_text:
+                cv2.putText(frame, plate_text, (px1, py2 + 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+
+            speed = speed_estimator.calculate_speed(track_id, plate_box)
+
+            if speed > SPEED_LIMIT_KMH:
+                cv2.putText(frame, f"Speed: {speed} km/h", (px1, py1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                seen_this_frame.add((track_id, "overspeed"))
+                if confirmed(track_id, "overspeed"):
+                    report_violation(track_id, "overspeed", plate_text, frame, plate_box)
+
+        # ------------------------
+        # NO HELMET / TRIPLE RIDING: associate to nearest tracked plate
+        # ------------------------
+        for box in without_helmet:
+            cv2.putText(frame, "No Helmet!", (box[0], box[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            report_violation(track_id, "overspeed", plate_text, frame, plate_box)
 
-    # ------------------------
-    # NO HELMET / TRIPLE RIDING: associate to nearest tracked plate
-    # ------------------------
-    for box in without_helmet:
-        pid = nearest_plate_id(box, tracked_plates)
+            pid = nearest_plate_id(box, tracked_plates)
 
-        if pid is not None:
-            report_violation(pid, "no_helmet", plate_text_by_id.get(pid), frame, tracked_plates[pid])
+            if pid is not None:
+                seen_this_frame.add((pid, "no_helmet"))
+                if confirmed(pid, "no_helmet"):
+                    report_violation(pid, "no_helmet", plate_text_by_id.get(pid), frame, tracked_plates[pid])
 
-    for box in triple_riding:
-        cv2.putText(frame, "Triple Riding!", (box[0], box[1] - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        for box in triple_riding:
+            cv2.putText(frame, "Triple Riding!", (box[0], box[1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        pid = nearest_plate_id(box, tracked_plates)
+            pid = nearest_plate_id(box, tracked_plates)
 
-        if pid is not None:
-            report_violation(pid, "triple_riding", plate_text_by_id.get(pid), frame, tracked_plates[pid])
+            if pid is not None:
+                seen_this_frame.add((pid, "triple_riding"))
+                if confirmed(pid, "triple_riding"):
+                    report_violation(pid, "triple_riding", plate_text_by_id.get(pid), frame, tracked_plates[pid])
 
-    cv2.imshow("Output", frame)
+        decay_streaks(seen_this_frame)
 
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
+        if writer:
+            writer.write(frame)
 
-cap.release()
-cv2.destroyAllWindows()
+        if args.display:
+            cv2.imshow("Output", frame)
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
+
+        if frame_count % 30 == 0:
+            elapsed = time.time() - start_time
+            print(f"...processed {frame_count} frames ({frame_count / elapsed:.1f} fps)")
+
+    cap.release()
+    if writer:
+        writer.release()
+    if args.display:
+        cv2.destroyAllWindows()
+
+    elapsed = time.time() - start_time
+    print(
+        f"\nDone: {frame_count} frames in {elapsed:.1f}s, "
+        f"{len(tracker.objects)} plate(s) tracked, {len(reported)} violation(s) reported."
+    )
+
+
+if __name__ == "__main__":
+    main()
