@@ -36,9 +36,12 @@ classes instead of hand-written heuristics.
 - **`plate_reader.py`**, `main_ocr` variants, and `test_*.py` — standalone detection/OCR scripts.
 
 ### 2. Model training
-- **`train_traffic.py`** — trains YOLOv8n on `master_traffic_violation_dataset/` (4 classes).
-- **`train_helmet.py`** — trains YOLOv8n on `data/` (helmet / no_helmet, 2 classes).
+- **`train_traffic.py`** — trains YOLOv8n on `master_traffic_violation_dataset/` (4 classes:
+  `Plate`, `WithHelmet`, `WithoutHelmet`, `TripleRiding`).
 - Training outputs land in `runs/detect/<name>/` (metrics, curves, weights).
+- An earlier 2-class helmet/no_helmet model (`train_helmet.py`, its own `data/`
+  dataset, `test_model.py`) was retired — nothing in the live app used it once the
+  4-class model above covered the same ground plus plate detection and triple-riding.
 
 ### 3. Web app — Traffic Fine Checker (Flask + SQLite)
 - **`app.py`** — Flask server with a SQLite (`traffic.db`) `fines` table.
@@ -153,5 +156,5 @@ validation metrics and confusion matrix, not unit tests.
 ## Not tracked in git
 Datasets, trained model weights (`*.pt`), `runs/` training outputs, the source
 `.zip`, `traffic.db`, and generated `evidence/` are excluded via `.gitignore`
-(they are large and/or regenerable). Retrain with `train_traffic.py` /
-`train_helmet.py`, and let Ultralytics download `yolov8n.pt` on first run.
+(they are large and/or regenerable). Retrain with `train_traffic.py`, and let
+Ultralytics download `yolov8n.pt` on first run.
