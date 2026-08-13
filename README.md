@@ -35,6 +35,8 @@ classes instead of hand-written heuristics.
   Runs headless by default (writes annotated output via `--output`, no window) —
   pass `--display` for a live preview if you have one. See `python main.py --help`.
 - **`modules/plate_ocr.py`** — EasyOCR plate reader helper.
+- **`modules/plate_info.py`** — decodes a plate string into its registration region
+  (state + RTO district) from the public, static plate-code scheme — no external API.
 - **`modules/speed.py`** — `SpeedEstimator`, per-tracked-object frame-to-frame speed estimate.
 - **`utils/tracker.py`** — `CentroidTracker`, a minimal greedy nearest-centroid multi-object tracker.
 - **`plate_reader.py`**, `main_ocr` variants, and `test_*.py` — standalone detection/OCR scripts.
@@ -61,7 +63,13 @@ classes instead of hand-written heuristics.
     case/whitespace-insensitive on both insert and lookup. If `DETECT_API_KEY` is
     set, this endpoint requires a matching `X-API-Key` header (see below) — without
     it, anyone who can reach the server can write arbitrary fines for any plate.
-  - `GET  /get_fines/<plate>` — returns fines + unpaid total for a plate
+  - `GET  /get_fines/<plate>` — returns fines + unpaid total for a plate, plus a
+    `vehicle` object with the **registration region decoded from the plate itself**
+    (state + RTO district — e.g. `MH02` → Maharashtra, Mumbai West). This is public,
+    static plate-encoding data (`modules/plate_info.py`), so it needs no external API
+    or key and works offline for every validly-formatted plate; it deliberately does
+    *not* expose maker/model/owner, which aren't in the plate and live only in the
+    access-restricted VAHAN database.
   - `GET  /fines` — lists all fines
   - `GET  /evidence/<file>` — serves saved evidence images
 - **`templates/frontend.html`** — single-page UI to look up fines by plate.

@@ -375,6 +375,45 @@
             margin-top: 0;
         }
 
+        .vehicle {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px 16px;
+            padding: 0 0 18px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .vehicle .veh-plate {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--blue-1);
+            font-family: 'Poppins', monospace;
+        }
+
+        .vehicle .veh-loc {
+            font-size: 15px;
+            color: #333;
+        }
+
+        .vehicle .veh-loc .state {
+            font-weight: 600;
+        }
+
+        .vehicle .veh-muted {
+            font-size: 13px;
+            color: #999;
+        }
+
+        .vehicle .veh-src {
+            width: 100%;
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 2px;
+        }
+
         .table-wrap {
             overflow-x: auto;
         }
@@ -577,6 +616,35 @@
             return type.replace(/_/g, " ");
         }
 
+        // Registration panel decoded from the plate itself (state + RTO).
+        function vehicleBlock(v) {
+            if (!v || !v.recognized) {
+                return `
+                    <div class="vehicle">
+                        <span class="veh-muted">Registration region couldn't be read from this plate format.</span>
+                    </div>
+                `;
+            }
+
+            let loc = `<span class="state">${escapeHtml(v.state)}</span>`;
+            if (v.rto) {
+                loc += ` · ${escapeHtml(v.rto)}`;
+            } else if (v.rto_code) {
+                loc += ` · RTO ${escapeHtml(v.rto_code)}`;
+            }
+            if (v.extra) {
+                loc += ` · ${escapeHtml(v.extra)}`;
+            }
+
+            return `
+                <div class="vehicle">
+                    <span class="veh-plate">${escapeHtml(v.plate || "")}</span>
+                    <span class="veh-loc">📍 ${loc}</span>
+                    <span class="veh-src">Registration decoded from the plate code (state &amp; RTO district).</span>
+                </div>
+            `;
+        }
+
         async function analyzePhoto() {
 
             if (!photo.files.length) {
@@ -718,7 +786,7 @@
             }
 
             let html =
-                `<div class="card">`;
+                `<div class="card">` + vehicleBlock(data.vehicle);
 
             if (data.fines.length === 0) {
 

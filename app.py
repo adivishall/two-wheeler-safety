@@ -204,7 +204,11 @@ def analyze():
 @app.route("/get_fines/<plate>")
 def get_fines(plate):
 
+    from modules.plate_info import decode_plate
+
     plate = plate.strip().upper()
+
+    vehicle = decode_plate(plate)
 
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -244,7 +248,8 @@ def get_fines(plate):
 
     return jsonify({
         "fines": fines,
-        "total": total
+        "total": total,
+        "vehicle": vehicle
     })
 
 # =====================================
