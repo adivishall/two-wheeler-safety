@@ -30,6 +30,7 @@ runs/
 # ===== Runtime-generated data =====
 traffic.db
 evidence/
+demo_shots/
 output/
 
 # ===== Test/sample videos (large, download separately) =====
