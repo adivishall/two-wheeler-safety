@@ -507,6 +507,71 @@
             text-align: right;
         }
 
+        /* ---- Video analysis ---- */
+
+        .progress-card {
+            background: white;
+            color: #1c1c1c;
+            max-width: 560px;
+            margin: 22px auto 0;
+            border-radius: var(--radius);
+            padding: 22px 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+            animation: fadeInUp 0.4s ease;
+        }
+
+        .progress-card .p-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .progress-track {
+            height: 12px;
+            background: #eef2f9;
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, var(--accent), var(--blue-2));
+            border-radius: 20px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-card .p-hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+        }
+
+        .detect-card video.shot {
+            width: 100%;
+            max-height: 420px;
+            border-radius: 12px;
+            border: 2px solid #eee;
+            display: block;
+            margin: 0 auto 16px;
+            background: #000;
+        }
+
+        .detect-card .vid-summary {
+            font-size: 13px;
+            color: #888;
+            margin: 0 0 14px;
+        }
+
+        .detect-card .dl-link {
+            display: inline-block;
+            margin-top: 4px;
+            font-size: 13px;
+            color: var(--blue-2);
+        }
+
         footer {
             text-align: center;
             margin-top: 50px;
@@ -536,7 +601,7 @@
 
     <div class="hero">
         <h1><span class="badge">🚦</span> Traffic Fine Checker</h1>
-        <p>Upload a photo to auto-detect violations, or look up a plate directly.</p>
+        <p>Upload a photo or video to auto-detect violations, or look up a plate directly.</p>
     </div>
 
     <form class="upload-card" id="uploadCard" onsubmit="return handleUpload(event)">
@@ -552,6 +617,20 @@
     </form>
 
     <div id="uploadResult"></div>
+
+    <form class="upload-card" id="videoCard" onsubmit="return handleVideoUpload(event)">
+
+        <label for="video" class="file-label" id="videoLabel">🎞️ Choose a video…</label>
+
+        <input type="file" id="video" accept="video/*">
+
+        <button type="submit" id="analyzeVideoBtn" disabled>
+            Analyze
+        </button>
+
+    </form>
+
+    <div id="videoResult"></div>
 
     <div class="or-divider">or look up a plate</div>
 
@@ -719,6 +798,114 @@
             // below without the user retyping the (possibly OCR-mangled) plate.
             input.value = data.plate;
             search();
+        }
+
+        // ---- Video upload: submit, poll progress, render result ----
+
+        const video = document.getElementById("video");
+        const videoLabel = document.getElementById("videoLabel");
+        const analyzeVideoBtn = document.getElementById("analyzeVideoBtn");
+        const videoResult = document.getElementById("videoResult");
+
+        video.addEventListener("change", () => {
+            if (video.files.length) {
+                videoLabel.textContent = "🎞️ " + video.files[0].name;
+                analyzeVideoBtn.disabled = false;
+            } else {
+                videoLabel.textContent = "🎞️ Choose a video…";
+                analyzeVideoBtn.disabled = true;
+            }
+        });
+
+        function handleVideoUpload(event) {
+            event.preventDefault();
+            analyzeVideo();
+            return false;
+        }
+
+        function renderProgress(done, total) {
+            const pct = total ? Math.round((done / total) * 100) : 0;
+            videoResult.innerHTML = `
+                <div class="progress-card">
+                    <div class="p-label">
+                        <span>Analyzing video…</span>
+                        <span>${pct}%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width:${pct}%"></div>
+                    </div>
+                    <p class="p-hint">Frame ${done}${total ? " of " + total : ""} — detecting and tracking across frames.</p>
+                </div>
+            `;
+        }
+
+        async function analyzeVideo() {
+            if (!video.files.length) {
+                return;
+            }
+
+            analyzeVideoBtn.disabled = true;
+            result.innerHTML = "";
+            renderProgress(0, 0);
+
+            let jobId;
+            try {
+                const body = new FormData();
+                body.append("video", video.files[0]);
+                const resp = await fetch("/analyze_video", { method: "POST", body });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    throw new Error(data.error || `Server responded with ${resp.status}`);
+                }
+                jobId = data.job_id;
+            } catch (err) {
+                videoResult.innerHTML = `<div class="error-msg">${escapeHtml(err.message || "Couldn't start video analysis.")}</div>`;
+                analyzeVideoBtn.disabled = false;
+                return;
+            }
+
+            // Poll for progress until the job finishes or errors.
+            const poll = setInterval(async () => {
+                let job;
+                try {
+                    job = await fetch(`/video_status/${jobId}`).then(r => r.json());
+                } catch (err) {
+                    return; // transient; try again next tick
+                }
+
+                if (job.status === "processing") {
+                    renderProgress(job.done || 0, job.total || 0);
+                    return;
+                }
+
+                clearInterval(poll);
+                analyzeVideoBtn.disabled = false;
+
+                if (job.status === "error") {
+                    videoResult.innerHTML = `<div class="error-msg">${escapeHtml(job.error || "Video analysis failed.")}</div>`;
+                    return;
+                }
+
+                renderVideoResult(job.result);
+            }, 1500);
+        }
+
+        function renderVideoResult(res) {
+            const violHtml = res.violations.length
+                ? `<div class="viol-row">` + res.violations.map(v =>
+                    `<span class="viol-badge">${escapeHtml(violationLabel(v.violation))} · ${escapeHtml(v.plate)} · ₹${v.amount}</span>`
+                  ).join("") + `</div>`
+                : `<span class="clean-badge">✅ No violations detected in this video</span>`;
+
+            videoResult.innerHTML = `
+                <div class="detect-card">
+                    <video class="shot" src="${escapeHtml(res.output)}" controls autoplay muted loop playsinline></video>
+                    <p class="plate-read">Video analysed</p>
+                    <p class="vid-summary">${res.frames} frames · ${res.plates_tracked} vehicle(s) tracked · ${res.violations.length} fine(s) recorded</p>
+                    ${violHtml}
+                    <p class="recorded-note">Annotated with live detections. <a class="dl-link" href="${escapeHtml(res.output)}" download>Download video</a></p>
+                </div>
+            `;
         }
 
         function handleSubmit(event) {

@@ -37,6 +37,9 @@ classes instead of hand-written heuristics.
 - **`modules/plate_ocr.py`** — EasyOCR plate reader helper.
 - **`modules/plate_info.py`** — decodes a plate string into its registration region
   (state + RTO district) from the public, static plate-code scheme — no external API.
+- **`modules/video_detector.py`** — `process_video()`, the reusable video pipeline the
+  web app's `/analyze_video` route runs (per-call state, frame downscaling, records
+  fines through a callback, reports progress). `main.py` remains the standalone CLI.
 - **`modules/speed.py`** — `SpeedEstimator`, per-tracked-object frame-to-frame speed estimate.
 - **`utils/tracker.py`** — `CentroidTracker`, a minimal greedy nearest-centroid multi-object tracker.
 - **`plate_reader.py`**, `main_ocr` variants, and `test_*.py` — standalone detection/OCR scripts.
@@ -58,6 +61,16 @@ classes instead of hand-written heuristics.
     "upload a photo" flow, so the whole demo can happen in one window with no
     terminal. The model + OCR reader load lazily on the first upload (a few seconds),
     then stay cached.
+  - `POST /analyze_video` — accepts an uploaded video (multipart `video`) and runs the
+    full video pipeline (`modules/video_detector.py`: track plates across frames,
+    associate no-helmet/triple-riding to the nearest plate, confirm over a streak of
+    frames, record fines). Video takes far longer than one request, so this returns a
+    `{job_id}` immediately and processes in a background thread; the browser polls
+    `GET /video_status/<job_id>` for progress (`done`/`total` frames) and, when done,
+    the result (violations recorded + an annotated H.264 video served from
+    `/evidence`). This powers the in-browser "upload a video" flow. Frames wider than
+    1280px are downscaled for speed; OCR on video is inherently noisier than on a
+    single clean photo (see the helmet/OCR limitations below).
   - `POST /detect` — records a violation `{plate, violation, image_path}` and assigns a fine
     (no_helmet ₹500, triple_riding ₹1000, overspeed ₹700, default ₹300). Plate matching is
     case/whitespace-insensitive on both insert and lookup. If `DETECT_API_KEY` is
@@ -97,11 +110,13 @@ Start the web app:
 python app.py          # http://127.0.0.1:5000
 ```
 
-The web UI has two ways in: **upload a photo** (it runs detection server-side and
+The web UI has three ways in: **upload a photo** (it runs detection server-side and
 shows the detected plate, violations, and annotated evidence, then looks the plate
-up automatically), or **type a plate** to look it up directly. The upload path keeps
-the whole demo in one browser window — no terminal, and no retyping an OCR-mangled
-plate.
+up automatically), **upload a video** (it processes the clip in the background with a
+progress bar, then plays back the annotated video and records the fines it found), or
+**type a plate** to look it up directly. The upload paths keep the whole demo in one
+browser window — no terminal, and no retyping an OCR-mangled plate. (`main.py` is
+still available as the standalone command-line video pipeline.)
 
 Pre-seed a few realistic records for a demo (a plate with two unpaid fines, a
 triple-riding fine, and an already-paid one). It prints exactly which plates to look

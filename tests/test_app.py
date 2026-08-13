@@ -63,6 +63,19 @@ def test_analyze_without_an_image_is_rejected(client):
     assert "error" in response.get_json()
 
 
+def test_analyze_video_without_a_file_is_rejected(client):
+    # Same idea for the video route: the empty-upload guard runs before any
+    # model loads or background thread starts.
+    response = client.post("/analyze_video", data={})
+    assert response.status_code == 400
+    assert "error" in response.get_json()
+
+
+def test_video_status_unknown_job_is_404(client):
+    response = client.get("/video_status/does-not-exist")
+    assert response.status_code == 404
+
+
 def test_plate_lookup_is_case_and_whitespace_insensitive(client):
     client.post("/detect", json={
         "plate": "  mh12ab1234  ",

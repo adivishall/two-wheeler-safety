@@ -1,6 +1,7 @@
 import os
 import tempfile
 import threading
+import uuid
 from flask import Flask, request, jsonify, render_template, send_from_directory
 import sqlite3
 
@@ -196,6 +197,78 @@ def analyze():
         "evidence": evidence_url,
         "violations": recorded,
     })
+
+# =====================================
+# ANALYZE AN UPLOADED VIDEO (background job + progress)
+# =====================================
+
+# job_id -> {status, done, total, result, error}. Video processing takes far
+# longer than one request, so /analyze_video kicks off a background thread and
+# the browser polls /video_status for progress.
+_video_jobs = {}
+_video_jobs_lock = threading.Lock()
+
+
+def _set_job(job_id, **fields):
+    with _video_jobs_lock:
+        _video_jobs.setdefault(job_id, {}).update(fields)
+
+
+def _run_video_job(job_id, video_path):
+    from modules.video_detector import process_video
+
+    try:
+        model, reader = get_models()
+        output_path = os.path.join("evidence", f"annotated_{job_id}.mp4")
+
+        def progress(done, total):
+            _set_job(job_id, done=done, total=total)
+
+        # pixels_per_meter left unset: speed/overspeed needs calibration, so
+        # it's skipped rather than reporting a meaningless number (same as CLI).
+        result = process_video(
+            video_path, model, reader, output_path,
+            record_fn=record_fine, progress_cb=progress,
+        )
+        _set_job(job_id, status="done", result=result)
+    except Exception as exc:  # surface the failure to the poller
+        _set_job(job_id, status="error", error=str(exc))
+    finally:
+        try:
+            os.remove(video_path)
+        except OSError:
+            pass
+
+
+@app.route("/analyze_video", methods=["POST"])
+def analyze_video():
+    if "video" not in request.files or request.files["video"].filename == "":
+        return jsonify({"error": "no video uploaded"}), 400
+
+    upload = request.files["video"]
+    suffix = os.path.splitext(upload.filename)[1] or ".mp4"
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    upload.save(tmp_path)
+
+    job_id = uuid.uuid4().hex
+    _set_job(job_id, status="processing", done=0, total=0, result=None, error=None)
+
+    threading.Thread(
+        target=_run_video_job, args=(job_id, tmp_path), daemon=True
+    ).start()
+
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/video_status/<job_id>")
+def video_status(job_id):
+    with _video_jobs_lock:
+        job = _video_jobs.get(job_id)
+        job = dict(job) if job else None
+    if job is None:
+        return jsonify({"error": "unknown job"}), 404
+    return jsonify(job)
 
 # =====================================
 # GET FINES BY PLATE
