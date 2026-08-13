@@ -14,9 +14,13 @@ Both entry points use the same custom-trained YOLOv8 model
 `WithoutHelmet`, `TripleRiding`) rather than a generic pretrained model, so plate
 OCR runs on a tight plate crop and violations come from the model's own trained
 classes instead of hand-written heuristics.
-- **`main_ocr.py`** — single-image pipeline. Detects violations, runs EasyOCR on the
-  plate crop, saves a timestamped evidence image, and POSTs each violation to the
-  Flask API.
+- **`modules/detector.py`** — the shared single-image pipeline (`analyze_image`):
+  runs the model, OCRs the plate crop, applies the helmet-contradiction
+  suppression, draws labeled detection boxes onto the evidence image, and saves
+  that annotated copy. Both `main_ocr.py` and the web app's `/analyze` upload route
+  call it, so they can't drift apart.
+- **`main_ocr.py`** — single-image CLI. Wraps `modules/detector.analyze_image` and
+  POSTs each detected violation to the Flask API.
 - **`main.py`** — video pipeline. Tracks detected plates across frames with a small
   centroid tracker (`utils/tracker.py`) so each plate gets a stable ID, estimates
   per-vehicle speed, and associates `WithoutHelmet`/`TripleRiding` detections with
@@ -46,8 +50,14 @@ classes instead of hand-written heuristics.
 ### 3. Web app — Traffic Fine Checker (Flask + SQLite)
 - **`app.py`** — Flask server with a SQLite (`traffic.db`) `fines` table.
   - `GET  /` — renders the fine-checker UI (`templates/frontend.html`)
+  - `POST /analyze` — accepts an uploaded photo (multipart `image`), runs the same
+    detection pipeline server-side, records any violations, and returns the detected
+    plate + violations + annotated evidence. This is what powers the in-browser
+    "upload a photo" flow, so the whole demo can happen in one window with no
+    terminal. The model + OCR reader load lazily on the first upload (a few seconds),
+    then stay cached.
   - `POST /detect` — records a violation `{plate, violation, image_path}` and assigns a fine
-    (no_helmet ₹500, triple_riding ₹1000, default ₹300). Plate matching is
+    (no_helmet ₹500, triple_riding ₹1000, overspeed ₹700, default ₹300). Plate matching is
     case/whitespace-insensitive on both insert and lookup. If `DETECT_API_KEY` is
     set, this endpoint requires a matching `X-API-Key` header (see below) — without
     it, anyone who can reach the server can write arbitrary fines for any plate.
@@ -79,7 +89,22 @@ Start the web app:
 python app.py          # http://127.0.0.1:5000
 ```
 
-Run detection on an image (writes evidence + posts violations to the running app):
+The web UI has two ways in: **upload a photo** (it runs detection server-side and
+shows the detected plate, violations, and annotated evidence, then looks the plate
+up automatically), or **type a plate** to look it up directly. The upload path keeps
+the whole demo in one browser window — no terminal, and no retyping an OCR-mangled
+plate.
+
+Pre-seed a few realistic records for a demo (a plate with two unpaid fines, a
+triple-riding fine, and an already-paid one). It prints exactly which plates to look
+up:
+```bash
+python seed_demo.py          # wipes existing fines, then seeds
+python seed_demo.py --keep   # keeps existing fines, just adds the demo set
+```
+
+Run detection on an image from the command line instead (writes evidence + posts
+violations to the running app):
 ```bash
 python main_ocr.py --image your_photo.jpg                                    # defaults otherwise
 python main_ocr.py --image your_photo.jpg --model path/to/best.pt --api-url http://127.0.0.1:5000/detect
@@ -136,6 +161,7 @@ toward/away from the camera will read artificially slow.
 | `FLASK_DEBUG` | `1` (on) | Set to `0` before any real deployment — the Werkzeug debugger allows arbitrary code execution if the server is exposed with it on. |
 | `DETECT_API_KEY` | unset (no auth) | If set, `/detect` requires this value in an `X-API-Key` header. `main.py` and `main_ocr.py` read the same variable and send it automatically. |
 | `TRAFFIC_DB_PATH` | `traffic.db` | SQLite file `app.py` reads/writes. Override for a different deployment path, or to point tests at a throwaway DB instead of the real one. |
+| `MODEL_PATH` | `runs/detect/traffic_model-2/weights/best.pt` | YOLO weights the `/analyze` upload route (and `seed_demo.py`) run detection with. |
 
 ## Testing
 

@@ -1,4 +1,6 @@
 import os
+import tempfile
+import threading
 from flask import Flask, request, jsonify, render_template, send_from_directory
 import sqlite3
 
@@ -12,6 +14,55 @@ os.makedirs("evidence", exist_ok=True)
 DETECT_API_KEY = os.environ.get("DETECT_API_KEY")
 
 DB_PATH = os.environ.get("TRAFFIC_DB_PATH", "traffic.db")
+
+# Weights the /analyze upload route runs detection with. Same default as
+# the CLI (main_ocr.py); override with MODEL_PATH for a different model.
+MODEL_PATH = os.environ.get(
+    "MODEL_PATH", "runs/detect/traffic_model-2/weights/best.pt"
+)
+
+# Fine amount (₹) per violation type; anything unlisted falls back to 300.
+FINE_AMOUNTS = {
+    "no_helmet": 500,
+    "triple_riding": 1000,
+    "overspeed": 700,
+}
+
+# YOLO + EasyOCR are heavy to load (a few seconds) and not needed unless
+# someone actually uploads a photo, so they're loaded once on the first
+# /analyze call and cached. The lock keeps two simultaneous first-uploads
+# from loading the models twice.
+_models = None
+_models_lock = threading.Lock()
+
+
+def get_models():
+    global _models
+    if _models is None:
+        with _models_lock:
+            if _models is None:
+                from modules.detector import load_models
+                _models = load_models(MODEL_PATH)
+    return _models
+
+
+def record_fine(plate, violation, image_path):
+    """Insert one fine and return the amount charged."""
+    amount = FINE_AMOUNTS.get(violation, 300)
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(
+        """
+        INSERT INTO fines (plate, violation, amount, image_path)
+        VALUES (?, ?, ?, ?)
+        """,
+        (plate.strip().upper(), violation, amount, image_path),
+    )
+    conn.commit()
+    conn.close()
+
+    return amount
 
 # =====================================
 # DATABASE SETUP
@@ -81,45 +132,69 @@ def detect():
             "error": "plate, violation, and image_path are required"
         }), 400
 
-    plate = data["plate"].strip().upper()
-    violation = data["violation"]
-    image_path = data["image_path"]
-
-    fine_amounts = {
-        "no_helmet": 500,
-        "triple_riding": 1000
-    }
-
-    amount = fine_amounts.get(
-        violation,
-        300
-    )
-
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("""
-    INSERT INTO fines
-    (
-        plate,
-        violation,
-        amount,
-        image_path
-    )
-    VALUES (?, ?, ?, ?)
-    """,
-    (
-        plate,
-        violation,
-        amount,
-        image_path
-    ))
-
-    conn.commit()
-    conn.close()
+    record_fine(data["plate"], data["violation"], data["image_path"])
 
     return jsonify({
         "message": "Violation Recorded"
+    })
+
+# =====================================
+# ANALYZE AN UPLOADED PHOTO (one-window demo)
+# =====================================
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    """Run detection + OCR on an uploaded image, record any violations, and
+    return what was found so the web UI can show it without the terminal."""
+
+    from modules.detector import analyze_image
+
+    if "image" not in request.files or request.files["image"].filename == "":
+        return jsonify({"error": "no image uploaded"}), 400
+
+    upload = request.files["image"]
+
+    # Persist the upload to a temp file so OpenCV can read it by path, then
+    # remove it — analyze_image writes its own annotated copy into evidence/.
+    suffix = os.path.splitext(upload.filename)[1] or ".jpg"
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+
+    try:
+        upload.save(tmp_path)
+
+        model, reader = get_models()
+        result = analyze_image(tmp_path, model, reader)
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+    if result.get("error"):
+        return jsonify({"error": result["error"]}), 400
+
+    plate = result["plate"]
+
+    if not plate:
+        return jsonify({
+            "plate": None,
+            "message": "Couldn't read a number plate in that photo. Try a clearer image."
+        })
+
+    evidence_url = None
+    if result["evidence_file"]:
+        evidence_url = "/evidence/" + os.path.basename(result["evidence_file"])
+
+    recorded = []
+    for violation in result["violations"]:
+        amount = record_fine(plate, violation, result["evidence_file"])
+        recorded.append({"type": violation, "amount": amount})
+
+    return jsonify({
+        "plate": plate,
+        "evidence": evidence_url,
+        "violations": recorded,
     })
 
 # =====================================

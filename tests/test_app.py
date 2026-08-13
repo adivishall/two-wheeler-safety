@@ -42,6 +42,7 @@ def test_detect_records_a_fine(client):
 @pytest.mark.parametrize("violation,expected_amount", [
     ("no_helmet", 500),
     ("triple_riding", 1000),
+    ("overspeed", 700),
     ("some_unknown_violation", 300),
 ])
 def test_fine_amounts_by_violation_type(client, violation, expected_amount):
@@ -52,6 +53,14 @@ def test_fine_amounts_by_violation_type(client, violation, expected_amount):
     })
     data = client.get("/get_fines/MH12AB1234").get_json()
     assert data["fines"][0]["amount"] == expected_amount
+
+
+def test_analyze_without_an_image_is_rejected(client):
+    # The empty-upload guard runs before any model is loaded, so this
+    # exercises the /analyze route without needing the YOLO weights.
+    response = client.post("/analyze", data={})
+    assert response.status_code == 400
+    assert "error" in response.get_json()
 
 
 def test_plate_lookup_is_case_and_whitespace_insensitive(client):
