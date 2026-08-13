@@ -5,592 +5,483 @@
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>Traffic Fine Checker</title>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
 
         :root {
-            --blue-1: #1e3c72;
-            --blue-2: #2a5298;
-            --accent: #00c6ff;
-            --danger: #e63946;
-            --success: #1e8e3e;
-            --radius: 18px;
+            /* Light (default) */
+            --bg: #f5f5f7;
+            --bg-grad-1: #fbfbfd;
+            --bg-grad-2: #eef0f4;
+            --surface: #ffffff;
+            --surface-2: #f5f5f7;
+            --text: #1d1d1f;
+            --text-2: #6e6e73;
+            --text-3: #86868b;
+            --hairline: rgba(0, 0, 0, 0.09);
+            --hairline-strong: rgba(0, 0, 0, 0.14);
+            --accent: #0071e3;
+            --accent-press: #0060c0;
+            --danger: #d70015;
+            --danger-bg: rgba(255, 59, 48, 0.12);
+            --success: #1d8a3a;
+            --success-bg: rgba(52, 199, 89, 0.14);
+            --field: #ffffff;
+            --field-inset: rgba(0, 0, 0, 0.06);
+            --seg-track: rgba(118, 118, 128, 0.12);
+            --seg-thumb: #ffffff;
+            --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.08);
+            --shadow-thumb: 0 3px 8px rgba(0,0,0,0.12), 0 1px 1px rgba(0,0,0,0.04);
+            --r-lg: 22px;
+            --r-md: 14px;
+            --r-sm: 10px;
         }
 
-        * {
-            box-sizing: border-box;
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000000;
+                --bg-grad-1: #161617;
+                --bg-grad-2: #000000;
+                --surface: #1c1c1e;
+                --surface-2: #2c2c2e;
+                --text: #f5f5f7;
+                --text-2: #a1a1a6;
+                --text-3: #8e8e93;
+                --hairline: rgba(255, 255, 255, 0.12);
+                --hairline-strong: rgba(255, 255, 255, 0.2);
+                --accent: #2997ff;
+                --accent-press: #1a86ee;
+                --danger: #ff453a;
+                --danger-bg: rgba(255, 69, 58, 0.18);
+                --success: #30d158;
+                --success-bg: rgba(48, 209, 88, 0.18);
+                --field: #2c2c2e;
+                --field-inset: rgba(255, 255, 255, 0.08);
+                --seg-track: rgba(118, 118, 128, 0.28);
+                --seg-thumb: #636366;
+                --shadow-card: 0 1px 2px rgba(0,0,0,0.4), 0 16px 40px rgba(0,0,0,0.5);
+                --shadow-thumb: 0 3px 8px rgba(0,0,0,0.5);
+            }
         }
+
+        * { box-sizing: border-box; }
+
+        html { -webkit-text-size-adjust: 100%; }
 
         body {
             margin: 0;
-            font-family: 'Poppins', Arial, sans-serif;
-            background: linear-gradient(135deg, var(--blue-1), var(--blue-2));
-            background-attachment: fixed;
-            color: white;
             min-height: 100vh;
-            padding: 40px 20px 60px;
+            padding: 64px 22px 80px;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+                         "Helvetica Neue", Helvetica, Arial, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(120% 80% at 50% 0%, var(--bg-grad-1) 0%, var(--bg-grad-2) 60%, var(--bg) 100%);
+            background-attachment: fixed;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+            line-height: 1.5;
         }
+
+        .container { max-width: 640px; margin: 0 auto; }
 
         .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0,0,0,0);
-            white-space: nowrap;
-            border: 0;
+            position: absolute; width: 1px; height: 1px; padding: 0;
+            margin: -1px; overflow: hidden; clip: rect(0,0,0,0);
+            white-space: nowrap; border: 0;
         }
 
-        .hero {
-            text-align: center;
-            max-width: 640px;
-            margin: 0 auto 30px;
+        /* ---------------- Hero ---------------- */
+
+        .hero { text-align: center; margin-bottom: 34px; }
+
+        .app-mark {
+            width: 72px; height: 72px; margin: 0 auto 20px;
+            border-radius: 20px;
+            display: grid; place-items: center;
+            font-size: 38px; line-height: 1;
+            background: linear-gradient(160deg, #ff5f57 0%, #febc2e 50%, #28c840 100%);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.18), inset 0 1px 1px rgba(255,255,255,0.4);
         }
 
         .hero h1 {
-            font-size: clamp(28px, 5vw, 40px);
-            margin: 0 0 8px;
+            margin: 0 0 10px;
+            font-size: clamp(30px, 6vw, 46px);
             font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-        }
-
-        .hero .badge {
-            display: inline-block;
-            font-size: 44px;
-            animation: wobble 2.4s ease-in-out infinite;
+            letter-spacing: -0.021em;
+            line-height: 1.06;
         }
 
         .hero p {
-            margin: 0;
-            opacity: 0.85;
-            font-size: 15px;
-        }
-
-        @keyframes wobble {
-            0%, 100% { transform: rotate(0deg); }
-            25% { transform: rotate(-8deg); }
-            75% { transform: rotate(8deg); }
-        }
-
-        .search-card {
-            max-width: 480px;
             margin: 0 auto;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.18);
-            backdrop-filter: blur(10px);
-            border-radius: var(--radius);
-            padding: 20px;
+            max-width: 460px;
+            font-size: clamp(15px, 2.4vw, 18px);
+            color: var(--text-2);
+            letter-spacing: -0.01em;
+        }
+
+        /* ---------------- Console panel ---------------- */
+
+        .console {
+            background: var(--surface);
+            border: 1px solid var(--hairline);
+            border-radius: var(--r-lg);
+            box-shadow: var(--shadow-card);
+            padding: 12px;
+        }
+
+        /* Segmented control (Photo / Video / Plate) */
+        .segmented {
+            position: relative;
             display: flex;
-            gap: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            background: var(--seg-track);
+            border-radius: 12px;
+            padding: 3px;
+            margin-bottom: 14px;
         }
 
-        .search-card.shake {
-            animation: shake 0.4s ease;
+        .seg-thumb {
+            position: absolute;
+            top: 3px; left: 3px; bottom: 3px;
+            width: calc((100% - 6px) / 3);
+            background: var(--seg-thumb);
+            border-radius: 9px;
+            box-shadow: var(--shadow-thumb);
+            transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
         }
 
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            20%, 60% { transform: translateX(-8px); }
-            40%, 80% { transform: translateX(8px); }
-        }
-
-        .search-card input {
+        .seg {
+            position: relative;
+            z-index: 1;
             flex: 1;
-            min-width: 0;
-            padding: 14px 16px;
-            border-radius: 12px;
             border: none;
-            font-size: 16px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-family: inherit;
-            outline: none;
-            transition: box-shadow 0.2s ease;
-        }
-
-        .search-card input:focus {
-            box-shadow: 0 0 0 3px var(--accent);
-        }
-
-        .search-card input::placeholder {
-            text-transform: none;
-            letter-spacing: normal;
-            color: #999;
-        }
-
-        .search-card button {
-            padding: 0 22px;
-            border-radius: 12px;
-            border: none;
-            cursor: pointer;
-            background: var(--accent);
-            color: #06304a;
-            font-weight: 600;
-            font-size: 15px;
-            font-family: inherit;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-            white-space: nowrap;
-        }
-
-        .search-card button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,198,255,0.4);
-        }
-
-        .search-card button:active {
-            transform: translateY(0);
-        }
-
-        /* ---- Upload / analyze photo ---- */
-
-        .upload-card {
-            max-width: 480px;
-            margin: 0 auto 14px;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.18);
-            backdrop-filter: blur(10px);
-            border-radius: var(--radius);
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .upload-card .file-label {
-            flex: 1;
-            min-width: 0;
-            padding: 14px 16px;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.12);
-            border: 1px dashed rgba(255,255,255,0.4);
-            color: rgba(255,255,255,0.9);
-            font-size: 14px;
-            cursor: pointer;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            transition: background 0.2s ease, border-color 0.2s ease;
-        }
-
-        .upload-card .file-label:hover {
-            background: rgba(255,255,255,0.18);
-            border-color: var(--accent);
-        }
-
-        .upload-card input[type="file"] {
-            display: none;
-        }
-
-        .upload-card button {
-            padding: 0 22px;
-            height: 48px;
-            border-radius: 12px;
-            border: none;
-            cursor: pointer;
-            background: var(--accent);
-            color: #06304a;
-            font-weight: 600;
-            font-size: 15px;
-            font-family: inherit;
-            transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-            white-space: nowrap;
-        }
-
-        .upload-card button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,198,255,0.4);
-        }
-
-        .upload-card button:disabled {
-            opacity: 0.5;
-            cursor: default;
-        }
-
-        .or-divider {
-            max-width: 480px;
-            margin: 6px auto 0;
-            text-align: center;
-            font-size: 12px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            opacity: 0.6;
-        }
-
-        /* result card for a fresh detection */
-        .detect-card {
-            background: white;
-            color: #1c1c1c;
-            max-width: 640px;
-            margin: 22px auto 0;
-            border-radius: var(--radius);
-            padding: 24px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
-            animation: fadeInUp 0.4s ease;
-            text-align: center;
-        }
-
-        .detect-card img.shot {
-            max-width: 100%;
-            max-height: 340px;
-            border-radius: 12px;
-            border: 2px solid #eee;
-            display: block;
-            margin: 0 auto 16px;
-        }
-
-        .detect-card .plate-read {
-            font-size: 13px;
-            color: #666;
-            margin: 0 0 4px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .detect-card .plate-big {
-            font-size: 30px;
-            font-weight: 700;
-            letter-spacing: 2px;
-            margin: 0 0 14px;
-            color: var(--blue-1);
-        }
-
-        .detect-card .viol-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: center;
-            margin-bottom: 4px;
-        }
-
-        .viol-badge {
-            padding: 6px 14px;
-            border-radius: 20px;
+            background: transparent;
+            font: inherit;
             font-size: 14px;
             font-weight: 600;
-            background: #fdecea;
-            color: var(--danger);
-            text-transform: capitalize;
+            letter-spacing: -0.01em;
+            color: var(--text-2);
+            padding: 8px 6px;
+            cursor: pointer;
+            border-radius: 9px;
+            transition: color 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        .detect-card .clean-badge {
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            background: #e8f8ee;
-            color: var(--success);
-        }
+        .seg.active { color: var(--text); }
+        .seg:not(.active):hover { color: var(--text); }
 
-        .detect-card .recorded-note {
-            font-size: 13px;
-            color: #888;
-            margin-top: 12px;
-        }
+        /* Tab panels */
+        .tabpanel { display: none; padding: 6px 6px 8px; }
+        .tabpanel.active { display: block; animation: panelIn 0.3s ease; }
 
-        #result {
-            max-width: 1000px;
-            margin: 30px auto 0;
-        }
-
-        .spinner {
-            width: 34px;
-            height: 34px;
-            margin: 30px auto;
-            border: 4px solid rgba(255,255,255,0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .error-msg {
-            text-align: center;
-            background: rgba(230, 57, 70, 0.15);
-            border: 1px solid rgba(230, 57, 70, 0.4);
-            padding: 16px;
-            border-radius: 12px;
-            max-width: 480px;
-            margin: 20px auto 0;
-        }
-
-        .card {
-            background: white;
-            color: #1c1c1c;
-            margin: 0 auto;
-            border-radius: var(--radius);
-            padding: 26px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
-            animation: fadeInUp 0.4s ease;
-        }
-
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(16px); }
+        @keyframes panelIn {
+            from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .clean {
+        .field-row { display: flex; gap: 10px; align-items: stretch; }
+
+        /* Text input */
+        .text-input {
+            flex: 1; min-width: 0;
+            padding: 13px 16px;
+            font: inherit;
+            font-size: 16px;
+            color: var(--text);
+            background: var(--field);
+            border: 1px solid var(--hairline);
+            border-radius: var(--r-md);
+            outline: none;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .text-input.plate {
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 600;
+        }
+        .text-input::placeholder {
+            color: var(--text-3); text-transform: none;
+            letter-spacing: normal; font-weight: 400;
+        }
+        .text-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+        }
+
+        /* File chooser (dashed drop target) */
+        .file-label {
+            flex: 1; min-width: 0;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 13px 16px;
+            font-size: 15px; font-weight: 500;
+            color: var(--text-2);
+            background: var(--field);
+            border: 1.5px dashed var(--hairline-strong);
+            border-radius: var(--r-md);
+            cursor: pointer;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+        }
+        .file-label:hover { border-color: var(--accent); color: var(--text); }
+        .tabpanel input[type="file"] { display: none; }
+
+        .file-hint {
+            margin: 10px 2px 0;
+            font-size: 12.5px;
+            color: var(--text-3);
             text-align: center;
-            padding: 10px 0;
         }
 
-        .clean .icon {
-            font-size: 56px;
+        /* Primary button (Apple filled) */
+        .btn {
+            flex-shrink: 0;
+            padding: 0 22px;
+            min-height: 48px;
+            font: inherit; font-size: 15px; font-weight: 600;
+            letter-spacing: -0.01em;
+            color: #fff;
+            background: var(--accent);
+            border: none;
+            border-radius: var(--r-md);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.18s ease, transform 0.12s ease, opacity 0.18s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:hover:not(:disabled) { background: var(--accent-press); }
+        .btn:active:not(:disabled) { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.4; cursor: default; }
+
+        /* ---------------- Result cards ---------------- */
+
+        #uploadResult, #videoResult, #result { margin-top: 20px; }
+
+        .card, .detect-card, .progress-card {
+            background: var(--surface);
+            border: 1px solid var(--hairline);
+            border-radius: var(--r-lg);
+            box-shadow: var(--shadow-card);
+            animation: cardIn 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(14px) scale(0.99); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .card { padding: 26px 26px 24px; }
+        .detect-card { padding: 24px; text-align: center; }
+        .progress-card { padding: 22px 24px; }
+
+        /* Detection (photo/video) result */
+        .detect-card img.shot, .detect-card video.shot {
+            width: 100%;
+            max-height: 380px;
+            object-fit: contain;
+            border-radius: var(--r-md);
+            background: #000;
             display: block;
-            margin-bottom: 10px;
-            animation: pop 0.5s ease;
+            margin: 0 auto 18px;
         }
 
+        .detect-card .plate-read {
+            font-size: 12px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--text-3);
+            margin: 0 0 4px;
+        }
+        .detect-card .plate-big {
+            font-size: 30px; font-weight: 700; letter-spacing: 0.02em;
+            margin: 0 0 16px; color: var(--text);
+        }
+        .detect-card .vid-summary {
+            font-size: 13px; color: var(--text-3); margin: 0 0 16px;
+        }
+        .detect-card .recorded-note {
+            font-size: 13px; color: var(--text-3); margin-top: 14px;
+        }
+        .detect-card .dl-link {
+            display: inline-block; margin-top: 4px;
+            font-size: 13px; color: var(--accent); text-decoration: none;
+        }
+        .detect-card .dl-link:hover { text-decoration: underline; }
+
+        .viol-row {
+            display: flex; flex-wrap: wrap; gap: 8px;
+            justify-content: center; margin-bottom: 4px;
+        }
+        .viol-badge {
+            padding: 7px 14px; border-radius: 980px;
+            font-size: 13.5px; font-weight: 600;
+            background: var(--danger-bg); color: var(--danger);
+            text-transform: capitalize;
+        }
+        .clean-badge {
+            display: inline-block;
+            padding: 7px 16px; border-radius: 980px;
+            font-size: 13.5px; font-weight: 600;
+            background: var(--success-bg); color: var(--success);
+        }
+
+        /* Vehicle registration header */
+        .vehicle {
+            display: flex; flex-wrap: wrap; align-items: baseline;
+            gap: 6px 14px;
+            padding-bottom: 18px; margin-bottom: 20px;
+            border-bottom: 1px solid var(--hairline);
+        }
+        .vehicle .veh-plate {
+            font-size: 24px; font-weight: 700; letter-spacing: 0.02em;
+            color: var(--text);
+        }
+        .vehicle .veh-loc { font-size: 15px; color: var(--text-2); }
+        .vehicle .veh-loc .state { font-weight: 600; color: var(--text); }
+        .vehicle .veh-muted { font-size: 14px; color: var(--text-3); }
+        .vehicle .veh-src {
+            width: 100%; font-size: 11.5px; color: var(--text-3); margin-top: 2px;
+        }
+
+        /* Clean-record empty state */
+        .clean { text-align: center; padding: 12px 0 6px; }
+        .clean .icon {
+            font-size: 46px; display: block; margin-bottom: 12px;
+            animation: pop 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        }
         @keyframes pop {
-            0% { transform: scale(0.4); opacity: 0; }
-            70% { transform: scale(1.1); }
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.08); }
             100% { transform: scale(1); opacity: 1; }
         }
-
-        .clean h2 {
-            margin: 0 0 6px;
-        }
-
-        .clean p {
-            margin: 0;
-            color: #666;
-        }
+        .clean h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+        .clean p { margin: 0; color: var(--text-2); }
 
         .card h2 {
-            margin-top: 0;
+            margin: 0 0 14px;
+            font-size: 19px; font-weight: 600; letter-spacing: -0.01em;
         }
 
-        .vehicle {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px 16px;
-            padding: 0 0 18px;
-            margin-bottom: 18px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .vehicle .veh-plate {
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: 2px;
-            color: var(--blue-1);
-            font-family: 'Poppins', monospace;
-        }
-
-        .vehicle .veh-loc {
-            font-size: 15px;
-            color: #333;
-        }
-
-        .vehicle .veh-loc .state {
-            font-weight: 600;
-        }
-
-        .vehicle .veh-muted {
-            font-size: 13px;
-            color: #999;
-        }
-
-        .vehicle .veh-src {
-            width: 100%;
-            font-size: 11px;
-            color: #aaa;
-            margin-top: 2px;
-        }
-
-        .table-wrap {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 6px;
-        }
-
-        th {
-            background: var(--blue-2);
-            color: white;
-            padding: 12px 10px;
+        /* Records table */
+        .table-wrap { overflow-x: auto; margin: 0 -6px; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
             text-align: left;
-            font-weight: 600;
-            font-size: 14px;
+            font-size: 11.5px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--text-3);
+            padding: 0 12px 10px;
             white-space: nowrap;
+            border-bottom: 1px solid var(--hairline);
         }
-
-        th:first-child { border-radius: 10px 0 0 10px; }
-        th:last-child { border-radius: 0 10px 10px 0; }
-
-        td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #eee;
-            font-size: 14px;
+        tbody td {
+            padding: 14px 12px;
+            font-size: 14.5px;
+            border-bottom: 1px solid var(--hairline);
             vertical-align: middle;
         }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr { animation: cardIn 0.3s ease; }
+        tbody tr:hover { background: var(--surface-2); }
 
-        tbody tr {
-            animation: fadeInUp 0.35s ease;
-        }
-
-        tbody tr:hover {
-            background: #f6f9ff;
-        }
+        .amount-cell { font-weight: 600; font-variant-numeric: tabular-nums; }
 
         .violation-tag {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            background: #fdecea;
-            color: var(--danger);
-            text-transform: capitalize;
-            white-space: nowrap;
+            display: inline-block; padding: 5px 11px; border-radius: 980px;
+            font-size: 12.5px; font-weight: 600;
+            background: var(--danger-bg); color: var(--danger);
+            text-transform: capitalize; white-space: nowrap;
         }
-
         .status-pill {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: capitalize;
-            white-space: nowrap;
+            display: inline-block; padding: 5px 12px; border-radius: 980px;
+            font-size: 12.5px; font-weight: 600;
+            text-transform: capitalize; white-space: nowrap;
         }
-
-        .status-pill.unpaid {
-            background: #fdecea;
-            color: var(--danger);
-        }
-
-        .status-pill.paid {
-            background: #e8f8ee;
-            color: var(--success);
-        }
+        .status-pill.unpaid { background: var(--danger-bg); color: var(--danger); }
+        .status-pill.paid { background: var(--success-bg); color: var(--success); }
 
         img.evidence {
-            width: 100px;
-            border-radius: 10px;
-            border: 2px solid #eee;
-            cursor: zoom-in;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            display: block;
+            width: 88px; height: 66px; object-fit: cover;
+            border-radius: var(--r-sm);
+            border: 1px solid var(--hairline);
+            cursor: zoom-in; display: block;
+            transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
         }
-
         img.evidence:hover {
-            transform: scale(1.8);
-            box-shadow: 0 10px 24px rgba(0,0,0,0.3);
-            position: relative;
-            z-index: 5;
+            transform: scale(2.4);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+            position: relative; z-index: 5;
+            border-color: var(--hairline-strong);
         }
 
         .total {
-            font-size: 22px;
-            color: var(--danger);
-            margin-top: 20px;
-            font-weight: 700;
+            margin-top: 22px; padding-top: 18px;
+            border-top: 1px solid var(--hairline);
+            font-size: 15px; color: var(--text-2);
             text-align: right;
         }
-
-        /* ---- Video analysis ---- */
-
-        .progress-card {
-            background: white;
-            color: #1c1c1c;
-            max-width: 560px;
-            margin: 22px auto 0;
-            border-radius: var(--radius);
-            padding: 22px 24px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
-            animation: fadeInUp 0.4s ease;
+        .total strong {
+            font-size: 22px; font-weight: 700; color: var(--text);
+            font-variant-numeric: tabular-nums;
+            margin-left: 8px;
         }
 
+        /* Progress (video) */
         .progress-card .p-label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: baseline;
+            font-size: 15px; font-weight: 600; margin-bottom: 12px;
         }
-
+        .progress-card .p-label .pct {
+            color: var(--accent); font-variant-numeric: tabular-nums;
+        }
         .progress-track {
-            height: 12px;
-            background: #eef2f9;
-            border-radius: 20px;
-            overflow: hidden;
+            height: 8px; background: var(--seg-track);
+            border-radius: 980px; overflow: hidden;
         }
-
         .progress-fill {
-            height: 100%;
-            width: 0;
-            background: linear-gradient(90deg, var(--accent), var(--blue-2));
-            border-radius: 20px;
-            transition: width 0.3s ease;
+            height: 100%; width: 0;
+            background: var(--accent);
+            border-radius: 980px;
+            transition: width 0.35s ease;
         }
-
         .progress-card .p-hint {
-            font-size: 12px;
-            color: #999;
-            margin-top: 10px;
+            font-size: 12.5px; color: var(--text-3); margin: 12px 0 0;
         }
 
-        .detect-card video.shot {
-            width: 100%;
-            max-height: 420px;
-            border-radius: 12px;
-            border: 2px solid #eee;
-            display: block;
-            margin: 0 auto 16px;
-            background: #000;
+        /* Spinner */
+        .spinner {
+            width: 30px; height: 30px; margin: 34px auto;
+            border: 3px solid var(--hairline);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        .detect-card .vid-summary {
-            font-size: 13px;
-            color: #888;
-            margin: 0 0 14px;
-        }
-
-        .detect-card .dl-link {
-            display: inline-block;
-            margin-top: 4px;
-            font-size: 13px;
-            color: var(--blue-2);
+        /* Error */
+        .error-msg {
+            text-align: center;
+            background: var(--danger-bg);
+            color: var(--danger);
+            border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+            padding: 16px; border-radius: var(--r-md);
+            font-size: 14.5px;
         }
 
         footer {
-            text-align: center;
-            margin-top: 50px;
-            opacity: 0.6;
-            font-size: 12px;
+            text-align: center; margin-top: 48px;
+            font-size: 12.5px; color: var(--text-3);
         }
 
-        @media (max-width: 520px) {
-            .search-card {
-                flex-direction: column;
-            }
+        @media (max-width: 500px) {
+            body { padding: 44px 16px 64px; }
+            .field-row { flex-direction: column; }
+            .btn { width: 100%; padding: 13px; }
+        }
 
-            .search-card button {
-                padding: 14px;
-            }
-
-            .total {
-                text-align: center;
-            }
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
         }
 
     </style>
@@ -599,63 +490,88 @@
 
 <body>
 
-    <div class="hero">
-        <h1><span class="badge">🚦</span> Traffic Fine Checker</h1>
-        <p>Upload a photo or video to auto-detect violations, or look up a plate directly.</p>
+    <div class="container">
+
+        <div class="hero">
+            <div class="app-mark">🚦</div>
+            <h1>Traffic Fine Checker</h1>
+            <p>Detect two-wheeler violations from a photo or video, or look up any plate's record.</p>
+        </div>
+
+        <div class="console">
+
+            <div class="segmented" role="tablist" aria-label="Analysis mode">
+                <span class="seg-thumb" aria-hidden="true"></span>
+                <button type="button" class="seg active" data-tab="photo" role="tab" aria-selected="true">Photo</button>
+                <button type="button" class="seg" data-tab="video" role="tab" aria-selected="false">Video</button>
+                <button type="button" class="seg" data-tab="plate" role="tab" aria-selected="false">Plate</button>
+            </div>
+
+            <!-- Photo -->
+            <form class="tabpanel active" data-panel="photo" id="uploadCard" onsubmit="return handleUpload(event)">
+                <div class="field-row">
+                    <label for="photo" class="file-label" id="fileLabel">📷 Choose a photo…</label>
+                    <input type="file" id="photo" accept="image/*">
+                    <button type="submit" class="btn" id="analyzeBtn" disabled>Analyze</button>
+                </div>
+                <p class="file-hint">Detects helmet, triple-riding &amp; plate, then records the fine.</p>
+            </form>
+
+            <!-- Video -->
+            <form class="tabpanel" data-panel="video" id="videoCard" onsubmit="return handleVideoUpload(event)">
+                <div class="field-row">
+                    <label for="video" class="file-label" id="videoLabel">🎞️ Choose a video…</label>
+                    <input type="file" id="video" accept="video/*">
+                    <button type="submit" class="btn" id="analyzeVideoBtn" disabled>Analyze</button>
+                </div>
+                <p class="file-hint">Tracks vehicles across frames — processed with a live progress bar.</p>
+            </form>
+
+            <!-- Plate lookup -->
+            <form class="tabpanel" data-panel="plate" id="searchCard" onsubmit="return handleSubmit(event)">
+                <div class="field-row">
+                    <label for="plate" class="sr-only">Number plate</label>
+                    <input type="text" id="plate" class="text-input plate"
+                           placeholder="e.g. MH12AB1234" autocomplete="off">
+                    <button type="submit" class="btn">Check</button>
+                </div>
+                <p class="file-hint">Shows recorded fines and the vehicle's registration region.</p>
+            </form>
+
+        </div>
+
+        <div id="uploadResult"></div>
+        <div id="videoResult"></div>
+        <div id="result"></div>
+
+        <footer>Ride safe. Wear a helmet. Follow the speed limit.</footer>
+
     </div>
 
-    <form class="upload-card" id="uploadCard" onsubmit="return handleUpload(event)">
-
-        <label for="photo" class="file-label" id="fileLabel">📷 Choose a photo…</label>
-
-        <input type="file" id="photo" accept="image/*">
-
-        <button type="submit" id="analyzeBtn" disabled>
-            Analyze
-        </button>
-
-    </form>
-
-    <div id="uploadResult"></div>
-
-    <form class="upload-card" id="videoCard" onsubmit="return handleVideoUpload(event)">
-
-        <label for="video" class="file-label" id="videoLabel">🎞️ Choose a video…</label>
-
-        <input type="file" id="video" accept="video/*">
-
-        <button type="submit" id="analyzeVideoBtn" disabled>
-            Analyze
-        </button>
-
-    </form>
-
-    <div id="videoResult"></div>
-
-    <div class="or-divider">or look up a plate</div>
-
-    <form class="search-card" id="searchCard" onsubmit="return handleSubmit(event)">
-
-        <label for="plate" class="sr-only">Number plate</label>
-
-        <input
-            type="text"
-            id="plate"
-            placeholder="e.g. MH12AB1234"
-            autocomplete="off"
-            autofocus>
-
-        <button type="submit">
-            Check
-        </button>
-
-    </form>
-
-    <div id="result"></div>
-
-    <footer>Ride safe. Wear a helmet. Follow the speed limit. 🛵</footer>
-
     <script>
+
+        // ---- Segmented control (tab switching) ----
+        (function () {
+            const segs = Array.from(document.querySelectorAll(".seg"));
+            const thumb = document.querySelector(".seg-thumb");
+            const panels = Array.from(document.querySelectorAll(".tabpanel"));
+
+            function activate(name, idx) {
+                segs.forEach(s => {
+                    const on = s.dataset.tab === name;
+                    s.classList.toggle("active", on);
+                    s.setAttribute("aria-selected", on ? "true" : "false");
+                });
+                panels.forEach(p => p.classList.toggle("active", p.dataset.panel === name));
+                thumb.style.transform = `translateX(${idx * 100}%)`;
+                if (name === "plate") {
+                    const el = document.getElementById("plate");
+                    if (el) setTimeout(() => el.focus(), 60);
+                }
+            }
+
+            segs.forEach((s, i) => s.addEventListener("click", () => activate(s.dataset.tab, i)));
+        })();
 
         const input = document.getElementById("plate");
         const searchCard = document.getElementById("searchCard");
@@ -781,7 +697,7 @@
                 : "";
 
             const note = data.violations.length
-                ? `Recorded to the system. Look it up below ↓`
+                ? `Recorded to the system. Full record below ↓`
                 : `Nothing to fine — this plate stays clean.`;
 
             uploadResult.innerHTML = `
@@ -829,7 +745,7 @@
                 <div class="progress-card">
                     <div class="p-label">
                         <span>Analyzing video…</span>
-                        <span>${pct}%</span>
+                        <span class="pct">${pct}%</span>
                     </div>
                     <div class="progress-track">
                         <div class="progress-fill" style="width:${pct}%"></div>
@@ -915,9 +831,9 @@
         }
 
         function shakeCard() {
-            searchCard.classList.remove("shake");
-            void searchCard.offsetWidth; // restart animation
-            searchCard.classList.add("shake");
+            input.style.borderColor = "var(--danger)";
+            input.focus();
+            setTimeout(() => { input.style.borderColor = ""; }, 900);
         }
 
         function formatTime(raw) {
@@ -992,7 +908,7 @@
 
                 <div class="table-wrap">
                 <table>
-
+                    <thead>
                     <tr>
                         <th>Violation</th>
                         <th>Amount</th>
@@ -1000,6 +916,8 @@
                         <th>Time</th>
                         <th>Evidence</th>
                     </tr>
+                    </thead>
+                    <tbody>
                 `;
 
                 data.fines.forEach(f => {
@@ -1009,35 +927,28 @@
 
                     html += `
                     <tr>
-
                         <td><span class="violation-tag">${violationLabel}</span></td>
-
-                        <td>₹${f.amount}</td>
-
+                        <td class="amount-cell">₹${f.amount}</td>
                         <td><span class="status-pill ${statusClass}">${f.status}</span></td>
-
                         <td>${formatTime(f.time)}</td>
-
                         <td>
-
                             <img
                                 class="evidence"
                                 src="${f.image}"
                                 alt="Evidence for ${violationLabel}"
                             >
-
                         </td>
-
                     </tr>
                     `;
                 });
 
                 html += `
+                    </tbody>
                 </table>
                 </div>
 
                 <div class="total">
-                    Total Due: ₹${data.total}
+                    Total due <strong>₹${data.total}</strong>
                 </div>
                 `;
             }
