@@ -159,6 +159,14 @@ def analyze_image(image_path, model, reader, evidence_dir="evidence", conf=0.25)
                 plate_text = reader.readtext(plate_crop, detail=0)
 
     plate_number = clean_plate("".join(plate_text)) if plate_text else None
+    if plate_number:
+        # A single photo can't be temporally voted, but a small, structure-valid
+        # look-alike correction (0/O, 1/I, 8/B, 5/S) still improves one reading.
+        # Only applied when it yields a real plate shape; otherwise left as-is.
+        from modules.plate_recognizer import correct_plate
+
+        corrected, _ = correct_plate(plate_number)
+        plate_number = corrected or plate_number
 
     # A WithoutHelmet box overlapping a WithHelmet box is the model
     # contradicting itself on the same rider — tested against a real photo

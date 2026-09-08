@@ -22,7 +22,7 @@ import time
 import cv2
 
 from modules.association import DetBox
-from modules.detector import clean_plate
+from modules.plate_recognizer import PlateStabilizer
 from modules.vehicle import TrackState
 from modules.vehicle_tracker import VehicleTracker
 
@@ -89,7 +89,7 @@ def process_video(
     reported = set()  # (track_id, violation) already fined this run
     streak = {}  # (track_id, violation) -> consecutive-frame count
     recorded = []  # summaries of the fines we recorded
-    plate_text_by_track = {}  # track_id -> latest non-empty OCR reading
+    stabilizers = {}  # track_id -> PlateStabilizer (temporal OCR voting)
     confirmed_ids = set()  # distinct vehicles that reached CONFIRMED
 
     evidence_dir = os.path.dirname(output_path) or "evidence"
@@ -128,11 +128,14 @@ def process_video(
         if crop.size:
             cv2.imwrite(evidence_file, crop)
         amount = record_fn(plate, violation, evidence_file)
+        stab = stabilizers.get(track_id)
         recorded.append({
             "plate": plate,
             "violation": violation,
             "amount": amount,
             "evidence": "/evidence/" + os.path.basename(evidence_file),
+            "plate_confidence": round(stab.confidence, 3) if stab else 0.0,
+            "plate_observations": stab.num_observations if stab else 0,
         })
 
     while True:
@@ -175,17 +178,29 @@ def process_video(
             if track.state is TrackState.CONFIRMED:
                 confirmed_ids.add(tid)
 
-            # ---- OCR the plate (keep the latest non-empty reading) ----
+            # ---- OCR the plate and feed the temporal stabilizer ----
+            # detail=1 gives per-box confidence; the weakest group gates the
+            # reading's confidence. The stabilizer votes across frames, so a
+            # single noisy frame can't set the plate we fine on.
             if track.plate_box is not None:
                 px1, py1, px2, py2 = track.plate_box
                 crop = frame[max(0, py1):py2, max(0, px1):px2]
-                texts = reader.readtext(crop, detail=0) if crop.size else []
-                text = clean_plate("".join(texts)) if texts else None
-                if text:
-                    plate_text_by_track[tid] = text
-                    _put_label(frame, text, (px1, py2 + 20), (255, 255, 0))
+                ocr = reader.readtext(crop, detail=1) if crop.size else []
+                if ocr:
+                    joined = "".join(text for _, text, _ in ocr)
+                    conf = min(float(c) for _, _, c in ocr)
+                    stab = stabilizers.setdefault(tid, PlateStabilizer())
+                    stab.add(joined, conf)
+                    res = stab.result()
+                    track.stable_plate = res.stable
+                    track.plate_confidence = res.confidence
+                    track.plate_observations = stab.observations
+                    display = res.stable or res.normalized
+                    if display:
+                        _put_label(frame, display, (px1, py2 + 20), (255, 255, 0))
 
-            plate = plate_text_by_track.get(tid)
+            # Fine only on the temporally-voted stable plate, never a raw frame.
+            plate = track.stable_plate
 
             # ---- speed / overspeed (only when calibrated) ----
             if speed_estimator is not None and track.plate_box is not None:
