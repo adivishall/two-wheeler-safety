@@ -22,6 +22,8 @@ import time
 import cv2
 
 from modules.association import DetBox
+from modules.confidence import compute_confidence, temporal_confidence
+from modules.geometry import horizontal_overlap_ratio
 from modules.plate_recognizer import PlateStabilizer
 from modules.vehicle import TrackState
 from modules.vehicle_tracker import VehicleTracker
@@ -115,8 +117,12 @@ def process_video(
         streak[key] = streak.get(key, 0) + 1
         return streak[key] >= streak_threshold
 
-    def maybe_record(track_id, violation, plate, frame, box):
-        key = (track_id, violation)
+    def maybe_record(track, violation, plate, frame, box, detection, association):
+        """Record a confirmed (vehicle, violation) once, with a full confidence
+        breakdown. ``detection``/``association`` are the per-violation component
+        scores; temporal and OCR come from the streak and stabilizer."""
+        tid = track.track_id
+        key = (tid, violation)
         if key in reported or not plate:
             return
         reported.add(key)
@@ -128,14 +134,25 @@ def process_video(
         if crop.size:
             cv2.imwrite(evidence_file, crop)
         amount = record_fn(plate, violation, evidence_file)
-        stab = stabilizers.get(track_id)
+
+        supporting = streak.get(key, 0)
+        conf = compute_confidence(
+            violation,
+            detection=detection,
+            temporal=temporal_confidence(supporting, streak_threshold),
+            association=association,
+            ocr=track.plate_confidence,
+            supporting_frames=supporting,
+        )
+        track.violation_history.append(conf)
         recorded.append({
             "plate": plate,
             "violation": violation,
             "amount": amount,
             "evidence": "/evidence/" + os.path.basename(evidence_file),
-            "plate_confidence": round(stab.confidence, 3) if stab else 0.0,
-            "plate_observations": stab.num_observations if stab else 0,
+            "confidence": conf.final,
+            "confidence_breakdown": conf.as_dict(),
+            "plate_observations": len(track.plate_observations),
         })
 
     while True:
@@ -202,16 +219,27 @@ def process_video(
             # Fine only on the temporally-voted stable plate, never a raw frame.
             plate = track.stable_plate
 
+            body = track.body
+            # Association confidence: how well the plate sits under the rider.
+            assoc = (
+                horizontal_overlap_ratio(track.plate_box, body.box)
+                if body is not None and track.plate_box is not None
+                else 0.5
+            )
+
             # ---- speed / overspeed (only when calibrated) ----
             if speed_estimator is not None and track.plate_box is not None:
                 speed = speed_estimator.calculate_speed(tid, track.plate_box)
                 if speed > speed_limit_kmh:
                     _put_label(frame, f"{speed} km/h", (track.plate_box[0], track.plate_box[1] - 10), _RED)
                     if confirm(tid, "overspeed", seen):
-                        maybe_record(tid, "overspeed", plate, frame, track.plate_box)
+                        # margin over the limit as the detection score; speed is
+                        # measured on the plate itself, so association is 1.0.
+                        margin = (speed - speed_limit_kmh) / max(1, speed_limit_kmh)
+                        maybe_record(track, "overspeed", plate, frame, track.plate_box,
+                                     detection=margin, association=1.0)
 
             # ---- helmet / triple-riding from the vehicle's body ----
-            body = track.body
             if body is not None:
                 bx1, by1 = body.box[0], body.box[1]
                 if body.ambiguous_helmet:
@@ -219,11 +247,13 @@ def process_video(
                 elif body.no_helmet_violation:
                     _put_label(frame, "No Helmet!", (bx1, by1 - 10), _RED)
                     if confirm(tid, "no_helmet", seen):
-                        maybe_record(tid, "no_helmet", plate, frame, body.box)
+                        maybe_record(track, "no_helmet", plate, frame, body.box,
+                                     detection=body.no_helmet_conf, association=assoc)
                 if body.has_triple:
                     _put_label(frame, "Triple Riding!", (bx1, by1 - 28), _RED)
                     if confirm(tid, "triple_riding", seen):
-                        maybe_record(tid, "triple_riding", plate, frame, body.box)
+                        maybe_record(track, "triple_riding", plate, frame, body.box,
+                                     detection=body.triple_conf, association=assoc)
 
         # reset streaks for (track, violation) pairs not seen this frame
         for key in list(streak):
