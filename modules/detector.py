@@ -58,8 +58,8 @@ def load_models(model_path):
     (e.g. from a test) doesn't pull in ultralytics/easyocr or require the
     weights file to exist.
     """
-    from ultralytics import YOLO
     import easyocr
+    from ultralytics import YOLO
 
     return YOLO(model_path), easyocr.Reader(["en"])
 
