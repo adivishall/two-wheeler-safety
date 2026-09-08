@@ -106,6 +106,28 @@ _STANDARD = re.compile(r"^([A-Z]{2})(\d{1,2})([A-Z]{1,3})(\d{1,4})$")
 _BH_SERIES = re.compile(r"^(\d{2})BH(\d{4})([A-Z]{1,2})$")
 
 
+def normalize_plate(plate):
+    """Strip everything but letters/digits and upper-case. The single place
+    plate strings are canonicalised before storage, lookup, or matching."""
+    if not plate:
+        return ""
+    return re.sub(r"[^A-Za-z0-9]", "", plate).upper()
+
+
+def matches_structure(plate):
+    """True if the (normalized) string is *shaped* like a valid Indian plate
+    (standard or BH series). Unlike :func:`decode_plate` this does not require
+    the state code to be one we recognise, so ``MH99XY1234`` matches."""
+    cleaned = normalize_plate(plate)
+    return bool(_STANDARD.match(cleaned) or _BH_SERIES.match(cleaned))
+
+
+def is_valid_plate(plate):
+    """True if the plate is both well-formed *and* carries a known state code
+    (standard) or is a BH-series plate — i.e. :func:`decode_plate` recognises it."""
+    return decode_plate(plate).get("recognized", False)
+
+
 def decode_plate(plate):
     """Return registration details decoded from the plate string.
 

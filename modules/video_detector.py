@@ -1,59 +1,52 @@
 """Video violation pipeline for the web app's video-upload route.
 
-This mirrors what `main.py` does at the command line — detect + track plates
-across frames, associate no-helmet / triple-riding to the nearest tracked
-plate, estimate speed (when calibrated), and confirm a violation over a short
-streak of frames before recording it — but packaged as a single reusable
-`process_video()` with **per-call state** (its own tracker, streak counters,
-and reported set) so it's safe to call from a web request, records fines
-through a callback instead of POSTing to itself over HTTP, and reports
-progress so the browser can show a bar.
+Detect + track vehicles across frames, then confirm a violation over a short
+streak of frames before recording it. Packaged as a single reusable
+``process_video()`` with **per-call state** (its own tracker, streak counters,
+reported set) so it's safe to call from a web request, records fines through a
+callback instead of POSTing to itself over HTTP, and reports progress so the
+browser can show a bar.
 
-`main.py` is left as the standalone CLI; this is the library the server uses.
+Association is done by :class:`~modules.vehicle_tracker.VehicleTracker`, which
+groups each frame's raw boxes into per-vehicle instances (a rider/body region
+plus its plate, matched one-to-one) and follows them across frames with stable
+IDs. This replaces the old "attribute each violation box to the nearest tracked
+plate" heuristic, which mis-assigns when bikes are close together.
+
+``main.py`` remains the standalone CLI; this is the library the server uses.
 """
 
-import math
 import os
 import time
 
 import cv2
 
-from modules.detector import iou, clean_plate
+from modules.association import DetBox
+from modules.confidence import compute_confidence, temporal_confidence
+from modules.geometry import horizontal_overlap_ratio
+from modules.plate_recognizer import PlateStabilizer
+from modules.vehicle import TrackState
+from modules.vehicle_tracker import VehicleTracker
 
 # Draw colors (BGR) — green for plates/helmet-on, red for violations.
 _GREEN = (0, 200, 0)
 _RED = (0, 0, 230)
 _AMBER = (0, 200, 255)
 
-
-def _centroid(box):
-    x1, y1, x2, y2 = box
-    return ((x1 + x2) / 2, (y1 + y2) / 2)
-
-
-def _nearest_plate_id(box, tracked_plates):
-    """Attribute a violation box to the nearest tracked plate (best-effort;
-    can mis-attribute when several vehicles are close together)."""
-    if not tracked_plates:
-        return None
-    cx, cy = _centroid(box)
-    return min(
-        tracked_plates,
-        key=lambda tid: math.hypot(
-            cx - _centroid(tracked_plates[tid])[0],
-            cy - _centroid(tracked_plates[tid])[1],
-        ),
-    )
-
-
-def _is_contradicted(box, other_boxes, iou_threshold=0.1):
-    """A WithoutHelmet box overlapping a WithHelmet box is the model
-    contradicting itself on one rider — trust neither."""
-    return any(iou(box, other) > iou_threshold for other in other_boxes)
+_LABEL_COLORS = {
+    "Plate": _GREEN,
+    "WithHelmet": _GREEN,
+    "WithoutHelmet": _RED,
+    "TripleRiding": _RED,
+}
 
 
 def _put_label(frame, text, org, color):
-    cv2.putText(frame, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
+    x, y = org
+    cv2.putText(
+        frame, text, (int(x), int(max(0, y))),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA,
+    )
 
 
 def process_video(
@@ -80,24 +73,26 @@ def process_video(
                       how a fine gets persisted.
         progress_cb:  callable(frames_done, total_frames) for a progress bar.
         pixels_per_meter: speed calibration; speed/overspeed is skipped if None.
-        max_width:    frames wider than this are downscaled before processing
-                      (4K footage is needlessly slow and huge to write back).
+        max_width:    frames wider than this are downscaled before processing.
+        streak_threshold: consecutive frames a violation must hold before it's
+                      recorded (filters single-frame model flicker).
         max_frames:   optional cap for a quick run.
 
-    Returns a summary dict: frames processed, plate count, output path, fps,
+    Returns a summary dict: frames processed, vehicle count, output path, fps,
     and the list of recorded violations (plate, violation, amount, evidence).
     """
-    from utils.tracker import CentroidTracker
     from modules.speed import SpeedEstimator
 
-    tracker = CentroidTracker()
+    tracker = VehicleTracker()
     speed_estimator = (
         SpeedEstimator(pixels_per_meter=pixels_per_meter) if pixels_per_meter else None
     )
 
-    reported = set()          # (track_id, violation) already fined this run
-    streak = {}               # (track_id, violation) -> consecutive-frame count
-    recorded = []             # summaries of the fines we recorded
+    reported = set()  # (track_id, violation) already fined this run
+    streak = {}  # (track_id, violation) -> consecutive-frame count
+    recorded = []  # summaries of the fines we recorded
+    stabilizers = {}  # track_id -> PlateStabilizer (temporal OCR voting)
+    confirmed_ids = set()  # distinct vehicles that reached CONFIRMED
 
     evidence_dir = os.path.dirname(output_path) or "evidence"
     os.makedirs(evidence_dir, exist_ok=True)
@@ -112,7 +107,6 @@ def process_video(
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
 
     writer = None
-    scale = 1.0
     frame_idx = 0
 
     def confirm(track_id, violation, seen):
@@ -123,24 +117,42 @@ def process_video(
         streak[key] = streak.get(key, 0) + 1
         return streak[key] >= streak_threshold
 
-    def maybe_record(track_id, violation, plate, frame, box):
-        key = (track_id, violation)
+    def maybe_record(track, violation, plate, frame, box, detection, association):
+        """Record a confirmed (vehicle, violation) once, with a full confidence
+        breakdown. ``detection``/``association`` are the per-violation component
+        scores; temporal and OCR come from the streak and stabilizer."""
+        tid = track.track_id
+        key = (tid, violation)
         if key in reported or not plate:
             return
         reported.add(key)
         x1, y1, x2, y2 = box
-        crop = frame[max(0, y1):y2, max(0, x1):x2]
+        crop = frame[max(0, int(y1)):int(y2), max(0, int(x1)):int(x2)]
         evidence_file = os.path.join(
-            evidence_dir, f"{plate}_{violation}_{int(time.time()*1000)}.jpg"
+            evidence_dir, f"{plate}_{violation}_{int(time.time() * 1000)}.jpg"
         )
         if crop.size:
             cv2.imwrite(evidence_file, crop)
         amount = record_fn(plate, violation, evidence_file)
+
+        supporting = streak.get(key, 0)
+        conf = compute_confidence(
+            violation,
+            detection=detection,
+            temporal=temporal_confidence(supporting, streak_threshold),
+            association=association,
+            ocr=track.plate_confidence,
+            supporting_frames=supporting,
+        )
+        track.violation_history.append(conf)
         recorded.append({
             "plate": plate,
             "violation": violation,
             "amount": amount,
             "evidence": "/evidence/" + os.path.basename(evidence_file),
+            "confidence": conf.final,
+            "confidence_breakdown": conf.as_dict(),
+            "plate_observations": len(track.plate_observations),
         })
 
     while True:
@@ -167,58 +179,81 @@ def process_video(
 
         results = model(frame, verbose=False)[0]
 
-        plates, without_helmet, with_helmet, triple_riding = [], [], [], []
+        dets = []
         for box in results.boxes:
             label = model.names[int(box.cls[0])]
             x1, y1, x2, y2 = map(int, box.xyxy[0])
-            if label == "Plate":
-                plates.append((x1, y1, x2, y2))
-                cv2.rectangle(frame, (x1, y1), (x2, y2), _GREEN, 2)
-            elif label == "WithoutHelmet":
-                without_helmet.append((x1, y1, x2, y2))
-                cv2.rectangle(frame, (x1, y1), (x2, y2), _RED, 2)
-            elif label == "TripleRiding":
-                triple_riding.append((x1, y1, x2, y2))
-                cv2.rectangle(frame, (x1, y1), (x2, y2), _RED, 2)
-            else:  # WithHelmet
-                with_helmet.append((x1, y1, x2, y2))
-                cv2.rectangle(frame, (x1, y1), (x2, y2), _GREEN, 2)
+            conf = float(box.conf[0])
+            dets.append(DetBox(label, (x1, y1, x2, y2), conf))
+            cv2.rectangle(frame, (x1, y1), (x2, y2), _LABEL_COLORS.get(label, _GREEN), 2)
 
-        tracked_plates = tracker.update(plates)
-        plate_text_by_id = {}
+        tracks = tracker.update(dets, frame_idx)
         seen = set()
 
-        for track_id, plate_box in tracked_plates.items():
-            px1, py1, px2, py2 = plate_box
-            crop = frame[max(0, py1):py2, max(0, px1):px2]
-            texts = reader.readtext(crop, detail=0) if crop.size else []
-            plate_text = clean_plate("".join(texts)) if texts else None
-            plate_text_by_id[track_id] = plate_text
+        for track in tracks:
+            tid = track.track_id
+            if track.state is TrackState.CONFIRMED:
+                confirmed_ids.add(tid)
 
-            if plate_text:
-                _put_label(frame, plate_text, (px1, py2 + 20), (255, 255, 0))
+            # ---- OCR the plate and feed the temporal stabilizer ----
+            # detail=1 gives per-box confidence; the weakest group gates the
+            # reading's confidence. The stabilizer votes across frames, so a
+            # single noisy frame can't set the plate we fine on.
+            if track.plate_box is not None:
+                px1, py1, px2, py2 = track.plate_box
+                crop = frame[max(0, py1):py2, max(0, px1):px2]
+                ocr = reader.readtext(crop, detail=1) if crop.size else []
+                if ocr:
+                    joined = "".join(text for _, text, _ in ocr)
+                    conf = min(float(c) for _, _, c in ocr)
+                    stab = stabilizers.setdefault(tid, PlateStabilizer())
+                    stab.add(joined, conf)
+                    res = stab.result()
+                    track.stable_plate = res.stable
+                    track.plate_confidence = res.confidence
+                    track.plate_observations = stab.observations
+                    display = res.stable or res.normalized
+                    if display:
+                        _put_label(frame, display, (px1, py2 + 20), (255, 255, 0))
 
-            if speed_estimator is not None:
-                speed = speed_estimator.calculate_speed(track_id, plate_box)
+            # Fine only on the temporally-voted stable plate, never a raw frame.
+            plate = track.stable_plate
+
+            body = track.body
+            # Association confidence: how well the plate sits under the rider.
+            assoc = (
+                horizontal_overlap_ratio(track.plate_box, body.box)
+                if body is not None and track.plate_box is not None
+                else 0.5
+            )
+
+            # ---- speed / overspeed (only when calibrated) ----
+            if speed_estimator is not None and track.plate_box is not None:
+                speed = speed_estimator.calculate_speed(tid, track.plate_box)
                 if speed > speed_limit_kmh:
-                    _put_label(frame, f"{speed} km/h", (px1, py1 - 10), _RED)
-                    if confirm(track_id, "overspeed", seen):
-                        maybe_record(track_id, "overspeed", plate_text, frame, plate_box)
+                    _put_label(frame, f"{speed} km/h", (track.plate_box[0], track.plate_box[1] - 10), _RED)
+                    if confirm(tid, "overspeed", seen):
+                        # margin over the limit as the detection score; speed is
+                        # measured on the plate itself, so association is 1.0.
+                        margin = (speed - speed_limit_kmh) / max(1, speed_limit_kmh)
+                        maybe_record(track, "overspeed", plate, frame, track.plate_box,
+                                     detection=margin, association=1.0)
 
-        for box in without_helmet:
-            if _is_contradicted(box, with_helmet):
-                _put_label(frame, "Ambiguous helmet", (box[0], box[1] - 10), _AMBER)
-                continue
-            _put_label(frame, "No Helmet!", (box[0], box[1] - 10), _RED)
-            pid = _nearest_plate_id(box, tracked_plates)
-            if pid is not None and confirm(pid, "no_helmet", seen):
-                maybe_record(pid, "no_helmet", plate_text_by_id.get(pid), frame, tracked_plates[pid])
-
-        for box in triple_riding:
-            _put_label(frame, "Triple Riding!", (box[0], box[1] - 10), _RED)
-            pid = _nearest_plate_id(box, tracked_plates)
-            if pid is not None and confirm(pid, "triple_riding", seen):
-                maybe_record(pid, "triple_riding", plate_text_by_id.get(pid), frame, tracked_plates[pid])
+            # ---- helmet / triple-riding from the vehicle's body ----
+            if body is not None:
+                bx1, by1 = body.box[0], body.box[1]
+                if body.ambiguous_helmet:
+                    _put_label(frame, "Ambiguous helmet", (bx1, by1 - 10), _AMBER)
+                elif body.no_helmet_violation:
+                    _put_label(frame, "No Helmet!", (bx1, by1 - 10), _RED)
+                    if confirm(tid, "no_helmet", seen):
+                        maybe_record(track, "no_helmet", plate, frame, body.box,
+                                     detection=body.no_helmet_conf, association=assoc)
+                if body.has_triple:
+                    _put_label(frame, "Triple Riding!", (bx1, by1 - 28), _RED)
+                    if confirm(tid, "triple_riding", seen):
+                        maybe_record(track, "triple_riding", plate, frame, body.box,
+                                     detection=body.triple_conf, association=assoc)
 
         # reset streaks for (track, violation) pairs not seen this frame
         for key in list(streak):
@@ -238,7 +273,7 @@ def process_video(
 
     return {
         "frames": frame_idx,
-        "plates_tracked": len(tracker.objects),
+        "plates_tracked": len(confirmed_ids),
         "fps": round(src_fps, 1),
         "output": "/evidence/" + os.path.basename(output_path),
         "violations": recorded,
