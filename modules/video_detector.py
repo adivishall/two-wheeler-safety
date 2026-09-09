@@ -239,14 +239,22 @@ def process_video(
             )
 
             # ---- speed / overspeed (only when calibrated) ----
+            # Video time (frame_idx / fps), so a slow machine can't change the
+            # estimated speed. The estimate carries an uncertainty and is only
+            # valid after enough samples; overspeed is still temporally confirmed.
             if speed_estimator is not None and track.plate_box is not None:
-                speed = speed_estimator.calculate_speed(tid, track.plate_box)
-                if speed > speed_limit_kmh:
-                    _put_label(frame, f"{speed} km/h", (track.plate_box[0], track.plate_box[1] - 10), _RED)
+                est = speed_estimator.estimate(tid, track.plate_box, frame_idx / src_fps)
+                if est.valid and est.kmh > speed_limit_kmh:
+                    _put_label(
+                        frame, f"{est.kmh:.0f}+-{est.uncertainty:.0f} km/h",
+                        (track.plate_box[0], track.plate_box[1] - 10), _RED,
+                    )
+                    track.overspeed_state = "candidate"
                     if confirm(tid, "overspeed", seen):
+                        track.overspeed_state = "confirmed"
                         # margin over the limit as the detection score; speed is
                         # measured on the plate itself, so association is 1.0.
-                        margin = (speed - speed_limit_kmh) / max(1, speed_limit_kmh)
+                        margin = (est.kmh - speed_limit_kmh) / max(1, speed_limit_kmh)
                         maybe_record(track, "overspeed", plate, frame, track.plate_box,
                                      detection=margin, association=1.0,
                                      supporting_frames=streak.get((tid, "overspeed"), 0))
