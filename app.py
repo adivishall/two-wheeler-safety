@@ -2,8 +2,10 @@ import os
 import tempfile
 import threading
 import uuid
-from flask import Flask, request, jsonify, render_template, send_from_directory
-import sqlite3
+
+from flask import Flask, jsonify, render_template, request, send_from_directory
+
+from modules.db import Database
 
 app = Flask(__name__)
 
@@ -22,12 +24,9 @@ MODEL_PATH = os.environ.get(
     "MODEL_PATH", "runs/detect/traffic_model-2/weights/best.pt"
 )
 
-# Fine amount (₹) per violation type; anything unlisted falls back to 300.
-FINE_AMOUNTS = {
-    "no_helmet": 500,
-    "triple_riding": 1000,
-    "overspeed": 700,
-}
+# Normalized SQLite store (vehicles / violations / evidence / jobs). Creating it
+# initializes the schema and migrates any legacy flat `fines` table in place.
+db = Database(DB_PATH)
 
 # YOLO + EasyOCR are heavy to load (a few seconds) and not needed unless
 # someone actually uploads a photo, so they're loaded once on the first
@@ -48,48 +47,9 @@ def get_models():
 
 
 def record_fine(plate, violation, image_path):
-    """Insert one fine and return the amount charged."""
-    amount = FINE_AMOUNTS.get(violation, 300)
-
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(
-        """
-        INSERT INTO fines (plate, violation, amount, image_path)
-        VALUES (?, ?, ?, ?)
-        """,
-        (plate.strip().upper(), violation, amount, image_path),
-    )
-    conn.commit()
-    conn.close()
-
-    return amount
-
-# =====================================
-# DATABASE SETUP
-# =====================================
-
-def init_db():
-
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS fines (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        plate TEXT,
-        violation TEXT,
-        amount INTEGER,
-        image_path TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        status TEXT DEFAULT 'unpaid'
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
-init_db()
+    """Insert one fine and return the amount charged. Kept as a thin wrapper so
+    the CLIs and video pipeline can pass it as a ``record_fn`` callback."""
+    return db.record_fine(plate, violation, image_path)
 
 # =====================================
 # HOME PAGE
@@ -279,51 +239,9 @@ def get_fines(plate):
 
     from modules.plate_info import decode_plate
 
-    plate = plate.strip().upper()
-
-    vehicle = decode_plate(plate)
-
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("""
-    SELECT
-        violation,
-        amount,
-        image_path,
-        timestamp,
-        status
-    FROM fines
-    WHERE plate=?
-    """, (plate,))
-
-    rows = c.fetchall()
-
-    conn.close()
-
-    fines = []
-    total = 0
-
-    for row in rows:
-
-        image_file = row[2].split("/")[-1]
-
-        fines.append({
-            "violation": row[0],
-            "amount": row[1],
-            "status": row[4],
-            "time": row[3],
-            "image": f"/evidence/{image_file}"
-        })
-
-        if row[4] == "unpaid":
-            total += row[1]
-
-    return jsonify({
-        "fines": fines,
-        "total": total,
-        "vehicle": vehicle
-    })
+    result = db.get_fines(plate)
+    result["vehicle"] = decode_plate(plate)
+    return jsonify(result)
 
 # =====================================
 # SHOW ALL FINES
@@ -331,40 +249,7 @@ def get_fines(plate):
 
 @app.route("/fines")
 def all_fines():
-
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    c.execute("""
-    SELECT
-        id,
-        plate,
-        violation,
-        amount,
-        image_path,
-        timestamp,
-        status
-    FROM fines
-    """)
-
-    rows = c.fetchall()
-
-    conn.close()
-
-    fines = [
-        {
-            "id": row[0],
-            "plate": row[1],
-            "violation": row[2],
-            "amount": row[3],
-            "image_path": row[4],
-            "timestamp": row[5],
-            "status": row[6]
-        }
-        for row in rows
-    ]
-
-    return jsonify(fines)
+    return jsonify(db.all_fines())
 
 # =====================================
 # RUN
