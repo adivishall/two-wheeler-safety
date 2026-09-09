@@ -14,10 +14,10 @@ After it runs it prints exactly which plates to look up in the web UI.
 
 import os
 import sys
-import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from modules.detector import load_models, analyze_image
+from modules.db import Database
+from modules.detector import analyze_image, load_models
 
 DB_PATH = os.environ.get("TRAFFIC_DB_PATH", "traffic.db")
 MODEL_PATH = os.environ.get(
@@ -40,20 +40,6 @@ DEMO_RECORDS = [
 ]
 
 
-def ensure_table(conn):
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS fines (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        plate TEXT,
-        violation TEXT,
-        amount INTEGER,
-        image_path TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        status TEXT DEFAULT 'unpaid'
-    )
-    """)
-
-
 def main():
     keep = "--keep" in sys.argv
 
@@ -64,11 +50,10 @@ def main():
     print("Loading model + OCR…")
     model, reader = load_models(MODEL_PATH)
 
-    conn = sqlite3.connect(DB_PATH)
-    ensure_table(conn)
+    db = Database(DB_PATH)
 
     if not keep:
-        conn.execute("DELETE FROM fines")
+        db.reset()
         print(f"Cleared existing fines in {DB_PATH}.")
 
     seeded = {}  # plate -> [(violation, amount, status)]
@@ -92,17 +77,11 @@ def main():
                 datetime.now(timezone.utc) - timedelta(days=days_ago)
             ).strftime("%Y-%m-%d %H:%M:%S")
 
-            conn.execute(
-                """
-                INSERT INTO fines (plate, violation, amount, image_path, timestamp, status)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (plate, violation, amount, evidence, timestamp, status),
+            db.record_fine(
+                plate, violation, evidence,
+                amount=amount, status=status, timestamp=timestamp,
             )
             seeded.setdefault(plate, []).append((violation, amount, status))
-
-    conn.commit()
-    conn.close()
 
     print("\nSeeded demo records — look these up in the web UI:\n")
     for plate, rows in seeded.items():
