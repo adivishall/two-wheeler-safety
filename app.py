@@ -3,13 +3,40 @@ import tempfile
 import threading
 import uuid
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
 from modules.db import Database
+from modules.validation import (
+    IMAGE_EXTENSIONS,
+    VIDEO_EXTENSIONS,
+    RateLimiter,
+    file_extension,
+    is_allowed_extension,
+    safe_evidence_name,
+    safe_extension,
+    sniff_image,
+    validate_plate,
+    validate_violation,
+)
 
 app = Flask(__name__)
 
-os.makedirs("evidence", exist_ok=True)
+EVIDENCE_DIR = os.path.join(app.root_path, "evidence")
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
+
+# --- Upload / rate-limit config (Phase 9) ---
+# Global hard cap on request size (Flask returns 413 above it). Generous enough
+# for a video upload; images are far smaller.
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "200"))
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+
+# Simple in-process per-IP rate limit on the write/upload endpoints.
+RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "120"))
+_rate_limiter = RateLimiter(max_requests=RATE_LIMIT_PER_MIN, window_s=60.0)
+
+
+def _rate_limited() -> bool:
+    return not _rate_limiter.allow(request.remote_addr or "unknown")
 
 # If set, /detect requires this value in the X-API-Key header — without
 # it, anyone who can reach the server can write arbitrary fines for any
@@ -65,16 +92,24 @@ def home():
 
 @app.route('/evidence/<path:filename>')
 def evidence(filename):
+    # Only ever serve a plain basename with an allowed media extension from the
+    # evidence directory — no subpaths, no traversal. (send_from_directory is
+    # itself traversal-safe; this is defense in depth + a media-type allowlist.)
+    name = os.path.basename(filename)
+    if name != filename or file_extension(name) not in (IMAGE_EXTENSIONS | VIDEO_EXTENSIONS):
+        abort(404)
+    return send_from_directory(EVIDENCE_DIR, name)
 
-    evidence_folder = os.path.join(
-        app.root_path,
-        "evidence"
-    )
 
-    return send_from_directory(
-        evidence_folder,
-        filename
-    )
+@app.route("/health")
+def health():
+    """Liveness/readiness without exposing secrets: reports whether the models
+    are loaded (they load lazily on first upload)."""
+    return jsonify({
+        "status": "ok",
+        "models_loaded": _models is not None,
+        "debug": app.debug,
+    })
 
 # =====================================
 # SAVE DETECTED VIOLATION
@@ -86,6 +121,9 @@ def detect():
     if DETECT_API_KEY and request.headers.get("X-API-Key") != DETECT_API_KEY:
         return jsonify({"error": "invalid or missing API key"}), 401
 
+    if _rate_limited():
+        return jsonify({"error": "rate limit exceeded"}), 429
+
     data = request.get_json(silent=True) or {}
 
     if not all(k in data for k in ("plate", "violation", "image_path")):
@@ -93,7 +131,20 @@ def detect():
             "error": "plate, violation, and image_path are required"
         }), 400
 
-    record_fine(data["plate"], data["violation"], data["image_path"])
+    plate = validate_plate(data["plate"])
+    if plate is None:
+        return jsonify({"error": "invalid plate"}), 400
+    if not validate_violation(data["violation"]):
+        return jsonify({"error": "invalid violation type"}), 400
+
+    # Never trust a caller-supplied path: reduce it to a safe evidence basename
+    # (no directory, must be an allowed image type) rather than storing it raw.
+    image_name = safe_evidence_name(data["image_path"])
+    if data["image_path"] and image_name is None:
+        return jsonify({"error": "invalid image_path"}), 400
+    stored_path = f"evidence/{image_name}" if image_name else None
+
+    record_fine(plate, data["violation"], stored_path)
 
     return jsonify({
         "message": "Violation Recorded"
@@ -110,19 +161,28 @@ def analyze():
 
     from modules.detector import analyze_image
 
+    if _rate_limited():
+        return jsonify({"error": "rate limit exceeded"}), 429
+
     if "image" not in request.files or request.files["image"].filename == "":
         return jsonify({"error": "no image uploaded"}), 400
 
     upload = request.files["image"]
+    if not is_allowed_extension(upload.filename, IMAGE_EXTENSIONS):
+        return jsonify({"error": "unsupported image type"}), 400
 
-    # Persist the upload to a temp file so OpenCV can read it by path, then
-    # remove it — analyze_image writes its own annotated copy into evidence/.
-    suffix = os.path.splitext(upload.filename)[1] or ".jpg"
+    # Server-controlled temp name (never the user's filename); validate the file
+    # is really an image by its magic bytes before handing it to OpenCV.
+    suffix = safe_extension(upload.filename, IMAGE_EXTENSIONS, ".jpg")
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
 
     try:
         upload.save(tmp_path)
+
+        with open(tmp_path, "rb") as fh:
+            if not sniff_image(fh.read(16)):
+                return jsonify({"error": "file is not a valid image"}), 400
 
         model, reader = get_models()
         result = analyze_image(tmp_path, model, reader)
@@ -202,11 +262,17 @@ def _run_video_job(job_id, video_path):
 
 @app.route("/analyze_video", methods=["POST"])
 def analyze_video():
+    if _rate_limited():
+        return jsonify({"error": "rate limit exceeded"}), 429
+
     if "video" not in request.files or request.files["video"].filename == "":
         return jsonify({"error": "no video uploaded"}), 400
 
     upload = request.files["video"]
-    suffix = os.path.splitext(upload.filename)[1] or ".mp4"
+    if not is_allowed_extension(upload.filename, VIDEO_EXTENSIONS):
+        return jsonify({"error": "unsupported video type"}), 400
+
+    suffix = safe_extension(upload.filename, VIDEO_EXTENSIONS, ".mp4")
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
     upload.save(tmp_path)
@@ -256,8 +322,10 @@ def all_fines():
 # =====================================
 
 if __name__ == "__main__":
-    # Set FLASK_DEBUG=0 before any real deployment — the debugger
-    # allows arbitrary code execution if the server is exposed.
-    debug_mode = os.environ.get("FLASK_DEBUG", "1") != "0"
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=debug_mode, port=port)
+    # Debug is OFF by default now (the Werkzeug debugger allows arbitrary code
+    # execution if the server is exposed). Opt in explicitly with FLASK_DEBUG=1
+    # for local development only.
+    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    port = int(os.environ.get("PORT", "5000"))
+    host = os.environ.get("HOST", "127.0.0.1")
+    app.run(debug=debug_mode, host=host, port=port)

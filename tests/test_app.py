@@ -139,3 +139,53 @@ def test_detect_rejects_wrong_or_missing_api_key_when_configured(monkeypatch, tm
 
         response = client.post("/detect", json=payload, headers={"X-API-Key": "secret123"})
         assert response.status_code == 200
+
+
+# --- Phase 9: input validation & security ----------------------------------
+
+def test_health_endpoint(client):
+    data = client.get("/health").get_json()
+    assert data["status"] == "ok"
+    assert data["models_loaded"] is False  # lazy; nothing uploaded yet
+
+
+def test_detect_rejects_invalid_plate(client):
+    r = client.post("/detect", json={
+        "plate": "!!", "violation": "no_helmet", "image_path": "e.jpg"})
+    assert r.status_code == 400
+
+
+def test_detect_rejects_traversal_image_path(client):
+    r = client.post("/detect", json={
+        "plate": "MH12AB1234", "violation": "no_helmet",
+        "image_path": "../../etc/passwd"})
+    assert r.status_code == 400
+
+
+def test_evidence_rejects_non_media_and_subpaths(client):
+    assert client.get("/evidence/notes.txt").status_code == 404
+    assert client.get("/evidence/sub/dir.jpg").status_code == 404
+
+
+def test_analyze_rejects_unsupported_extension(client):
+    from io import BytesIO
+    data = {"image": (BytesIO(b"whatever"), "photo.txt")}
+    r = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert r.status_code == 400
+
+
+def test_analyze_rejects_non_image_content(client):
+    # A .jpg name but the bytes aren't an image -> magic-byte sniff rejects it
+    # before the model is ever loaded.
+    from io import BytesIO
+    data = {"image": (BytesIO(b"this is not a jpeg"), "photo.jpg")}
+    r = client.post("/analyze", data=data, content_type="multipart/form-data")
+    assert r.status_code == 400
+    assert "not a valid image" in r.get_json()["error"]
+
+
+def test_analyze_video_rejects_unsupported_extension(client):
+    from io import BytesIO
+    data = {"video": (BytesIO(b"whatever"), "clip.txt")}
+    r = client.post("/analyze_video", data=data, content_type="multipart/form-data")
+    assert r.status_code == 400
