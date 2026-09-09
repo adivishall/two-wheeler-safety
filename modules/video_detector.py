@@ -17,12 +17,12 @@ plate" heuristic, which mis-assigns when bikes are close together.
 """
 
 import os
-import time
 
 import cv2
 
 from modules.association import DetBox
 from modules.confidence import compute_confidence, temporal_confidence
+from modules.evidence import build_evidence
 from modules.geometry import horizontal_overlap_ratio
 from modules.plate_recognizer import PlateStabilizer
 from modules.vehicle import TrackState
@@ -128,24 +128,15 @@ def process_video(
         streak[key] = streak.get(key, 0) + 1
         return streak[key] >= streak_threshold
 
-    def maybe_record(track, violation, plate, frame, box, *, detection,
-                     association, supporting_frames):
+    def maybe_record(track, violation, plate, original, annotated, violation_box,
+                     *, detection, association, supporting_frames, speed=None):
         """Record a confirmed (vehicle, violation) once, with a full confidence
-        breakdown. ``detection``/``association`` are the per-violation component
-        scores; ``supporting_frames`` is how long the violation persisted."""
+        breakdown and a structured evidence package."""
         tid = track.track_id
         key = (tid, violation)
         if key in reported or not plate:
             return
         reported.add(key)
-        x1, y1, x2, y2 = box
-        crop = frame[max(0, int(y1)):int(y2), max(0, int(x1)):int(x2)]
-        evidence_file = os.path.join(
-            evidence_dir, f"{plate}_{violation}_{int(time.time() * 1000)}.jpg"
-        )
-        if crop.size:
-            cv2.imwrite(evidence_file, crop)
-        amount = record_fn(plate, violation, evidence_file)
 
         conf = compute_confidence(
             violation,
@@ -156,11 +147,30 @@ def process_video(
             supporting_frames=supporting_frames,
         )
         track.violation_history.append(conf)
+
+        pkg = build_evidence(
+            evidence_dir,
+            plate=plate,
+            violation=violation,
+            original=original,
+            annotated=annotated,
+            plate_box=track.plate_box,
+            violation_box=violation_box,
+            frame_index=frame_idx,
+            track_id=tid,
+            confidence=conf.as_dict(),
+            speed=speed,
+        )
+        primary = os.path.join(evidence_dir, pkg.primary_path) if pkg.primary_path else ""
+        amount = record_fn(plate, violation, primary)
+        track.evidence_frames[violation] = pkg.metadata_path
         recorded.append({
             "plate": plate,
             "violation": violation,
             "amount": amount,
-            "evidence": "/evidence/" + os.path.basename(evidence_file),
+            "evidence": "/evidence/" + os.path.basename(primary) if primary else None,
+            "evidence_id": pkg.evidence_id,
+            "metadata": "/evidence/" + pkg.metadata_path,
             "confidence": conf.final,
             "confidence_breakdown": conf.as_dict(),
             "plate_observations": len(track.plate_observations),
@@ -188,6 +198,10 @@ def process_video(
                 output_path, cv2.VideoWriter_fourcc(*"avc1"), src_fps, (w, h)
             )
 
+        # Keep the original frame untouched (clean OCR + real "original"
+        # evidence); draw boxes/labels onto a copy that gets written out.
+        annotated = frame.copy()
+
         results = model(frame, verbose=False)[0]
 
         dets = []
@@ -196,7 +210,7 @@ def process_video(
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             conf = float(box.conf[0])
             dets.append(DetBox(label, (x1, y1, x2, y2), conf))
-            cv2.rectangle(frame, (x1, y1), (x2, y2), _LABEL_COLORS.get(label, _GREEN), 2)
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), _LABEL_COLORS.get(label, _GREEN), 2)
 
         tracks = tracker.update(dets, frame_idx)
         seen = set()
@@ -225,7 +239,7 @@ def process_video(
                     track.plate_observations = stab.observations
                     display = res.stable or res.normalized
                     if display:
-                        _put_label(frame, display, (px1, py2 + 20), (255, 255, 0))
+                        _put_label(annotated, display, (px1, py2 + 20), (255, 255, 0))
 
             # Fine only on the temporally-voted stable plate, never a raw frame.
             plate = track.stable_plate
@@ -246,7 +260,7 @@ def process_video(
                 est = speed_estimator.estimate(tid, track.plate_box, frame_idx / src_fps)
                 if est.valid and est.kmh > speed_limit_kmh:
                     _put_label(
-                        frame, f"{est.kmh:.0f}+-{est.uncertainty:.0f} km/h",
+                        annotated, f"{est.kmh:.0f}+-{est.uncertainty:.0f} km/h",
                         (track.plate_box[0], track.plate_box[1] - 10), _RED,
                     )
                     track.overspeed_state = "candidate"
@@ -255,12 +269,13 @@ def process_video(
                         # margin over the limit as the detection score; speed is
                         # measured on the plate itself, so association is 1.0.
                         margin = (est.kmh - speed_limit_kmh) / max(1, speed_limit_kmh)
-                        maybe_record(track, "overspeed", plate, frame, track.plate_box,
-                                     detection=margin, association=1.0,
-                                     supporting_frames=streak.get((tid, "overspeed"), 0))
+                        maybe_record(track, "overspeed", plate, frame, annotated,
+                                     track.plate_box, detection=margin, association=1.0,
+                                     supporting_frames=streak.get((tid, "overspeed"), 0),
+                                     speed={"kmh": est.kmh, "uncertainty": est.uncertainty,
+                                            "limit": speed_limit_kmh})
 
             # ---- helmet: temporal state machine (Phase 4) ----
-            body = track.body
             hsm = helmet_sms.setdefault(tid, HelmetStateMachine(helmet_cfg))
             hstate = hsm.update(
                 has_helmet=bool(body and body.has_helmet),
@@ -273,14 +288,13 @@ def process_video(
             if body is not None:
                 bx1, by1 = body.box[0], body.box[1]
                 if body.ambiguous_helmet:
-                    _put_label(frame, "Ambiguous helmet", (bx1, by1 - 10), _AMBER)
+                    _put_label(annotated, "Ambiguous helmet", (bx1, by1 - 10), _AMBER)
                 elif body.no_helmet_violation:
-                    _put_label(frame, "No Helmet!", (bx1, by1 - 10), _RED)
+                    _put_label(annotated, "No Helmet!", (bx1, by1 - 10), _RED)
             if hsm.confirmed and body is not None:
                 # Record once the state machine has confirmed; retries each frame
                 # until the plate is readable, then maybe_record dedups.
-                maybe_record(track, "no_helmet", plate, frame,
-                             body.box if body else track.box,
+                maybe_record(track, "no_helmet", plate, frame, annotated, body.box,
                              detection=hsm.best_conf, association=assoc,
                              supporting_frames=hsm.supporting_frames)
 
@@ -293,9 +307,9 @@ def process_video(
             )
             track.triple_state = tstate.value
             if body is not None and body.has_triple:
-                _put_label(frame, "Triple Riding!", (body.box[0], body.box[1] - 28), _RED)
+                _put_label(annotated, "Triple Riding!", (body.box[0], body.box[1] - 28), _RED)
             if tsm.confirmed and body is not None:
-                maybe_record(track, "triple_riding", plate, frame, body.box,
+                maybe_record(track, "triple_riding", plate, frame, annotated, body.box,
                              detection=tsm.best_conf, association=assoc,
                              supporting_frames=tsm.frames_observed)
 
@@ -304,7 +318,7 @@ def process_video(
             if key not in seen:
                 streak[key] = 0
 
-        writer.write(frame)
+        writer.write(annotated)
 
         if progress_cb and frame_idx % 5 == 0:
             progress_cb(frame_idx, total_frames)
