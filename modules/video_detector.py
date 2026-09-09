@@ -27,6 +27,12 @@ from modules.geometry import horizontal_overlap_ratio
 from modules.plate_recognizer import PlateStabilizer
 from modules.vehicle import TrackState
 from modules.vehicle_tracker import VehicleTracker
+from modules.violation_state import (
+    HelmetConfig,
+    HelmetStateMachine,
+    TripleConfig,
+    TripleRidingStateMachine,
+)
 
 # Draw colors (BGR) — green for plates/helmet-on, red for violations.
 _GREEN = (0, 200, 0)
@@ -88,10 +94,15 @@ def process_video(
         SpeedEstimator(pixels_per_meter=pixels_per_meter) if pixels_per_meter else None
     )
 
+    helmet_cfg = HelmetConfig(confirm_window=streak_threshold)
+    triple_cfg = TripleConfig(confirm_window=streak_threshold)
+
     reported = set()  # (track_id, violation) already fined this run
-    streak = {}  # (track_id, violation) -> consecutive-frame count
+    streak = {}  # (track_id, violation) -> consecutive-frame count (overspeed only)
     recorded = []  # summaries of the fines we recorded
     stabilizers = {}  # track_id -> PlateStabilizer (temporal OCR voting)
+    helmet_sms = {}  # track_id -> HelmetStateMachine (Phase 4)
+    triple_sms = {}  # track_id -> TripleRidingStateMachine (Phase 5)
     confirmed_ids = set()  # distinct vehicles that reached CONFIRMED
 
     evidence_dir = os.path.dirname(output_path) or "evidence"
@@ -117,10 +128,11 @@ def process_video(
         streak[key] = streak.get(key, 0) + 1
         return streak[key] >= streak_threshold
 
-    def maybe_record(track, violation, plate, frame, box, detection, association):
+    def maybe_record(track, violation, plate, frame, box, *, detection,
+                     association, supporting_frames):
         """Record a confirmed (vehicle, violation) once, with a full confidence
         breakdown. ``detection``/``association`` are the per-violation component
-        scores; temporal and OCR come from the streak and stabilizer."""
+        scores; ``supporting_frames`` is how long the violation persisted."""
         tid = track.track_id
         key = (tid, violation)
         if key in reported or not plate:
@@ -135,14 +147,13 @@ def process_video(
             cv2.imwrite(evidence_file, crop)
         amount = record_fn(plate, violation, evidence_file)
 
-        supporting = streak.get(key, 0)
         conf = compute_confidence(
             violation,
             detection=detection,
-            temporal=temporal_confidence(supporting, streak_threshold),
+            temporal=temporal_confidence(supporting_frames, streak_threshold),
             association=association,
             ocr=track.plate_confidence,
-            supporting_frames=supporting,
+            supporting_frames=supporting_frames,
         )
         track.violation_history.append(conf)
         recorded.append({
@@ -237,23 +248,48 @@ def process_video(
                         # measured on the plate itself, so association is 1.0.
                         margin = (speed - speed_limit_kmh) / max(1, speed_limit_kmh)
                         maybe_record(track, "overspeed", plate, frame, track.plate_box,
-                                     detection=margin, association=1.0)
+                                     detection=margin, association=1.0,
+                                     supporting_frames=streak.get((tid, "overspeed"), 0))
 
-            # ---- helmet / triple-riding from the vehicle's body ----
+            # ---- helmet: temporal state machine (Phase 4) ----
+            body = track.body
+            hsm = helmet_sms.setdefault(tid, HelmetStateMachine(helmet_cfg))
+            hstate = hsm.update(
+                has_helmet=bool(body and body.has_helmet),
+                has_no_helmet=bool(body and body.no_helmet_violation),
+                no_helmet_conf=body.no_helmet_conf if body else 0.0,
+                ambiguous=bool(body and body.ambiguous_helmet),
+                frame_idx=frame_idx,
+            )
+            track.helmet_state = hstate.value
             if body is not None:
                 bx1, by1 = body.box[0], body.box[1]
                 if body.ambiguous_helmet:
                     _put_label(frame, "Ambiguous helmet", (bx1, by1 - 10), _AMBER)
                 elif body.no_helmet_violation:
                     _put_label(frame, "No Helmet!", (bx1, by1 - 10), _RED)
-                    if confirm(tid, "no_helmet", seen):
-                        maybe_record(track, "no_helmet", plate, frame, body.box,
-                                     detection=body.no_helmet_conf, association=assoc)
-                if body.has_triple:
-                    _put_label(frame, "Triple Riding!", (bx1, by1 - 28), _RED)
-                    if confirm(tid, "triple_riding", seen):
-                        maybe_record(track, "triple_riding", plate, frame, body.box,
-                                     detection=body.triple_conf, association=assoc)
+            if hsm.confirmed and body is not None:
+                # Record once the state machine has confirmed; retries each frame
+                # until the plate is readable, then maybe_record dedups.
+                maybe_record(track, "no_helmet", plate, frame,
+                             body.box if body else track.box,
+                             detection=hsm.best_conf, association=assoc,
+                             supporting_frames=hsm.supporting_frames)
+
+            # ---- triple riding: temporal state machine (Phase 5) ----
+            tsm = triple_sms.setdefault(tid, TripleRidingStateMachine(triple_cfg))
+            tstate = tsm.update(
+                has_triple=bool(body and body.has_triple),
+                conf=body.triple_conf if body else 0.0,
+                frame_idx=frame_idx,
+            )
+            track.triple_state = tstate.value
+            if body is not None and body.has_triple:
+                _put_label(frame, "Triple Riding!", (body.box[0], body.box[1] - 28), _RED)
+            if tsm.confirmed and body is not None:
+                maybe_record(track, "triple_riding", plate, frame, body.box,
+                             detection=tsm.best_conf, association=assoc,
+                             supporting_frames=tsm.frames_observed)
 
         # reset streaks for (track, violation) pairs not seen this frame
         for key in list(streak):
