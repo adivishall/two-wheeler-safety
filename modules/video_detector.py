@@ -17,6 +17,7 @@ plate" heuristic, which mis-assigns when bikes are close together.
 """
 
 import os
+import time
 
 import cv2
 
@@ -67,6 +68,8 @@ def process_video(
     speed_limit_kmh=40,
     streak_threshold=5,
     max_frames=None,
+    cancel_check=None,
+    max_seconds=None,
 ):
     """Detect two-wheeler violations across a video.
 
@@ -119,6 +122,7 @@ def process_video(
 
     writer = None
     frame_idx = 0
+    start_wall = time.monotonic()
 
     def confirm(track_id, violation, seen):
         """Bump the streak for (track, violation); True once it's held for
@@ -183,6 +187,13 @@ def process_video(
         frame_idx += 1
         if max_frames and frame_idx > max_frames:
             frame_idx -= 1
+            break
+
+        # Cooperative cancellation and a processing-time ceiling: stop cleanly
+        # and return what was found so far rather than running unbounded.
+        if cancel_check is not None and cancel_check():
+            break
+        if max_seconds is not None and (time.monotonic() - start_wall) > max_seconds:
             break
 
         if frame.shape[1] > max_width:
