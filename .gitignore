@@ -32,6 +32,7 @@ traffic.db
 evidence/
 demo_shots/
 output/
+reports/
 
 # ===== Test/sample videos (large, download separately) =====
 *.mp4
