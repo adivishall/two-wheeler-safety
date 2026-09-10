@@ -25,6 +25,7 @@ from modules.association import DetBox
 from modules.confidence import compute_confidence, temporal_confidence
 from modules.evidence import build_evidence
 from modules.geometry import horizontal_overlap_ratio
+from modules.logging_setup import get_logger
 from modules.plate_recognizer import PlateStabilizer
 from modules.vehicle import TrackState
 from modules.vehicle_tracker import VehicleTracker
@@ -46,6 +47,8 @@ _LABEL_COLORS = {
     "WithoutHelmet": _RED,
     "TripleRiding": _RED,
 }
+
+log = get_logger("video")
 
 
 def _put_label(frame, text, org, color):
@@ -113,6 +116,7 @@ def process_video(
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
+        log.error("could not open video: %s", video_path)
         raise ValueError(f"could not open video: {video_path}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
@@ -168,6 +172,10 @@ def process_video(
         primary = os.path.join(evidence_dir, pkg.primary_path) if pkg.primary_path else ""
         amount = record_fn(plate, violation, primary)
         track.evidence_frames[violation] = pkg.metadata_path
+        log.info(
+            "confirmed %s for track %s (plate=%s, conf=%.2f)",
+            violation, tid, plate, conf.final,
+        )
         recorded.append({
             "plate": plate,
             "violation": violation,
@@ -340,6 +348,10 @@ def process_video(
     if progress_cb:
         progress_cb(frame_idx, total_frames or frame_idx)
 
+    log.info(
+        "video done: %d frames, %d vehicle(s) confirmed, %d violation(s) recorded",
+        frame_idx, len(confirmed_ids), len(recorded),
+    )
     return {
         "frames": frame_idx,
         "plates_tracked": len(confirmed_ids),

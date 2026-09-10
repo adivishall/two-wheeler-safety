@@ -68,3 +68,32 @@ def test_nearest_plate_id_picks_the_closer_plate():
     }
     assert main.nearest_plate_id((5, 5, 15, 15), tracked_plates) == 0
     assert main.nearest_plate_id((995, 995, 1005, 1005), tracked_plates) == 1
+
+
+def test_import_main_is_dependency_light():
+    # Importing the CLI module must not pull in torch/ultralytics/easyocr (they
+    # load lazily inside main()), so tests/CI stay fast and model-free. Checked
+    # in a clean subprocess so other tests in the suite can't pollute the result.
+    import subprocess
+    import sys
+    code = (
+        "import main, sys; "
+        "bad=[m for m in ('torch','ultralytics','easyocr') if m in sys.modules]; "
+        "print(','.join(bad))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "", f"import main pulled in: {out.stdout.strip()}"
+
+
+def test_parse_args_defaults_and_flags():
+    args = main.parse_args(["--source", "clip.mp4", "--no-report", "--max-frames", "50"])
+    assert args.source == "clip.mp4" and args.no_report is True and args.max_frames == 50
+
+
+def test_local_recorder_returns_fine_amount_without_network():
+    # report=False must never touch the network; it returns the fine amount.
+    rec = main._make_recorder("http://unused", None, report=False)
+    assert rec("MH12AB1234", "no_helmet", "evidence/x.jpg") == 500
+    assert rec("MH12AB1234", "triple_riding", None) == 1000

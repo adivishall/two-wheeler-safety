@@ -1,0 +1,13 @@
+# Lean dependency set for CI.
+#
+# CI deliberately does NOT install torch / ultralytics / easyocr: those pull in
+# ~2 GB of binaries and the trained YOLO weights aren't available in CI anyway.
+# The whole test suite is model-free (heavy inference is isolated behind lazy
+# imports and never exercised in tests), so CI only needs the light runtime deps
+# the tests actually touch, plus pytest and the linter.
+flask~=3.1
+opencv-python-headless~=4.13
+numpy
+pyyaml
+pytest~=9.1
+ruff~=0.16

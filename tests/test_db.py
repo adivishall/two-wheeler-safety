@@ -118,3 +118,137 @@ def test_jobs_lifecycle(tmp_path):
     row = conn.execute("SELECT status, progress FROM processing_jobs WHERE id='job1'").fetchone()
     conn.close()
     assert row[0] == "done" and row[1] == 100
+
+
+# --- dashboard analytics ---------------------------------------------------
+
+def _seed(db):
+    db.record_fine("MH12AB1234", "no_helmet", "evidence/a.jpg", confidence=0.91)
+    db.record_fine("MH12AB1234", "overspeed", "evidence/b.jpg", confidence=0.55, status="paid")
+    db.record_fine("KA05CD9", "triple_riding", "evidence/c.jpg", confidence=0.80)
+
+
+def test_stats_totals_and_breakdown(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    _seed(db)
+    s = db.stats()
+    assert s["total_violations"] == 3
+    assert s["total_fines"] == 2200
+    assert s["unpaid_fines"] == 1500  # 500 + 1000, paid overspeed excluded
+    assert s["paid_fines"] == 700
+    assert s["vehicles"] == 2
+    assert {r["type"] for r in s["by_type"]} == {"no_helmet", "overspeed", "triple_riding"}
+    assert s["by_review_status"] == {"pending": 3}
+
+
+def test_stats_empty_db_is_zeroed(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    s = db.stats()
+    assert s["total_violations"] == 0
+    assert s["total_fines"] == 0
+    assert s["recent"] == []
+
+
+# --- filtered / paginated listing ------------------------------------------
+
+def test_list_filters_by_type_and_confidence(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    _seed(db)
+    assert db.list_violations(violation_type="no_helmet")["total"] == 1
+    hi = db.list_violations(min_confidence=0.8)["items"]
+    assert all(i["confidence"] >= 0.8 for i in hi)
+    assert len(hi) == 2
+
+
+def test_list_filter_by_plate_is_normalized(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    _seed(db)
+    assert db.list_violations(plate="ka05cd9")["total"] == 1
+    assert db.list_violations(plate="  ka 05 cd 9 ")["total"] == 1
+
+
+def test_list_pagination_and_total(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    for i in range(7):
+        db.record_fine("MH12AB1234", "no_helmet", "e.jpg")
+    page = db.list_violations(limit=3, offset=0)
+    assert page["total"] == 7
+    assert len(page["items"]) == 3
+    assert db.list_violations(limit=3, offset=6)["items"].__len__() == 1
+
+
+def test_list_limit_is_clamped(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    _seed(db)
+    # An absurd limit is clamped, never an unbounded dump.
+    assert db.list_violations(limit=100000)["limit"] <= 500
+
+
+def test_list_sort_whitelist_rejects_injection(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    _seed(db)
+    # A non-whitelisted sort column silently falls back to id (no SQL error).
+    res = db.list_violations(sort="amount; DROP TABLE violations")
+    assert res["total"] == 3
+
+
+# --- detail + review -------------------------------------------------------
+
+def test_get_violation_detail_has_evidence(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    _seed(db)
+    vid = db.list_violations()["items"][0]["id"]
+    detail = db.get_violation(vid)
+    assert detail["plate"]
+    assert "evidence" in detail and set(detail["evidence"]) == {
+        "original", "annotated", "plate_crop", "metadata"
+    }
+    assert db.get_violation(999999) is None
+
+
+def test_set_review_transitions_and_validates(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    _seed(db)
+    vid = db.list_violations()["items"][0]["id"]
+    assert db.set_review(vid, "confirmed", reviewer_decision="valid", notes="clear") is True
+    d = db.get_violation(vid)
+    assert d["review_status"] == "confirmed"
+    assert d["reviewed_at"] is not None
+    # reset to pending clears the timestamp
+    db.set_review(vid, "pending")
+    assert db.get_violation(vid)["reviewed_at"] is None
+    # unknown state rejected, missing id -> False
+    import pytest
+    with pytest.raises(ValueError):
+        db.set_review(vid, "bogus")
+    assert db.set_review(999999, "confirmed") is False
+
+
+def test_review_columns_added_to_legacy_normalized_db(tmp_path):
+    """A normalized DB created before the review workflow gets the columns
+    added by migration (ALTER TABLE), not a broken query."""
+    path = str(tmp_path / "old.db")
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE vehicles (id INTEGER PRIMARY KEY AUTOINCREMENT, plate TEXT,
+            normalized_plate TEXT UNIQUE, registration_state TEXT, rto_code TEXT,
+            rto_name TEXT, created_at DATETIME, updated_at DATETIME);
+        CREATE TABLE violations (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vehicle_id INTEGER, type TEXT, amount INTEGER, confidence REAL,
+            timestamp DATETIME, status TEXT DEFAULT 'unpaid', track_id INTEGER);
+        CREATE TABLE evidence (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            violation_id INTEGER, original_path TEXT, annotated_path TEXT,
+            plate_crop_path TEXT, metadata_path TEXT);
+        INSERT INTO vehicles (plate, normalized_plate) VALUES ('MH01XX1','MH01XX1');
+        INSERT INTO violations (vehicle_id, type, amount, status)
+            VALUES (1,'no_helmet',500,'unpaid');
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db = Database(path)  # initialize() should ALTER in the review columns
+    row = db.list_violations()["items"][0]
+    assert row["review_status"] == "pending"
+    assert db.set_review(1, "dismissed", notes="false positive") is True

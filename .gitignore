@@ -13,9 +13,13 @@ env/
 
 # ===== Large datasets (regenerate / download separately) =====
 master_traffic_violation_dataset/
+dataset_helmet_clean/
 data/test/
 data/train/
 data/val/
+
+# ===== Local experiment scratch (untracked helmet-model retraining probes) =====
+_*.py
 
 # ===== Model weights (download pretrained / re-train) =====
 yolov8n.pt
@@ -32,6 +36,7 @@ traffic.db
 evidence/
 demo_shots/
 output/
+reports/
 
 # ===== Test/sample videos (large, download separately) =====
 *.mp4

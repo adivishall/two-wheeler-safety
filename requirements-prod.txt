@@ -1,0 +1,5 @@
+# Production runtime = the full app dependencies + a real WSGI server.
+# The Flask dev server (app.run) is for local use only; in a container we serve
+# with gunicorn. See docs/DEPLOYMENT.md.
+-r requirements.txt
+gunicorn~=23.0

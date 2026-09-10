@@ -1,0 +1,20 @@
+# Project tooling config. The project is run as loose scripts/modules (there is
+# no package to build), so this file only configures the linter.
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# Local, untracked experiment scratch (helmet-model retraining probes and their
+# working dataset) are not part of the shipped project and are excluded from
+# linting. CI only ever checks out tracked files, so this just keeps a local
+# `ruff check .` aligned with CI.
+extend-exclude = ["_*.py", "dataset_helmet_clean", "runs", "evidence", "reports"]
+
+[tool.ruff.lint]
+# A pragmatic, high-signal rule set: pyflakes (real errors: undefined names,
+# unused imports), pycodestyle errors/warnings, and import sorting.
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
