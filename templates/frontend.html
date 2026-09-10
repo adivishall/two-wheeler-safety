@@ -145,7 +145,7 @@
         .seg-thumb {
             position: absolute;
             top: 3px; left: 3px; bottom: 3px;
-            width: calc((100% - 6px) / 3);
+            width: calc((100% - 6px) / 4);
             background: var(--seg-thumb);
             border-radius: 9px;
             box-shadow: var(--shadow-thumb);
@@ -159,7 +159,7 @@
             border: none;
             background: transparent;
             font: inherit;
-            font-size: 14px;
+            font-size: 13.5px;
             font-weight: 600;
             letter-spacing: -0.01em;
             color: var(--text-2);
@@ -474,10 +474,211 @@
             font-size: 12.5px; color: var(--text-3);
         }
 
+        /* ---------------- Dashboard ---------------- */
+
+        .dash { padding: 6px 6px 8px; }
+        .dash-actions {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 14px; gap: 10px;
+        }
+        .dash-actions h3 {
+            margin: 0; font-size: 15px; font-weight: 600; color: var(--text-2);
+        }
+        .link-btn {
+            border: none; background: transparent; color: var(--accent);
+            font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+            padding: 6px 8px; border-radius: 8px;
+        }
+        .link-btn:hover { background: var(--surface-2); }
+
+        .stat-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+            margin-bottom: 16px;
+        }
+        .stat-card {
+            background: var(--surface-2);
+            border: 1px solid var(--hairline);
+            border-radius: var(--r-md);
+            padding: 14px 14px 12px;
+        }
+        .stat-num {
+            font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums; color: var(--text);
+        }
+        .stat-num.danger { color: var(--danger); }
+        .stat-num.success { color: var(--success); }
+        .stat-label {
+            margin-top: 2px; font-size: 12px; color: var(--text-3);
+            font-weight: 500;
+        }
+
+        .breakdown { margin: 4px 2px 18px; }
+        .bar-row {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 13px; margin-bottom: 8px;
+        }
+        .bar-row .bar-name {
+            width: 108px; flex-shrink: 0; color: var(--text-2);
+            text-transform: capitalize;
+        }
+        .bar-track {
+            flex: 1; height: 8px; background: var(--seg-track);
+            border-radius: 980px; overflow: hidden;
+        }
+        .bar-fill { height: 100%; background: var(--accent); border-radius: 980px; }
+        .bar-row .bar-val {
+            width: 34px; text-align: right; color: var(--text-3);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Filters */
+        .filters {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+        }
+        .filter-input, .filter-select {
+            font: inherit; font-size: 13px;
+            padding: 8px 10px;
+            color: var(--text); background: var(--field);
+            border: 1px solid var(--hairline); border-radius: var(--r-sm);
+            outline: none; min-width: 0;
+        }
+        .filter-input { flex: 1; min-width: 120px; text-transform: uppercase; }
+        .filter-input::placeholder { text-transform: none; }
+        .filter-select { cursor: pointer; }
+        .filter-input:focus, .filter-select:focus { border-color: var(--accent); }
+
+        /* Confidence — honest, non-probability presentation */
+        .conf {
+            display: inline-flex; align-items: center; gap: 7px;
+            font-variant-numeric: tabular-nums;
+        }
+        .conf-bar {
+            width: 42px; height: 6px; border-radius: 980px;
+            background: var(--seg-track); overflow: hidden;
+        }
+        .conf-bar > i { display: block; height: 100%; background: var(--accent); }
+        .conf-val { font-size: 12.5px; color: var(--text-2); }
+        .conf-na { font-size: 12.5px; color: var(--text-3); }
+
+        /* Review status pills */
+        .review-badge {
+            display: inline-block; padding: 4px 10px; border-radius: 980px;
+            font-size: 11.5px; font-weight: 600; text-transform: capitalize;
+            white-space: nowrap;
+        }
+        .review-badge.pending { background: var(--seg-track); color: var(--text-2); }
+        .review-badge.confirmed { background: var(--success-bg); color: var(--success); }
+        .review-badge.dismissed { background: var(--danger-bg); color: var(--danger); }
+
+        .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+        .icon-btn {
+            border: 1px solid var(--hairline); background: var(--field);
+            border-radius: var(--r-sm); cursor: pointer;
+            font-size: 12.5px; font-weight: 600; padding: 6px 10px;
+            color: var(--text-2); transition: all 0.15s ease;
+        }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .pager {
+            display: flex; justify-content: center; align-items: center; gap: 14px;
+            margin-top: 18px; font-size: 13px; color: var(--text-3);
+        }
+
+        .empty-note {
+            text-align: center; color: var(--text-3);
+            font-size: 14px; padding: 28px 0;
+        }
+
+        /* Detail modal */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 50;
+            background: rgba(0,0,0,0.45);
+            display: flex; align-items: center; justify-content: center;
+            padding: 22px;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--hairline);
+            border-radius: var(--r-lg);
+            box-shadow: 0 30px 70px rgba(0,0,0,0.4);
+            width: 100%; max-width: 560px;
+            max-height: 88vh; overflow-y: auto;
+            padding: 22px 24px 24px;
+            animation: cardIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .modal-head {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            gap: 10px; margin-bottom: 14px;
+        }
+        .modal-head h2 { margin: 0; font-size: 22px; font-weight: 700; }
+        .modal-head .sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
+        .modal-close {
+            border: none; background: var(--surface-2); color: var(--text-2);
+            width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+            font-size: 16px; line-height: 1; flex-shrink: 0;
+        }
+        .modal-close:hover { color: var(--text); }
+
+        .evidence-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            margin: 6px 0 16px;
+        }
+        .evidence-grid figure { margin: 0; }
+        .evidence-grid img {
+            width: 100%; border-radius: var(--r-sm);
+            border: 1px solid var(--hairline); background: #000;
+            display: block; cursor: zoom-in;
+        }
+        .evidence-grid figcaption {
+            font-size: 11px; color: var(--text-3); margin-top: 3px;
+            text-align: center;
+        }
+
+        .conf-breakdown { margin: 6px 0 16px; }
+        .conf-breakdown .cb-title {
+            font-size: 11.5px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--text-3); margin-bottom: 10px;
+        }
+        .cb-row {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 13px; margin-bottom: 7px;
+        }
+        .cb-row .cb-name { width: 96px; flex-shrink: 0; color: var(--text-2); }
+        .cb-row .cb-track {
+            flex: 1; height: 6px; background: var(--seg-track);
+            border-radius: 980px; overflow: hidden;
+        }
+        .cb-row .cb-track > i { display: block; height: 100%; background: var(--accent); }
+        .cb-row.final .cb-name { font-weight: 700; color: var(--text); }
+        .cb-row.final .cb-track > i { background: var(--success); }
+        .cb-row .cb-val {
+            width: 42px; text-align: right; color: var(--text-2);
+            font-variant-numeric: tabular-nums;
+        }
+        .disclaimer {
+            font-size: 11.5px; color: var(--text-3); line-height: 1.5;
+            background: var(--surface-2); border-radius: var(--r-sm);
+            padding: 10px 12px; margin-bottom: 16px;
+        }
+        .review-actions { display: flex; gap: 8px; }
+        .review-actions .btn { flex: 1; min-height: 42px; padding: 0 14px; }
+        .btn.ghost {
+            background: var(--surface-2); color: var(--text);
+            border: 1px solid var(--hairline);
+        }
+        .btn.ghost:hover:not(:disabled) { background: var(--field); }
+        .btn.confirm { background: var(--success); }
+        .btn.confirm:hover:not(:disabled) { filter: brightness(0.94); }
+        .btn.dismiss { background: var(--danger); }
+        .btn.dismiss:hover:not(:disabled) { filter: brightness(0.94); }
+
         @media (max-width: 500px) {
             body { padding: 44px 16px 64px; }
             .field-row { flex-direction: column; }
             .btn { width: 100%; padding: 13px; }
+            .stat-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -494,21 +695,58 @@
 
         <div class="hero">
             <div class="app-mark">🚦</div>
-            <h1>Traffic Fine Checker</h1>
-            <p>Detect two-wheeler violations from a photo or video, or look up any plate's record.</p>
+            <h1>Two-Wheeler Safety Monitor</h1>
+            <p>Detect helmet, triple-riding &amp; speed violations from a photo or video, review them, and look up any plate's record.</p>
         </div>
 
         <div class="console">
 
             <div class="segmented" role="tablist" aria-label="Analysis mode">
                 <span class="seg-thumb" aria-hidden="true"></span>
-                <button type="button" class="seg active" data-tab="photo" role="tab" aria-selected="true">Photo</button>
+                <button type="button" class="seg active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+                <button type="button" class="seg" data-tab="photo" role="tab" aria-selected="false">Photo</button>
                 <button type="button" class="seg" data-tab="video" role="tab" aria-selected="false">Video</button>
                 <button type="button" class="seg" data-tab="plate" role="tab" aria-selected="false">Plate</button>
             </div>
 
+            <!-- Dashboard -->
+            <section class="tabpanel active dash" data-panel="dashboard" id="dashboardPanel">
+                <div class="dash-actions">
+                    <h3>Overview</h3>
+                    <button type="button" class="link-btn" id="refreshDash">↻ Refresh</button>
+                </div>
+                <div id="statGrid"><div class="spinner"></div></div>
+                <div id="typeBreakdown"></div>
+
+                <div class="dash-actions" style="margin-top:6px;">
+                    <h3>Violations</h3>
+                </div>
+                <div class="filters">
+                    <input type="text" id="fPlate" class="filter-input" placeholder="Filter by plate…" autocomplete="off">
+                    <select id="fType" class="filter-select" aria-label="Violation type">
+                        <option value="">All types</option>
+                        <option value="no_helmet">No helmet</option>
+                        <option value="triple_riding">Triple riding</option>
+                        <option value="overspeed">Overspeed</option>
+                    </select>
+                    <select id="fReview" class="filter-select" aria-label="Review status">
+                        <option value="">Any review state</option>
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="dismissed">Dismissed</option>
+                    </select>
+                    <select id="fStatus" class="filter-select" aria-label="Payment status">
+                        <option value="">Any status</option>
+                        <option value="unpaid">Unpaid</option>
+                        <option value="paid">Paid</option>
+                    </select>
+                </div>
+                <div id="violationsList"></div>
+                <div id="pager"></div>
+            </section>
+
             <!-- Photo -->
-            <form class="tabpanel active" data-panel="photo" id="uploadCard" onsubmit="return handleUpload(event)">
+            <form class="tabpanel" data-panel="photo" id="uploadCard" onsubmit="return handleUpload(event)">
                 <div class="field-row">
                     <label for="photo" class="file-label" id="fileLabel">📷 Choose a photo…</label>
                     <input type="file" id="photo" accept="image/*">
@@ -544,9 +782,14 @@
         <div id="videoResult"></div>
         <div id="result"></div>
 
-        <footer>Ride safe. Wear a helmet. Follow the speed limit.</footer>
+        <footer>
+            Prototype detection &amp; review assistant — computer-vision predictions are
+            not legal proof. Ride safe. Wear a helmet. Follow the speed limit.
+        </footer>
 
     </div>
+
+    <div id="modalRoot"></div>
 
     <script>
 
@@ -567,6 +810,9 @@
                 if (name === "plate") {
                     const el = document.getElementById("plate");
                     if (el) setTimeout(() => el.focus(), 60);
+                }
+                if (name === "dashboard") {
+                    loadDashboard();
                 }
             }
 
@@ -714,6 +960,9 @@
             // below without the user retyping the (possibly OCR-mangled) plate.
             input.value = data.plate;
             search();
+            if (data.violations.length) {
+                loadDashboard();  // keep the dashboard tab in sync
+            }
         }
 
         // ---- Video upload: submit, poll progress, render result ----
@@ -739,6 +988,8 @@
             return false;
         }
 
+        let currentVideoJob = null;
+
         function renderProgress(done, total) {
             const pct = total ? Math.round((done / total) * 100) : 0;
             videoResult.innerHTML = `
@@ -751,8 +1002,18 @@
                         <div class="progress-fill" style="width:${pct}%"></div>
                     </div>
                     <p class="p-hint">Frame ${done}${total ? " of " + total : ""} — detecting and tracking across frames.</p>
+                    <div style="text-align:center;margin-top:14px">
+                        <button type="button" class="icon-btn" onclick="cancelVideoJob()">Cancel</button>
+                    </div>
                 </div>
             `;
+        }
+
+        async function cancelVideoJob() {
+            if (!currentVideoJob) return;
+            try {
+                await fetch(`/video_cancel/${currentVideoJob}`, { method: "POST" });
+            } catch (err) { /* the poller will surface the final state */ }
         }
 
         async function analyzeVideo() {
@@ -774,13 +1035,14 @@
                     throw new Error(data.error || `Server responded with ${resp.status}`);
                 }
                 jobId = data.job_id;
+                currentVideoJob = jobId;
             } catch (err) {
                 videoResult.innerHTML = `<div class="error-msg">${escapeHtml(err.message || "Couldn't start video analysis.")}</div>`;
                 analyzeVideoBtn.disabled = false;
                 return;
             }
 
-            // Poll for progress until the job finishes or errors.
+            // Poll for progress until the job finishes, errors, or is cancelled.
             const poll = setInterval(async () => {
                 let job;
                 try {
@@ -796,13 +1058,20 @@
 
                 clearInterval(poll);
                 analyzeVideoBtn.disabled = false;
+                currentVideoJob = null;
 
                 if (job.status === "error") {
                     videoResult.innerHTML = `<div class="error-msg">${escapeHtml(job.error || "Video analysis failed.")}</div>`;
                     return;
                 }
 
+                if (job.status === "cancelled") {
+                    videoResult.innerHTML = `<div class="detect-card"><p class="recorded-note">Video analysis cancelled.</p></div>`;
+                    return;
+                }
+
                 renderVideoResult(job.result);
+                loadDashboard();  // reflect any newly recorded violations
             }, 1500);
         }
 
@@ -957,6 +1226,279 @@
 
             result.innerHTML = html;
         }
+
+        // =====================================================================
+        // DASHBOARD: overview, filtered violations, evidence + human review
+        // =====================================================================
+
+        const dashState = { offset: 0, limit: 10 };
+
+        // Confidence is a non-calibrated score in [0,1], NOT a probability, so
+        // it's shown as a raw two-decimal score + a bar, never as "97% likely".
+        function confBar(score) {
+            if (score === null || score === undefined) {
+                return `<span class="conf-na">—</span>`;
+            }
+            const pct = Math.round(score * 100);
+            return `<span class="conf" title="Confidence score (0–1, not a calibrated probability)">
+                <span class="conf-bar"><i style="width:${pct}%"></i></span>
+                <span class="conf-val">${score.toFixed(2)}</span></span>`;
+        }
+
+        async function loadDashboard() {
+            await Promise.all([loadStats(), loadViolations()]);
+        }
+
+        async function loadStats() {
+            const grid = document.getElementById("statGrid");
+            let s;
+            try {
+                s = await fetch("/api/stats").then(r => r.json());
+            } catch (err) {
+                grid.innerHTML = `<div class="error-msg">Couldn't load statistics.</div>`;
+                return;
+            }
+            const pending = (s.by_review_status && s.by_review_status.pending) || 0;
+            grid.innerHTML = `
+              <div class="stat-grid">
+                <div class="stat-card"><div class="stat-num">${s.total_violations}</div><div class="stat-label">Violations</div></div>
+                <div class="stat-card"><div class="stat-num">${s.vehicles}</div><div class="stat-label">Vehicles</div></div>
+                <div class="stat-card"><div class="stat-num">${pending}</div><div class="stat-label">Pending review</div></div>
+                <div class="stat-card"><div class="stat-num">₹${s.total_fines}</div><div class="stat-label">Fines total</div></div>
+                <div class="stat-card"><div class="stat-num danger">₹${s.unpaid_fines}</div><div class="stat-label">Unpaid</div></div>
+                <div class="stat-card"><div class="stat-num success">₹${s.paid_fines}</div><div class="stat-label">Paid</div></div>
+              </div>`;
+            renderBreakdown(s.by_type);
+        }
+
+        function renderBreakdown(byType) {
+            const el = document.getElementById("typeBreakdown");
+            if (!byType || !byType.length) { el.innerHTML = ""; return; }
+            const max = Math.max(...byType.map(t => t.n), 1);
+            el.innerHTML = `<div class="breakdown">` + byType.map(t => {
+                const w = Math.round((t.n / max) * 100);
+                return `<div class="bar-row">
+                    <span class="bar-name">${escapeHtml(violationLabel(t.type))}</span>
+                    <span class="bar-track"><span class="bar-fill" style="width:${w}%"></span></span>
+                    <span class="bar-val">${t.n}</span></div>`;
+            }).join("") + `</div>`;
+        }
+
+        function currentFilters() {
+            return {
+                plate: document.getElementById("fPlate").value.trim(),
+                type: document.getElementById("fType").value,
+                review_status: document.getElementById("fReview").value,
+                status: document.getElementById("fStatus").value,
+            };
+        }
+
+        async function loadViolations() {
+            const list = document.getElementById("violationsList");
+            list.innerHTML = `<div class="spinner"></div>`;
+            const params = new URLSearchParams({
+                limit: dashState.limit, offset: dashState.offset,
+            });
+            Object.entries(currentFilters()).forEach(([k, v]) => {
+                if (v) params.set(k, v);
+            });
+            let data;
+            try {
+                data = await fetch(`/api/violations?${params}`).then(r => r.json());
+            } catch (err) {
+                list.innerHTML = `<div class="error-msg">Couldn't load violations.</div>`;
+                return;
+            }
+            renderViolations(data);
+        }
+
+        function renderViolations(data) {
+            const list = document.getElementById("violationsList");
+            const pager = document.getElementById("pager");
+            if (!data.items.length) {
+                list.innerHTML = `<div class="empty-note">No violations match these filters.</div>`;
+                pager.innerHTML = "";
+                return;
+            }
+            const rows = data.items.map(v => `
+              <tr>
+                <td><strong>${escapeHtml(v.plate)}</strong>${
+                    v.registration_state
+                        ? `<div style="font-size:11px;color:var(--text-3)">${escapeHtml(v.registration_state)}</div>`
+                        : ""}</td>
+                <td><span class="violation-tag">${escapeHtml(violationLabel(v.type))}</span></td>
+                <td>${confBar(v.confidence)}</td>
+                <td><span class="review-badge ${escapeHtml(v.review_status)}">${escapeHtml(v.review_status)}</span></td>
+                <td class="amount-cell">₹${v.amount}</td>
+                <td><button class="icon-btn" onclick="openDetail(${v.id})">Review</button></td>
+              </tr>`).join("");
+            list.innerHTML = `<div class="table-wrap"><table>
+                <thead><tr><th>Plate</th><th>Violation</th><th>Confidence</th>
+                <th>Review</th><th>Fine</th><th></th></tr></thead>
+                <tbody>${rows}</tbody></table></div>`;
+            renderPager(data);
+        }
+
+        function renderPager(data) {
+            const pager = document.getElementById("pager");
+            const start = data.total ? data.offset + 1 : 0;
+            const end = Math.min(data.offset + data.limit, data.total);
+            pager.innerHTML = `<div class="pager">
+                <button class="icon-btn" ${data.offset <= 0 ? "disabled" : ""} onclick="pageBy(-1)">‹ Prev</button>
+                <span>${start}–${end} of ${data.total}</span>
+                <button class="icon-btn" ${end >= data.total ? "disabled" : ""} onclick="pageBy(1)">Next ›</button>
+            </div>`;
+        }
+
+        function pageBy(dir) {
+            dashState.offset = Math.max(0, dashState.offset + dir * dashState.limit);
+            loadViolations();
+        }
+
+        // ---- Detail modal: evidence viewer + confidence breakdown + review ----
+
+        async function openDetail(id) {
+            let d;
+            try {
+                d = await fetch(`/api/violations/${id}`).then(r => r.json());
+            } catch (err) { return; }
+            if (d.error) return;
+            renderModal(d);
+            // The per-component confidence breakdown lives in the evidence
+            // metadata sidecar (JSON), loaded lazily so the modal opens instantly.
+            if (d.evidence && d.evidence.metadata) {
+                loadConfidenceBreakdown(d.evidence.metadata);
+            }
+        }
+
+        function evidenceFig(url, caption) {
+            if (!url) return "";
+            return `<figure><img src="${escapeHtml(url)}" alt="${escapeHtml(caption)}"
+                onclick="window.open(this.src, '_blank')"><figcaption>${escapeHtml(caption)}</figcaption></figure>`;
+        }
+
+        function renderModal(d) {
+            const ev = d.evidence || {};
+            const figs = [
+                evidenceFig(ev.annotated, "Annotated frame"),
+                evidenceFig(ev.original, "Original frame"),
+                evidenceFig(ev.plate_crop, "Plate crop"),
+            ].filter(Boolean).join("");
+            const evidenceGrid = figs
+                ? `<div class="evidence-grid">${figs}</div>`
+                : `<div class="empty-note">No evidence images stored for this violation.</div>`;
+
+            const region = d.registration_state
+                ? `${escapeHtml(d.registration_state)}${d.rto_name ? " · " + escapeHtml(d.rto_name) : ""}`
+                : "Region not decoded";
+
+            const disabled = (state) => d.review_status === state ? "disabled" : "";
+
+            document.getElementById("modalRoot").innerHTML = `
+              <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+                <div class="modal" role="dialog" aria-modal="true">
+                  <div class="modal-head">
+                    <div>
+                      <h2>${escapeHtml(d.plate)}</h2>
+                      <div class="sub">${escapeHtml(violationLabel(d.type))} · ₹${d.amount} · 📍 ${region}</div>
+                      <div class="sub">${formatTime(d.timestamp)} · <span class="review-badge ${escapeHtml(d.review_status)}">${escapeHtml(d.review_status)}</span></div>
+                    </div>
+                    <button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>
+                  </div>
+
+                  ${evidenceGrid}
+
+                  <div class="conf-breakdown" id="confBreakdown">
+                    <div class="cb-title">Confidence score</div>
+                    ${confRow("Final score", d.confidence, true)}
+                    <div class="sub" style="margin-top:8px">Component breakdown loading…</div>
+                  </div>
+
+                  <div class="disclaimer">
+                    This is a computer-vision <strong>confidence score</strong> (0–1), not a
+                    calibrated probability or legal proof. Confirm only after checking the
+                    evidence above; dismiss false positives.
+                  </div>
+
+                  <div class="review-actions">
+                    <button class="btn confirm" ${disabled("confirmed")} onclick="submitReview(${d.id}, 'confirmed')">Confirm</button>
+                    <button class="btn dismiss" ${disabled("dismissed")} onclick="submitReview(${d.id}, 'dismissed')">Dismiss</button>
+                    <button class="btn ghost" ${disabled("pending")} onclick="submitReview(${d.id}, 'pending')">Reset</button>
+                  </div>
+                </div>
+              </div>`;
+        }
+
+        function confRow(name, value, isFinal) {
+            const has = value !== null && value !== undefined;
+            const pct = has ? Math.round(value * 100) : 0;
+            return `<div class="cb-row ${isFinal ? "final" : ""}">
+                <span class="cb-name">${escapeHtml(name)}</span>
+                <span class="cb-track"><i style="width:${pct}%"></i></span>
+                <span class="cb-val">${has ? value.toFixed(2) : "—"}</span></div>`;
+        }
+
+        async function loadConfidenceBreakdown(metadataUrl) {
+            let meta;
+            try {
+                meta = await fetch(metadataUrl).then(r => r.json());
+            } catch (err) { return; }
+            const c = meta && meta.confidence;
+            const el = document.getElementById("confBreakdown");
+            if (!el) return;
+            if (!c) {
+                // Image uploads don't carry a temporal breakdown.
+                el.querySelector(".sub").textContent =
+                    "No per-component breakdown (single-image detection).";
+                return;
+            }
+            el.innerHTML = `<div class="cb-title">Confidence breakdown</div>` +
+                confRow("Detection", c.detection) +
+                confRow("Temporal", c.temporal) +
+                confRow("Association", c.association) +
+                confRow("OCR", c.ocr) +
+                confRow("Final score", c.final, true);
+        }
+
+        async function submitReview(id, status) {
+            try {
+                const resp = await fetch(`/api/violations/${id}/review`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ review_status: status }),
+                });
+                if (!resp.ok) throw new Error();
+            } catch (err) {
+                return;
+            }
+            closeModal();
+            loadDashboard();
+        }
+
+        function closeModal() {
+            document.getElementById("modalRoot").innerHTML = "";
+        }
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") closeModal();
+        });
+
+        // Filter + refresh wiring (reset to first page on any filter change).
+        ["fType", "fReview", "fStatus"].forEach(id =>
+            document.getElementById(id).addEventListener("change", () => {
+                dashState.offset = 0; loadViolations();
+            }));
+        let plateFilterTimer;
+        document.getElementById("fPlate").addEventListener("input", () => {
+            clearTimeout(plateFilterTimer);
+            plateFilterTimer = setTimeout(() => {
+                dashState.offset = 0; loadViolations();
+            }, 300);
+        });
+        document.getElementById("refreshDash").addEventListener("click", loadDashboard);
+
+        // Dashboard is the default tab, so load it on first paint.
+        loadDashboard();
 
     </script>
 

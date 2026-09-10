@@ -1,5 +1,5 @@
-import sys
 import importlib
+import sys
 
 import pytest
 
@@ -189,3 +189,89 @@ def test_analyze_video_rejects_unsupported_extension(client):
     data = {"video": (BytesIO(b"whatever"), "clip.txt")}
     r = client.post("/analyze_video", data=data, content_type="multipart/form-data")
     assert r.status_code == 400
+
+
+# --- dashboard analytics + filtering + review API --------------------------
+
+def _record(client, plate="MH12AB1234", violation="no_helmet"):
+    return client.post("/detect", json={
+        "plate": plate, "violation": violation, "image_path": "evidence/x.jpg"})
+
+
+def test_api_stats_reflects_real_data(client):
+    _record(client, violation="no_helmet")
+    _record(client, plate="KA05CD9", violation="triple_riding")
+    data = client.get("/api/stats").get_json()
+    assert data["total_violations"] == 2
+    assert data["total_fines"] == 500 + 1000
+    assert data["vehicles"] == 2
+    assert data["by_review_status"] == {"pending": 2}
+    assert len(data["recent"]) == 2
+
+
+def test_api_violations_filter_by_type(client):
+    _record(client, violation="no_helmet")
+    _record(client, violation="overspeed")
+    data = client.get("/api/violations?type=overspeed").get_json()
+    assert data["total"] == 1
+    assert data["items"][0]["type"] == "overspeed"
+
+
+def test_api_violations_pagination_shape(client):
+    for _ in range(5):
+        _record(client)
+    data = client.get("/api/violations?limit=2&offset=0").get_json()
+    assert data["total"] == 5
+    assert len(data["items"]) == 2
+    assert data["limit"] == 2 and data["offset"] == 0
+
+
+def test_api_violation_detail_and_404(client):
+    _record(client)
+    vid = client.get("/api/violations").get_json()["items"][0]["id"]
+    detail = client.get(f"/api/violations/{vid}").get_json()
+    assert detail["id"] == vid
+    assert "evidence" in detail
+    assert client.get("/api/violations/999999").status_code == 404
+
+
+def test_api_review_flow(client):
+    _record(client)
+    vid = client.get("/api/violations").get_json()["items"][0]["id"]
+
+    # missing review_status -> 400
+    assert client.post(f"/api/violations/{vid}/review", json={}).status_code == 400
+    # unknown state -> 400
+    bad = client.post(f"/api/violations/{vid}/review", json={"review_status": "nope"})
+    assert bad.status_code == 400
+    # valid -> 200 and reflected in the listing
+    ok = client.post(f"/api/violations/{vid}/review",
+                     json={"review_status": "confirmed", "notes": "clear plate"})
+    assert ok.status_code == 200
+    listed = client.get("/api/violations?review_status=confirmed").get_json()
+    assert listed["total"] == 1
+    # unknown id -> 404
+    assert client.post("/api/violations/999999/review",
+                       json={"review_status": "confirmed"}).status_code == 404
+
+
+def test_video_cancel_unknown_job_is_404(client):
+    assert client.post("/video_cancel/does-not-exist").status_code == 404
+
+
+def test_rate_limit_returns_429_when_exceeded(monkeypatch, tmp_path):
+    # A tiny per-minute cap makes the limiter trip deterministically. app.py
+    # builds its limiter from config at import, so set the env then reload.
+    db_path = str(tmp_path / "rl.db")
+    monkeypatch.setenv("TRAFFIC_DB_PATH", db_path)
+    monkeypatch.delenv("DETECT_API_KEY", raising=False)
+    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "2")
+
+    app_module = importlib.reload(sys.modules["app"]) if "app" in sys.modules else __import__("app")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as c:
+        payload = {"plate": "MH12AB1234", "violation": "no_helmet", "image_path": "e.jpg"}
+        assert c.post("/detect", json=payload).status_code == 200
+        assert c.post("/detect", json=payload).status_code == 200
+        assert c.post("/detect", json=payload).status_code == 429  # 3rd exceeds cap
