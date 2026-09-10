@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import math
 import os
-import re
 import uuid
 
 from modules.config import load_config

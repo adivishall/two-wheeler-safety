@@ -307,12 +307,16 @@ def _render_markdown(p: dict) -> str:
         if ea.get("helmet_confusion"):
             hc = ea["helmet_confusion"]
             lines += ["### Helmet confusion", "",
-                      f"- WithHelmet predicted as WithoutHelmet: {hc['withhelmet_as_withouthelmet']}",
-                      f"- WithoutHelmet predicted as WithHelmet: {hc['withouthelmet_as_withhelmet']}", ""]
+                      f"- WithHelmet predicted as WithoutHelmet: "
+                      f"{hc['withhelmet_as_withouthelmet']}",
+                      f"- WithoutHelmet predicted as WithHelmet: "
+                      f"{hc['withouthelmet_as_withhelmet']}", ""]
         c = ea["confidence"]
         lines += ["### Confidence vs correctness", "",
-                  f"- mean confidence when correct: {c['mean_conf_correct']} ({c['n_correct']} preds)",
-                  f"- mean confidence when wrong: {c['mean_conf_wrong']} ({c['n_wrong']} preds)",
+                  f"- mean confidence when correct: {c['mean_conf_correct']} "
+                  f"({c['n_correct']} preds)",
+                  f"- mean confidence when wrong: {c['mean_conf_wrong']} "
+                  f"({c['n_wrong']} preds)",
                   f"- separation (correct - wrong): **{c['separation']}** "
                   "(>0 is good; <=0 means confidently wrong)", ""]
         if ea["false_positive_examples"]:

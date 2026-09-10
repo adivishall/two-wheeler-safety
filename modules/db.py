@@ -366,10 +366,12 @@ class Database:
         try:
             totals = conn.execute(
                 """SELECT
-                     COUNT(*)                                        AS total_violations,
-                     COALESCE(SUM(amount), 0)                        AS total_fines,
-                     COALESCE(SUM(CASE WHEN status='unpaid' THEN amount ELSE 0 END), 0) AS unpaid_fines,
-                     COALESCE(SUM(CASE WHEN status='paid'   THEN amount ELSE 0 END), 0) AS paid_fines
+                     COUNT(*) AS total_violations,
+                     COALESCE(SUM(amount), 0) AS total_fines,
+                     COALESCE(SUM(CASE WHEN status='unpaid' THEN amount ELSE 0 END), 0)
+                         AS unpaid_fines,
+                     COALESCE(SUM(CASE WHEN status='paid' THEN amount ELSE 0 END), 0)
+                         AS paid_fines
                    FROM violations"""
             ).fetchone()
 
