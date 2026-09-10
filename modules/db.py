@@ -23,18 +23,13 @@ from __future__ import annotations
 import os
 import sqlite3
 
+from modules.config import DEFAULT_FINE, DEFAULT_FINE_AMOUNTS, fine_amount
 from modules.plate_info import decode_plate, normalize_plate
 
-DEFAULT_FINE_AMOUNTS = {
-    "no_helmet": 500,
-    "triple_riding": 1000,
-    "overspeed": 700,
-}
-DEFAULT_FINE_AMOUNT = 300
-
-
-def fine_amount(violation: str) -> int:
-    return DEFAULT_FINE_AMOUNTS.get(violation, DEFAULT_FINE_AMOUNT)
+# Re-exported from modules.config so existing importers of these names keep
+# working; the single source of truth now lives in the config module.
+DEFAULT_FINE_AMOUNT = DEFAULT_FINE
+__all__ = ["Database", "get_database", "fine_amount", "DEFAULT_FINE_AMOUNTS"]
 
 
 class Database:

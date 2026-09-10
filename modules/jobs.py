@@ -23,6 +23,10 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
+from modules.logging_setup import get_logger
+
+log = get_logger("jobs")
+
 
 class JobStatus:
     PROCESSING = "processing"
@@ -90,20 +94,24 @@ class JobManager:
         def cancel_check():
             return job.cancel_event.is_set()
 
+        log.info("job %s (%s) started", job.id, job.type)
         try:
             result = target(progress, cancel_check)
             with self._lock:
                 if job.cancel_event.is_set():
                     job.status = JobStatus.CANCELLED
+                    log.info("job %s cancelled", job.id)
                 else:
                     job.status = JobStatus.DONE
                     job.result = result
+                    log.info("job %s done (%s frames)", job.id, job.done)
                 job.updated_at = time.time()
         except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
             with self._lock:
                 job.status = JobStatus.ERROR
                 job.error = str(exc)
                 job.updated_at = time.time()
+            log.exception("job %s failed: %s", job.id, exc)
         finally:
             with self._lock:
                 self._active -= 1

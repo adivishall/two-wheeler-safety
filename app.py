@@ -5,8 +5,10 @@ import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
+from modules.config import load_config
 from modules.db import Database
 from modules.jobs import JobManager
+from modules.logging_setup import configure_logging, get_logger
 from modules.validation import (
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
@@ -20,20 +22,24 @@ from modules.validation import (
     validate_violation,
 )
 
+# All runtime knobs come from one typed config built from the environment.
+# Read here (at import) so a test that patches the env and re-imports app.py
+# still picks up fresh values, exactly as the old inline os.environ reads did.
+config = load_config()
+configure_logging(config.log_level)
+log = get_logger("app")
+
 app = Flask(__name__)
 
-EVIDENCE_DIR = os.path.join(app.root_path, "evidence")
+EVIDENCE_DIR = os.path.join(app.root_path, config.evidence_dir)
 os.makedirs(EVIDENCE_DIR, exist_ok=True)
 
-# --- Upload / rate-limit config (Phase 9) ---
 # Global hard cap on request size (Flask returns 413 above it). Generous enough
 # for a video upload; images are far smaller.
-MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "200"))
-app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = config.server.max_upload_mb * 1024 * 1024
 
 # Simple in-process per-IP rate limit on the write/upload endpoints.
-RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "120"))
-_rate_limiter = RateLimiter(max_requests=RATE_LIMIT_PER_MIN, window_s=60.0)
+_rate_limiter = RateLimiter(max_requests=config.server.rate_limit_per_min, window_s=60.0)
 
 
 def _rate_limited() -> bool:
@@ -42,19 +48,17 @@ def _rate_limited() -> bool:
 # If set, /detect requires this value in the X-API-Key header — without
 # it, anyone who can reach the server can write arbitrary fines for any
 # plate. Unset by default so local dev/demo usage is unaffected.
-DETECT_API_KEY = os.environ.get("DETECT_API_KEY")
+DETECT_API_KEY = config.server.detect_api_key
 
-DB_PATH = os.environ.get("TRAFFIC_DB_PATH", "traffic.db")
+DB_PATH = config.db_path
 
-# Weights the /analyze upload route runs detection with. Same default as
-# the CLI (main_ocr.py); override with MODEL_PATH for a different model.
-MODEL_PATH = os.environ.get(
-    "MODEL_PATH", "runs/detect/traffic_model-2/weights/best.pt"
-)
+# Weights the /analyze upload route runs detection with; override with MODEL_PATH.
+MODEL_PATH = config.model_path
 
 # Normalized SQLite store (vehicles / violations / evidence / jobs). Creating it
 # initializes the schema and migrates any legacy flat `fines` table in place.
 db = Database(DB_PATH)
+log.info("database ready at %s", DB_PATH)
 
 # YOLO + EasyOCR are heavy to load (a few seconds) and not needed unless
 # someone actually uploads a photo, so they're loaded once on the first
@@ -70,7 +74,9 @@ def get_models():
         with _models_lock:
             if _models is None:
                 from modules.detector import load_models
+                log.info("loading YOLO + OCR models from %s", MODEL_PATH)
                 _models = load_models(MODEL_PATH)
+                log.info("models loaded")
     return _models
 
 
@@ -226,13 +232,12 @@ def analyze():
 # Video processing takes far longer than one request, so /analyze_video hands
 # the work to an in-process JobManager (bounded concurrency, cancellation,
 # expiry) and the browser polls /video_status for progress.
-MAX_CONCURRENT_VIDEO_JOBS = int(os.environ.get("MAX_CONCURRENT_VIDEO_JOBS", "2"))
-JOB_MAX_AGE_S = int(os.environ.get("JOB_MAX_AGE_S", "3600"))
-MAX_VIDEO_MB = int(os.environ.get("MAX_VIDEO_MB", "100"))
-MAX_VIDEO_SECONDS = int(os.environ.get("MAX_VIDEO_SECONDS", "300"))
+MAX_VIDEO_MB = config.server.max_video_mb
+MAX_VIDEO_SECONDS = config.server.max_video_seconds
 
 job_manager = JobManager(
-    max_concurrent=MAX_CONCURRENT_VIDEO_JOBS, max_age_s=JOB_MAX_AGE_S
+    max_concurrent=config.server.max_concurrent_video_jobs,
+    max_age_s=config.server.job_max_age_s,
 )
 
 
@@ -279,8 +284,10 @@ def analyze_video():
     job_id = job_manager.submit("video", target)
     if job_id is None:
         os.remove(tmp_path)
+        log.warning("video job rejected: concurrency cap reached")
         return jsonify({"error": "server busy: too many concurrent video jobs"}), 503
 
+    log.info("video job %s accepted", job_id)
     return jsonify({"job_id": job_id})
 
 
@@ -324,10 +331,16 @@ def all_fines():
 # =====================================
 
 if __name__ == "__main__":
-    # Debug is OFF by default now (the Werkzeug debugger allows arbitrary code
+    # Debug is OFF by default (the Werkzeug debugger allows arbitrary code
     # execution if the server is exposed). Opt in explicitly with FLASK_DEBUG=1
-    # for local development only.
-    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
-    port = int(os.environ.get("PORT", "5000"))
-    host = os.environ.get("HOST", "127.0.0.1")
-    app.run(debug=debug_mode, host=host, port=port)
+    # for local development only. For production use a WSGI server (gunicorn) —
+    # see docs/DEPLOYMENT.md.
+    log.info(
+        "starting dev server on %s:%s (debug=%s)",
+        config.server.host, config.server.port, config.server.debug,
+    )
+    app.run(
+        debug=config.server.debug,
+        host=config.server.host,
+        port=config.server.port,
+    )
