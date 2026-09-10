@@ -253,3 +253,25 @@ def test_api_review_flow(client):
     # unknown id -> 404
     assert client.post("/api/violations/999999/review",
                        json={"review_status": "confirmed"}).status_code == 404
+
+
+def test_video_cancel_unknown_job_is_404(client):
+    assert client.post("/video_cancel/does-not-exist").status_code == 404
+
+
+def test_rate_limit_returns_429_when_exceeded(monkeypatch, tmp_path):
+    # A tiny per-minute cap makes the limiter trip deterministically. app.py
+    # builds its limiter from config at import, so set the env then reload.
+    db_path = str(tmp_path / "rl.db")
+    monkeypatch.setenv("TRAFFIC_DB_PATH", db_path)
+    monkeypatch.delenv("DETECT_API_KEY", raising=False)
+    monkeypatch.setenv("RATE_LIMIT_PER_MIN", "2")
+
+    app_module = importlib.reload(sys.modules["app"]) if "app" in sys.modules else __import__("app")
+    app_module.app.config["TESTING"] = True
+
+    with app_module.app.test_client() as c:
+        payload = {"plate": "MH12AB1234", "violation": "no_helmet", "image_path": "e.jpg"}
+        assert c.post("/detect", json=payload).status_code == 200
+        assert c.post("/detect", json=payload).status_code == 200
+        assert c.post("/detect", json=payload).status_code == 429  # 3rd exceeds cap
