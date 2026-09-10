@@ -327,6 +327,98 @@ def all_fines():
     return jsonify(db.all_fines())
 
 # =====================================
+# DASHBOARD ANALYTICS + FILTERED LISTING (JSON API)
+# =====================================
+
+def _arg_float(name):
+    raw = request.args.get(name)
+    if raw in (None, ""):
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _arg_int(name, default):
+    raw = request.args.get(name)
+    if raw in (None, ""):
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+@app.route("/api/stats")
+def api_stats():
+    """Aggregate counts for the dashboard overview (all real data)."""
+    return jsonify(db.stats(recent_limit=_arg_int("recent", 5)))
+
+
+@app.route("/api/violations")
+def api_violations():
+    """Filtered, paginated violation list. All filters are optional query
+    params: plate, type, status, review_status, min_confidence, max_confidence,
+    date_from, date_to, sort, order (asc|desc), limit, offset."""
+    result = db.list_violations(
+        plate=request.args.get("plate"),
+        violation_type=request.args.get("type"),
+        status=request.args.get("status"),
+        review_status=request.args.get("review_status"),
+        min_confidence=_arg_float("min_confidence"),
+        max_confidence=_arg_float("max_confidence"),
+        date_from=request.args.get("date_from"),
+        date_to=request.args.get("date_to"),
+        sort=request.args.get("sort", "id"),
+        descending=request.args.get("order", "desc").lower() != "asc",
+        limit=_arg_int("limit", 50),
+        offset=_arg_int("offset", 0),
+    )
+    return jsonify(result)
+
+
+@app.route("/api/violations/<int:violation_id>")
+def api_violation_detail(violation_id):
+    """Full detail for one violation, including its evidence package paths."""
+    detail = db.get_violation(violation_id)
+    if detail is None:
+        return jsonify({"error": "violation not found"}), 404
+    return jsonify(detail)
+
+
+@app.route("/api/violations/<int:violation_id>/review", methods=["POST"])
+def api_review(violation_id):
+    """Record a human review decision. Body: {review_status, decision?, notes?}.
+
+    Separates automated detection from human confirmation — CV predictions are
+    not ground truth, so a violation stays 'pending' until a person confirms or
+    dismisses it."""
+    if _rate_limited():
+        return jsonify({"error": "rate limit exceeded"}), 429
+
+    data = request.get_json(silent=True) or {}
+    review_status = data.get("review_status")
+    if not review_status:
+        return jsonify({"error": "review_status is required"}), 400
+
+    try:
+        updated = db.set_review(
+            violation_id,
+            review_status,
+            reviewer_decision=data.get("decision"),
+            notes=data.get("notes"),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    if not updated:
+        return jsonify({"error": "violation not found"}), 404
+
+    log.info("violation %s reviewed: %s", violation_id, review_status)
+    return jsonify({"message": "review recorded", "review_status": review_status})
+
+# =====================================
 # RUN
 # =====================================
 

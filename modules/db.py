@@ -70,7 +70,13 @@ class Database:
                         confidence REAL,
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                         status TEXT NOT NULL DEFAULT 'unpaid',
-                        track_id INTEGER
+                        track_id INTEGER,
+                        -- Human-in-the-loop review (CV predictions are not ground
+                        -- truth): pending -> confirmed | dismissed.
+                        review_status TEXT NOT NULL DEFAULT 'pending',
+                        reviewer_decision TEXT,
+                        reviewed_at DATETIME,
+                        review_notes TEXT
                     );
 
                     CREATE TABLE IF NOT EXISTS evidence (
@@ -110,13 +116,47 @@ class Database:
                         ON violations(vehicle_id);
                     CREATE INDEX IF NOT EXISTS idx_violations_status
                         ON violations(status);
+                    CREATE INDEX IF NOT EXISTS idx_violations_type
+                        ON violations(type);
+                    CREATE INDEX IF NOT EXISTS idx_violations_timestamp
+                        ON violations(timestamp);
                     CREATE INDEX IF NOT EXISTS idx_evidence_violation
                         ON evidence(violation_id);
                     """
                 )
+                self._migrate_add_columns(conn)
+                # The review-status index references a column that only exists
+                # after the migration above, so create it separately.
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_violations_review "
+                    "ON violations(review_status)"
+                )
             self._migrate_legacy_fines(conn)
         finally:
             conn.close()
+
+    def _migrate_add_columns(self, conn: sqlite3.Connection) -> None:
+        """Add columns introduced after the first normalized schema shipped.
+
+        A ``traffic.db`` created before the review workflow existed won't have
+        the review columns; ``CREATE TABLE IF NOT EXISTS`` never alters an
+        existing table, so add any missing columns here (idempotent, run inside
+        ``initialize``'s transaction). New databases already have them from the
+        CREATE above and skip every branch.
+        """
+        existing = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(violations)").fetchall()
+        }
+        added = {
+            "review_status": "TEXT NOT NULL DEFAULT 'pending'",
+            "reviewer_decision": "TEXT",
+            "reviewed_at": "DATETIME",
+            "review_notes": "TEXT",
+        }
+        for column, decl in added.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE violations ADD COLUMN {column} {decl}")
 
     def _migrate_legacy_fines(self, conn: sqlite3.Connection) -> None:
         has_legacy = conn.execute(
@@ -314,6 +354,237 @@ class Database:
             }
             for row in rows
         ]
+
+    # -- dashboard analytics ------------------------------------------------
+
+    def stats(self, recent_limit: int = 5) -> dict:
+        """Aggregate counts for the dashboard overview, computed from the real
+        data (never fabricated). Returns totals, a per-type breakdown, a
+        review-status breakdown, the vehicle count, and the most recent
+        violations."""
+        conn = self._connect()
+        try:
+            totals = conn.execute(
+                """SELECT
+                     COUNT(*)                                        AS total_violations,
+                     COALESCE(SUM(amount), 0)                        AS total_fines,
+                     COALESCE(SUM(CASE WHEN status='unpaid' THEN amount ELSE 0 END), 0) AS unpaid_fines,
+                     COALESCE(SUM(CASE WHEN status='paid'   THEN amount ELSE 0 END), 0) AS paid_fines
+                   FROM violations"""
+            ).fetchone()
+
+            by_type = conn.execute(
+                "SELECT type, COUNT(*) AS n, COALESCE(SUM(amount),0) AS amount "
+                "FROM violations GROUP BY type ORDER BY n DESC"
+            ).fetchall()
+
+            by_review = conn.execute(
+                "SELECT review_status, COUNT(*) AS n "
+                "FROM violations GROUP BY review_status"
+            ).fetchall()
+
+            vehicles = conn.execute(
+                "SELECT COUNT(*) AS n FROM vehicles"
+            ).fetchone()["n"]
+
+            recent = conn.execute(
+                """SELECT v.id, ve.plate, v.type, v.amount, v.status,
+                          v.confidence, v.timestamp, v.review_status
+                   FROM violations v JOIN vehicles ve ON v.vehicle_id = ve.id
+                   ORDER BY v.id DESC LIMIT ?""",
+                (recent_limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        return {
+            "total_violations": totals["total_violations"],
+            "total_fines": totals["total_fines"],
+            "unpaid_fines": totals["unpaid_fines"],
+            "paid_fines": totals["paid_fines"],
+            "vehicles": vehicles,
+            "by_type": [dict(r) for r in by_type],
+            "by_review_status": {r["review_status"]: r["n"] for r in by_review},
+            "recent": [dict(r) for r in recent],
+        }
+
+    # -- filtered / paginated listing ---------------------------------------
+
+    # Columns a caller may sort by, whitelisted so ``sort`` can never inject SQL.
+    _SORTABLE = {"id", "timestamp", "amount", "confidence", "type", "status"}
+
+    def list_violations(
+        self,
+        *,
+        plate: str | None = None,
+        violation_type: str | None = None,
+        status: str | None = None,
+        review_status: str | None = None,
+        min_confidence: float | None = None,
+        max_confidence: float | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        sort: str = "id",
+        descending: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """Return ``{"items": [...], "total": n, "limit": l, "offset": o}``.
+
+        Every filter is optional and applied with a parameterized WHERE clause
+        (no string interpolation of values); ``limit`` is clamped to a sane
+        maximum so a caller can never request an unbounded dump. Confidence
+        filters ignore rows with a NULL confidence, since a range check on NULL
+        is undefined.
+        """
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
+        sort_col = sort if sort in self._SORTABLE else "id"
+        direction = "DESC" if descending else "ASC"
+
+        where = []
+        params: list = []
+        if plate:
+            where.append("ve.normalized_plate = ?")
+            params.append(normalize_plate(plate))
+        if violation_type:
+            where.append("v.type = ?")
+            params.append(violation_type)
+        if status:
+            where.append("v.status = ?")
+            params.append(status)
+        if review_status:
+            where.append("v.review_status = ?")
+            params.append(review_status)
+        if min_confidence is not None:
+            where.append("v.confidence IS NOT NULL AND v.confidence >= ?")
+            params.append(float(min_confidence))
+        if max_confidence is not None:
+            where.append("v.confidence IS NOT NULL AND v.confidence <= ?")
+            params.append(float(max_confidence))
+        if date_from:
+            where.append("v.timestamp >= ?")
+            params.append(date_from)
+        if date_to:
+            where.append("v.timestamp <= ?")
+            params.append(date_to)
+
+        clause = (" WHERE " + " AND ".join(where)) if where else ""
+
+        conn = self._connect()
+        try:
+            total = conn.execute(
+                f"SELECT COUNT(*) AS n FROM violations v "
+                f"JOIN vehicles ve ON v.vehicle_id = ve.id{clause}",
+                params,
+            ).fetchone()["n"]
+
+            rows = conn.execute(
+                f"""SELECT v.id, ve.plate, ve.registration_state, ve.rto_name,
+                           v.type, v.amount, v.status, v.confidence, v.timestamp,
+                           v.track_id, v.review_status, v.reviewer_decision,
+                           v.reviewed_at, v.review_notes,
+                           COALESCE(e.annotated_path, e.original_path) AS image_path
+                    FROM violations v
+                    JOIN vehicles ve ON v.vehicle_id = ve.id
+                    LEFT JOIN evidence e ON e.violation_id = v.id
+                    {clause}
+                    ORDER BY v.{sort_col} {direction}
+                    LIMIT ? OFFSET ?""",
+                (*params, limit, offset),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        items = []
+        for row in rows:
+            item = dict(row)
+            image_file = (item.pop("image_path") or "").split("/")[-1]
+            item["evidence"] = f"/evidence/{image_file}" if image_file else None
+            items.append(item)
+
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+    def get_violation(self, violation_id: int) -> dict | None:
+        """Full detail for one violation, including its evidence package paths
+        (served under ``/evidence/<name>``). Returns None if not found."""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """SELECT v.*, ve.plate, ve.registration_state, ve.rto_code,
+                          ve.rto_name
+                   FROM violations v JOIN vehicles ve ON v.vehicle_id = ve.id
+                   WHERE v.id = ?""",
+                (violation_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            ev = conn.execute(
+                "SELECT original_path, annotated_path, plate_crop_path, "
+                "metadata_path FROM evidence WHERE violation_id = ?",
+                (violation_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        result = dict(row)
+
+        def _url(name):
+            base = (name or "").split("/")[-1]
+            return f"/evidence/{base}" if base else None
+
+        result["evidence"] = {
+            "original": _url(ev["original_path"]) if ev else None,
+            "annotated": _url(ev["annotated_path"]) if ev else None,
+            "plate_crop": _url(ev["plate_crop_path"]) if ev else None,
+            "metadata": _url(ev["metadata_path"]) if ev else None,
+        }
+        return result
+
+    # -- human review -------------------------------------------------------
+
+    REVIEW_STATES = {"pending", "confirmed", "dismissed"}
+
+    def set_review(
+        self,
+        violation_id: int,
+        review_status: str,
+        *,
+        reviewer_decision: str | None = None,
+        notes: str | None = None,
+    ) -> bool:
+        """Record a human review decision on a violation. Returns True if a row
+        was updated, False if the id doesn't exist. Raises ValueError for an
+        unknown ``review_status`` so the API can 400 rather than store garbage."""
+        if review_status not in self.REVIEW_STATES:
+            raise ValueError(
+                f"review_status must be one of {sorted(self.REVIEW_STATES)}"
+            )
+        reviewed_at = None if review_status == "pending" else "CURRENT_TIMESTAMP"
+        conn = self._connect()
+        try:
+            with conn:
+                # reviewed_at is set to now for a decision, cleared back to NULL
+                # if a row is reset to pending.
+                if reviewed_at:
+                    cur = conn.execute(
+                        """UPDATE violations
+                           SET review_status = ?, reviewer_decision = ?,
+                               review_notes = ?, reviewed_at = CURRENT_TIMESTAMP
+                           WHERE id = ?""",
+                        (review_status, reviewer_decision, notes, violation_id),
+                    )
+                else:
+                    cur = conn.execute(
+                        """UPDATE violations
+                           SET review_status = ?, reviewer_decision = ?,
+                               review_notes = ?, reviewed_at = NULL
+                           WHERE id = ?""",
+                        (review_status, reviewer_decision, notes, violation_id),
+                    )
+            return cur.rowcount > 0
+        finally:
+            conn.close()
 
     # -- processing jobs ----------------------------------------------------
 
