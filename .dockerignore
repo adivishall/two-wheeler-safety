@@ -1,0 +1,38 @@
+# Keep the build context small and never ship local data / weights / scratch.
+.git
+.github
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+
+# Tests aren't needed in the runtime image.
+tests
+conftest.py
+
+# Large / generated / local-only
+runs
+reports
+evidence
+traffic.db
+*.pt
+master_traffic_violation_dataset
+dataset_helmet_clean
+data/train
+data/val
+data/test
+_*.py
+*.zip
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Docs / editor
+docs
+*.md
+!README.md
+.DS_Store
