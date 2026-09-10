@@ -85,6 +85,17 @@ def record_fine(plate, violation, image_path):
     the CLIs and video pipeline can pass it as a ``record_fn`` callback."""
     return db.record_fine(plate, violation, image_path)
 
+@app.after_request
+def _security_headers(response):
+    """Baseline hardening headers on every response. Kept modest for a
+    single-page same-origin app: block MIME sniffing, disallow framing
+    (clickjacking), and don't leak referrers. No strict CSP because the
+    dashboard intentionally uses inline styles/scripts."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    return response
+
 # =====================================
 # HOME PAGE
 # =====================================
