@@ -1,0 +1,48 @@
+# Reference constraints for the FULL runtime stack (torch / ultralytics /
+# easyocr and their closure) — the exact versions this project's measured
+# results (docs/EVALUATION.md) were produced on.
+#
+# Usage (full local install for running the model):
+#     pip install -r requirements.txt -c constraints-runtime.txt
+#
+# CAVEAT — torch is platform/accelerator specific. The pins below are the
+# CPU/Apple-Silicon (MPS) build the author used. On an NVIDIA machine, install
+# the matching CUDA build of torch/torchvision from https://pytorch.org first
+# (that decides the torch version), then install the rest with this file. Do NOT
+# force a CPU torch pin onto a CUDA host.
+#
+# This file is a reproducibility *record*, not used by CI (CI is model-free;
+# see constraints-ci.txt). Regenerate from a clean full install with
+# `pip freeze | sort`.
+
+# --- deep-learning stack (see caveat above re: torch build) ---
+torch==2.12.1
+torchvision==0.27.1
+ultralytics==8.4.71
+easyocr==1.7.2
+
+# --- app + heavy transitive closure ---
+certifi==2026.6.17
+charset-normalizer==3.4.7
+filelock==3.29.4
+Flask==3.1.3
+fsspec==2026.6.0
+idna==3.18
+matplotlib==3.10.9
+networkx==3.6.1
+ninja==1.13.0
+numpy==2.4.6
+opencv-python==4.13.0.92
+pandas==3.0.5
+pillow==12.2.0
+psutil==7.2.2
+pyclipper==1.4.0
+python-bidi==0.6.10
+PyYAML==6.0.3
+requests==2.34.2
+scikit-image==0.26.0
+scipy==1.17.1
+shapely==2.1.2
+sympy==1.14.0
+typing_extensions==4.15.0
+urllib3==2.7.0
