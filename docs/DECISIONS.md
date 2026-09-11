@@ -131,3 +131,32 @@ helpers (`iou`, `is_contradicted`, `nearest_plate_id`, `clean_plate`) are kept.
 **Why.** They encode the regression test for a real bug — a photo where the
 higher-confidence helmet call was wrong — that must never silently regress. They
 cost nothing to keep and document the contradiction safeguard's origin.
+
+## 13. Keep the flat layout — do NOT adopt a `src/` package
+
+**Decision.** Evaluated moving the code under `src/two_wheeler_safety/` (a
+pip-installable package). **Rejected.** Keep the current layout: a `modules/`
+package of importable logic plus top-level entry-point scripts (`app.py`,
+`main.py`, `demo.py`, `benchmark.py`, `evaluate_*.py`, `train_traffic.py`,
+`seed_demo.py`, `calibrate_confidence.py`).
+
+**Why.** A `src/` layout earns its keep when a project is *distributed as a
+library* — published to PyPI, imported by other packages, versioned as an API.
+This project is an **application**: a web app plus a set of CLIs run in place. It
+is never `pip install`-ed as a dependency. Against zero real benefit, the move
+has real costs:
+
+* **It breaks every working CLI.** 12 entry points import `from modules.…`;
+  repackaging forces a rename (`from two_wheeler_safety.…`) across the tree and
+  changes how each script is invoked — exactly the "preserve working CLIs"
+  constraint we're told not to violate.
+* **The stated wins are already covered another way.** Import hygiene is enforced
+  by ruff (`I`/`F`); the accidental-`import config`-vs-`modules.config` ambiguity
+  a `src/` layout prevents is instead handled by mypy's
+  `explicit_package_bases`; reproducibility is handled by the constraints files.
+* It would be complexity added for its own sake — against the project's rule of
+  not adding buzzword structure without a measured benefit.
+
+**When to revisit.** If the tracking/OCR/confidence logic in `modules/` is ever
+genuinely reused by a *separate* project, extract just that into a package then —
+not the whole application.

@@ -10,6 +10,10 @@ and surfaces everything in a review dashboard.
 > truth, and are meant to be confirmed by a human before any action. See
 > [Limitations](#limitations) and [docs/PRIVACY.md](docs/PRIVACY.md).
 
+![Review dashboard — overview stats, per-type breakdown, processing sessions, and the filterable violations table with confidence scores and human-review state](docs/images/dashboard.png)
+
+<sub>The review dashboard (populated with the one-command demo). Try it in ~30 s with `make demo` — no model or weights required.</sub>
+
 ---
 
 ## What it does
@@ -229,11 +233,28 @@ environment. Every variable the project reads:
 
 ## Running locally
 
+**Fastest look (no model, no weights):** seed a self-contained demo and serve it
+with only the model-free deps installed —
+
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-ci.txt -c constraints-ci.txt
+make demo                 # or: python3 demo.py   → http://127.0.0.1:5000
+```
+
+This populates the dashboard, analytics, sessions, review flow, and plate lookup
+with clearly-labelled synthetic demo data so there's something to click. See
+[docs/DEMO.md](docs/DEMO.md). For the real detector on your own footage:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate   # Python 3.11–3.13
+pip install -r requirements.txt -c constraints-runtime.txt
 python3 app.py            # http://127.0.0.1:5000
 ```
+
+The full stack is platform-specific because of torch (install the CUDA build
+first on an NVIDIA host). Reproducible, pinned setup for every profile —
+contributor/test, full runtime, production — is in
+[docs/INSTALL.md](docs/INSTALL.md).
 
 The UI has four tabs: **Dashboard** (stats, violations, review), **Photo**
 (server-side detection on an upload), **Video** (background processing with a
@@ -264,8 +285,8 @@ No weights, datasets, or videos ship in the repo (all gitignored). Train first
 ## Testing
 
 ```bash
-pip install -r requirements-dev.txt
-pytest                     # 174 tests
+pip install -r requirements-ci.txt -c constraints-ci.txt   # model-free, pinned
+pytest                     # 299 tests, ~3s
 ```
 
 The suite is **model-free by design** — heavy inference (torch/ultralytics/
@@ -372,10 +393,18 @@ and `reports/`, and local experiment scratch — all large and/or regenerable.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — components & data flow
 - [docs/DECISIONS.md](docs/DECISIONS.md) — engineering decision records
 - [docs/API.md](docs/API.md) — HTTP API reference
-- [docs/DEMO.md](docs/DEMO.md) — step-by-step demo
+- [docs/INSTALL.md](docs/INSTALL.md) — reproducible install profiles & pins
+- [docs/DEMO.md](docs/DEMO.md) — one-command demo + step-by-step walkthrough
+- [docs/EVALUATION.md](docs/EVALUATION.md) — measured detector/OCR/system/speed/perf results
+- [docs/ERROR_ANALYSIS.md](docs/ERROR_ANALYSIS.md) — failure modes & how they're contained
+- [docs/TESTING.md](docs/TESTING.md) — test strategy & coverage
+- [docs/SECURITY.md](docs/SECURITY.md) — threat model & controls
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — running in production
 - [docs/PRIVACY.md](docs/PRIVACY.md) — data & privacy
+- [docs/MODEL_VERSIONING.md](docs/MODEL_VERSIONING.md) — weights ↔ manifest ↔ evidence
+- [docs/DATASET.md](docs/DATASET.md) — dataset provenance & caveats
 - [docs/BASELINE.md](docs/BASELINE.md) — pre-upgrade baseline audit
+- [CHANGELOG.md](CHANGELOG.md) — release notes (v1.0.0-rc1)
 
 ## Tech stack
 

@@ -47,3 +47,9 @@ reports/
 # ===== Env / secrets =====
 .env
 *.log
+
+# Coverage artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/

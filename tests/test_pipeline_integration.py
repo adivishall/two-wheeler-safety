@@ -157,6 +157,43 @@ def test_contradiction_is_not_recorded(stub_video_io, tmp_path):
     assert summary["violations"] == []
 
 
+def test_ocr_lock_skips_redundant_ocr_without_changing_the_fine(stub_video_io, tmp_path):
+    """Phase 21 optimization: once the stabilizer has locked a high-confidence
+    plate over enough readings, OCR is skipped on later frames. The recorded
+    fine must be identical to running OCR every frame."""
+
+    class _CountingReader(_FakeReader):
+        calls = 0
+
+        def readtext(self, crop, detail=1):
+            _CountingReader.calls += 1
+            return super().readtext(crop, detail=detail)
+
+    def run(lock_conf):
+        _CountingReader.calls = 0
+        recorded = []
+        out = str(tmp_path / f"o_{lock_conf}.mp4")
+        summary = process_video(
+            "unused.mp4", _FakeModel(), _CountingReader(), out,
+            record_fn=lambda p, v, e, **k: recorded.append((p, v)) or 500,
+            streak_threshold=3, ocr_lock_confidence=lock_conf,
+            ocr_lock_min_observations=5,
+        )
+        return _CountingReader.calls, recorded, summary["violations"]
+
+    # Lock disabled (confidence can never be reached): OCR runs every frame.
+    calls_off, fines_off, viol_off = run(1.1)
+    assert calls_off == N_FRAMES
+
+    # Lock enabled: OCR stops after the plate locks (5 readings), so far fewer
+    # calls — but the same single fine for the same plate.
+    calls_on, fines_on, viol_on = run(0.90)
+    assert calls_on < calls_off
+    assert calls_on == 5  # locks exactly at ocr_lock_min_observations
+    assert fines_on == fines_off == [(PLATE_TEXT, "no_helmet")]
+    assert viol_on[0]["plate"] == viol_off[0]["plate"] == PLATE_TEXT
+
+
 def test_could_not_open_video_raises(monkeypatch, tmp_path):
     import cv2
 

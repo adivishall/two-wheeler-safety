@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import overload
 
 # Version of the detection/evidence pipeline code. Bumped when the pipeline's
 # behaviour or evidence format changes; stamped into every evidence package so a
@@ -79,7 +80,13 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+@overload
+def _env_str(name: str, default: str) -> str: ...
+@overload
+def _env_str(name: str, default: None) -> str | None: ...
 def _env_str(name: str, default: str | None) -> str | None:
+    # A non-None default guarantees a non-None result (overloads let a caller
+    # like host=_env_str("HOST", "127.0.0.1") stay typed as str).
     raw = os.environ.get(name)
     return raw if raw not in (None, "") else default
 
@@ -174,6 +181,14 @@ class DetectionConfig:
     # long video never stores every detection forever; set enabled False to skip.
     trace_enabled: bool = True
     trace_max_frames: int = 20
+    # OCR is the top per-frame cost when a plate is on screen (benchmark:
+    # ~63% of video wall time). Once the temporal stabilizer has locked a
+    # plate — at least ``ocr_lock_min_observations`` readings and confidence
+    # >= ``ocr_lock_confidence`` — re-OCRing every frame cannot change the
+    # fined plate, so it is skipped. Set the confidence to 1.1 to disable
+    # (never lock) and restore per-frame OCR.
+    ocr_lock_confidence: float = 0.90
+    ocr_lock_min_observations: int = 5
 
     @classmethod
     def from_env(cls) -> "DetectionConfig":
@@ -187,6 +202,8 @@ class DetectionConfig:
             contradiction_iou=_env_float("CONTRADICTION_IOU", 0.1),
             trace_enabled=_env_bool("DETECTION_TRACE_ENABLED", True),
             trace_max_frames=_env_int("DETECTION_TRACE_MAX_FRAMES", 20),
+            ocr_lock_confidence=_env_float("OCR_LOCK_CONFIDENCE", 0.90),
+            ocr_lock_min_observations=_env_int("OCR_LOCK_MIN_OBSERVATIONS", 5),
         )
 
 

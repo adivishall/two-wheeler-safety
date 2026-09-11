@@ -158,6 +158,55 @@ dataset yet (it would come from the human-review workflow: each stored
 `confidence` joined to the reviewer's confirmed/dismissed decision). Until that
 is run and shown to help, confidence stays a score and no probability is claimed.
 
+## 6. Performance profiling (`benchmark.py`)
+
+`benchmark.py` measures model-load time, single-image inference/OCR latency,
+end-to-end video throughput, and a **per-stage breakdown** of where each frame's
+time actually goes (`modules/profiling.py`). Every number below is from a real
+run on this machine — nothing is hard-coded.
+
+**Machine:** Apple Silicon, device `mps`, torch 2.12, model
+`traffic-4class@1.0.0`. Model load ≈ 2.7 s (one-time).
+
+**Single-image (test.jpg, 15 iters):** inference 21.5 ms mean (≈ 46 FPS,
+p90 22.2 ms); EasyOCR on the plate crop 12.1 ms mean.
+
+**Where the per-frame time goes** depends entirely on whether a plate is on
+screen, because OCR only runs on plated tracks:
+
+| Stage | No plate in frame | Plate on screen |
+|-------|------------------:|----------------:|
+| YOLO inference | 67% | 35% |
+| OCR (EasyOCR) | — | **63%** |
+| read / track / evidence / DB / encode | < 12% combined | < 1% combined |
+| unaccounted (draw, state machines, glue) | 21% | 1% |
+
+The measured conclusion: **the only two costs that matter are the model forward
+pass and OCR.** Every stage we wrote around them (tracking, association,
+evidence, DB, encode) is together under 1% when a plate is present — so there is
+no orchestration bottleneck worth optimizing, and none was.
+
+**The one measured optimization (OCR lock).** OCR was re-running on *every*
+frame for a plated track, even after the temporal stabilizer had already elected
+a high-confidence plate. Once a track's plate is locked (≥ 5 readings, stabilizer
+confidence ≥ 0.90) another OCR call cannot change the fined plate, so it is
+skipped (`ocr_lock_*` in `DetectionConfig`). Measured on `demo_traffic.mp4`
+(120 frames):
+
+| | OCR every frame | OCR locked (default) |
+|--|---------------:|---------------------:|
+| OCR calls | 120 | 5 |
+| Throughput | 18.5 FPS | **50.2 FPS** (+172%) |
+| Recorded fine | `MH02DL4596` no_helmet 0.968 | **identical** |
+
+The fine is byte-identical; only redundant work was removed. Disable with
+`OCR_LOCK_CONFIDENCE=1.1` to restore per-frame OCR. Regenerate with:
+
+```
+python3 benchmark.py --model runs/detect/traffic_model-2/weights/best.pt \
+    --image test.jpg --video demo_traffic.mp4 --max-frames 300
+```
+
 ## Principles
 
 * **Confidence is a score, not a probability.** The measured +0.248

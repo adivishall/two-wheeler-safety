@@ -152,10 +152,11 @@ class SpeedEstimator:
         self.config = config
         self.calibration = calibration
 
-        self.prev = {}  # legacy wall-clock path: track_id -> (center_x, timestamp)
-        self._hist = {}  # track_id -> deque[(t, cx, cy)]  (video-time path)
-        self._recent = {}  # track_id -> deque[instantaneous kmh]
-        self._first_t = {}  # track_id -> first video timestamp seen
+        # legacy wall-clock path: track_id -> (center_x, timestamp)
+        self.prev: dict[int, tuple[float, float]] = {}
+        self._hist: dict[int, deque] = {}  # track_id -> deque[(t, cx, cy)] (video-time)
+        self._recent: dict[int, deque] = {}  # track_id -> deque[instantaneous kmh]
+        self._first_t: dict[int, float] = {}  # track_id -> first video timestamp seen
 
     def _ppm(self, y):
         return self.calibration(y) if self.calibration is not None else self.pixels_per_meter

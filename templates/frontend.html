@@ -531,6 +531,82 @@
             font-variant-numeric: tabular-nums;
         }
 
+        /* ---------------- Analytics ---------------- */
+
+        #analytics { margin: 2px 2px 18px; }
+        .analytics-block { margin-bottom: 18px; }
+        .analytics-block .ab-title {
+            font-size: 11.5px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--text-3); margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: baseline;
+        }
+        .analytics-block .ab-title .ab-note {
+            font-weight: 500; text-transform: none; letter-spacing: 0;
+            color: var(--text-3);
+        }
+
+        /* Over-time sparkline (SVG fills its box) */
+        .spark-wrap { width: 100%; }
+        .spark-wrap svg { width: 100%; height: 64px; display: block; overflow: visible; }
+        .spark-wrap .spark-area { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
+        .spark-wrap .spark-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+        .spark-wrap .spark-dot { fill: var(--accent); }
+        .spark-axis {
+            display: flex; justify-content: space-between;
+            font-size: 11px; color: var(--text-3); margin-top: 4px;
+        }
+
+        /* Confidence histogram */
+        .histo {
+            display: flex; align-items: flex-end; gap: 3px;
+            height: 72px; margin-bottom: 4px;
+        }
+        .histo .hcol {
+            flex: 1; background: var(--accent); border-radius: 3px 3px 0 0;
+            min-height: 2px; opacity: 0.85;
+        }
+        .histo-axis {
+            display: flex; justify-content: space-between;
+            font-size: 11px; color: var(--text-3);
+        }
+
+        /* Small labelled metric rows (rates + throughput) */
+        .metric-rows { display: grid; gap: 8px; }
+        .metric-row {
+            display: flex; justify-content: space-between; align-items: baseline;
+            font-size: 13.5px; padding: 8px 12px;
+            background: var(--surface-2); border-radius: var(--r-sm);
+        }
+        .metric-row .m-label { color: var(--text-2); }
+        .metric-row .m-val {
+            font-weight: 600; color: var(--text);
+            font-variant-numeric: tabular-nums;
+        }
+        .metric-row .m-val.muted { color: var(--text-3); font-weight: 500; }
+
+        /* Sessions list */
+        .session-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px; margin-bottom: 8px;
+            background: var(--surface-2); border: 1px solid var(--hairline);
+            border-radius: var(--r-md);
+        }
+        .session-row .s-main { flex: 1; min-width: 0; }
+        .session-row .s-src {
+            font-weight: 600; font-size: 14px; color: var(--text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .session-row .s-meta { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+        .session-status {
+            display: inline-block; padding: 3px 9px; border-radius: 980px;
+            font-size: 11px; font-weight: 600; text-transform: capitalize;
+            white-space: nowrap;
+        }
+        .session-status.completed { background: var(--success-bg); color: var(--success); }
+        .session-status.processing { background: var(--seg-track); color: var(--text-2); }
+        .session-status.failed,
+        .session-status.rejected { background: var(--danger-bg); color: var(--danger); }
+
         /* Filters */
         .filters {
             display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
@@ -717,6 +793,18 @@
                 </div>
                 <div id="statGrid"><div class="spinner"></div></div>
                 <div id="typeBreakdown"></div>
+
+                <div class="dash-actions" style="margin-top:6px;">
+                    <h3>Analytics</h3>
+                    <button type="button" class="link-btn" id="toggleAnalytics" aria-expanded="false">Show ▾</button>
+                </div>
+                <div id="analytics" hidden></div>
+
+                <div class="dash-actions" style="margin-top:6px;">
+                    <h3>Processing sessions</h3>
+                    <button type="button" class="link-btn" id="refreshSessions">↻ Refresh</button>
+                </div>
+                <div id="sessionsList"></div>
 
                 <div class="dash-actions" style="margin-top:6px;">
                     <h3>Violations</h3>
@@ -1246,7 +1334,9 @@
         }
 
         async function loadDashboard() {
-            await Promise.all([loadStats(), loadViolations()]);
+            const tasks = [loadStats(), loadViolations(), loadSessions()];
+            if (analyticsShown) tasks.push(loadAnalytics());
+            await Promise.all(tasks);
         }
 
         async function loadStats() {
@@ -1282,6 +1372,221 @@
                     <span class="bar-track"><span class="bar-fill" style="width:${w}%"></span></span>
                     <span class="bar-val">${t.n}</span></div>`;
             }).join("") + `</div>`;
+        }
+
+        // ---- Analytics (lazy: fetched on first expand) ----
+
+        let analyticsShown = false;
+        let analyticsLoaded = false;
+
+        function pct1(x) { return x === null || x === undefined ? "—" : (x * 100).toFixed(1) + "%"; }
+
+        async function loadAnalytics() {
+            const el = document.getElementById("analytics");
+            if (!analyticsLoaded) el.innerHTML = `<div class="spinner"></div>`;
+            let a;
+            try {
+                a = await fetch("/api/analytics").then(r => r.json());
+            } catch (err) {
+                el.innerHTML = `<div class="error-msg">Couldn't load analytics.</div>`;
+                return;
+            }
+            analyticsLoaded = true;
+            renderAnalytics(a);
+        }
+
+        // Build an area+line sparkline SVG from a series of {day, n} points.
+        function sparkline(points) {
+            if (!points.length) return `<div class="empty-note">No dated violations yet.</div>`;
+            const W = 300, H = 60, pad = 4;
+            const max = Math.max(...points.map(p => p.n), 1);
+            const n = points.length;
+            const x = i => n === 1 ? W / 2 : pad + (i * (W - 2 * pad)) / (n - 1);
+            const y = v => H - pad - (v / max) * (H - 2 * pad);
+            const line = points.map((p, i) => `${x(i).toFixed(1)},${y(p.n).toFixed(1)}`).join(" ");
+            const area = `${pad},${H} ${line} ${(x(n - 1)).toFixed(1)},${H}`;
+            const dots = points.map((p, i) =>
+                `<circle class="spark-dot" cx="${x(i).toFixed(1)}" cy="${y(p.n).toFixed(1)}" r="${n > 40 ? 0 : 2.5}"></circle>`
+            ).join("");
+            return `<div class="spark-wrap">
+                <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+                     aria-label="Violations per day">
+                    <polygon class="spark-area" points="${area}"></polygon>
+                    <polyline class="spark-line" points="${line}"></polyline>
+                    ${dots}
+                </svg>
+                <div class="spark-axis"><span>${escapeHtml(points[0].day)}</span>
+                    <span>${escapeHtml(points[n - 1].day)}</span></div>
+            </div>`;
+        }
+
+        function histogram(conf) {
+            const h = conf.histogram || [];
+            if (!conf.count) {
+                return `<div class="empty-note">No confidence scores recorded yet
+                    (image uploads and manual entries carry none).</div>`;
+            }
+            const max = Math.max(...h, 1);
+            const cols = h.map(c =>
+                `<div class="hcol" style="height:${Math.round((c / max) * 100)}%"
+                      title="${c} in this range"></div>`).join("");
+            return `<div class="histo">${cols}</div>
+                <div class="histo-axis"><span>0.0</span><span>0.5</span><span>1.0</span></div>`;
+        }
+
+        function metricRow(label, value, muted) {
+            return `<div class="metric-row"><span class="m-label">${escapeHtml(label)}</span>
+                <span class="m-val ${muted ? "muted" : ""}">${value}</span></div>`;
+        }
+
+        function renderAnalytics(a) {
+            const ot = a.over_time || [];
+            const ro = a.review_outcomes || {};
+            const pr = a.plate_recognition || {};
+            const sess = a.sessions || {};
+            const tp = (sess.throughput_fps) || {};
+            const conf = a.confidence || {};
+
+            document.getElementById("analytics").innerHTML = `
+              <div class="analytics-block">
+                <div class="ab-title">Violations over time
+                    <span class="ab-note">last ${ot.length} day(s) with data</span></div>
+                ${sparkline(ot)}
+              </div>
+
+              <div class="analytics-block">
+                <div class="ab-title">Confidence distribution
+                    <span class="ab-note">raw score, not a calibrated probability</span></div>
+                ${histogram(conf)}
+                <div class="metric-rows" style="margin-top:10px">
+                    ${metricRow("Scored violations", conf.count)}
+                    ${metricRow("Mean score", conf.mean === null ? "—" : conf.mean.toFixed(2))}
+                    ${conf.missing ? metricRow("No score stored", conf.missing, true) : ""}
+                </div>
+              </div>
+
+              <div class="analytics-block">
+                <div class="ab-title">Human review outcomes</div>
+                <div class="metric-rows">
+                    ${metricRow("Confirmed", ro.confirmed || 0)}
+                    ${metricRow("Dismissed", ro.dismissed || 0)}
+                    ${metricRow("Pending", ro.pending || 0, true)}
+                    ${metricRow("Confirmation rate (of decided)", pct1(ro.confirmation_rate))}
+                </div>
+              </div>
+
+              <div class="analytics-block">
+                <div class="ab-title">Plate recognition
+                    <span class="ab-note">registration decoded on stored fines</span></div>
+                <div class="metric-rows">
+                    ${metricRow("Decoded to a region", `${pr.decoded || 0} / ${pr.total || 0}`)}
+                    ${metricRow("Recognition rate", pct1(pr.rate))}
+                </div>
+              </div>
+
+              <div class="analytics-block">
+                <div class="ab-title">Processing throughput
+                    <span class="ab-note">${tp.runs || 0} completed run(s)</span></div>
+                <div class="metric-rows">
+                    ${metricRow("Avg speed", tp.avg === null || tp.avg === undefined ? "—" : tp.avg.toFixed(1) + " FPS")}
+                    ${metricRow("Range", (tp.min == null || tp.max == null) ? "—" : `${tp.min.toFixed(1)}–${tp.max.toFixed(1)} FPS`, true)}
+                    ${metricRow("Frames processed", (sess.totals && sess.totals.frames) || 0)}
+                    ${metricRow("Vehicles tracked", (sess.totals && sess.totals.vehicles_tracked) || 0)}
+                    ${(sess.by_model || []).map(m =>
+                        metricRow("Model · " + m.model, m.runs + " run(s)", true)).join("")}
+                </div>
+              </div>`;
+        }
+
+        // ---- Processing sessions list + per-run detail ----
+
+        async function loadSessions() {
+            const el = document.getElementById("sessionsList");
+            let data;
+            try {
+                data = await fetch("/api/sessions?limit=8").then(r => r.json());
+            } catch (err) {
+                el.innerHTML = `<div class="error-msg">Couldn't load sessions.</div>`;
+                return;
+            }
+            renderSessions(data.sessions || []);
+        }
+
+        function renderSessions(sessions) {
+            const el = document.getElementById("sessionsList");
+            if (!sessions.length) {
+                el.innerHTML = `<div class="empty-note">No processing runs yet — analyze a video to create one.</div>`;
+                return;
+            }
+            el.innerHTML = sessions.map(s => {
+                const status = escapeHtml(s.status || "processing");
+                const src = escapeHtml(s.source || s.id.slice(0, 8));
+                const meta = [
+                    s.frames_processed ? `${s.frames_processed} frames` : null,
+                    (s.processing_fps != null) ? `${s.processing_fps.toFixed(1)} FPS` : null,
+                    s.violations_detected != null ? `${s.violations_detected} violation(s)` : null,
+                ].filter(Boolean).join(" · ");
+                return `<div class="session-row">
+                    <div class="s-main">
+                        <div class="s-src">🎞️ ${src}</div>
+                        <div class="s-meta">${meta || "queued"} · ${formatTime(s.started_at)}</div>
+                    </div>
+                    <span class="session-status ${status}">${status}</span>
+                    <button class="icon-btn" onclick="openSession('${escapeHtml(s.id)}')">View</button>
+                </div>`;
+            }).join("");
+        }
+
+        async function openSession(id) {
+            let d;
+            try {
+                d = await fetch(`/api/sessions/${encodeURIComponent(id)}`).then(r => r.json());
+            } catch (err) { return; }
+            if (d.error) return;
+            renderSessionModal(d);
+        }
+
+        function renderSessionModal(d) {
+            const items = (d.violations && d.violations.items) || [];
+            const rows = items.length
+                ? items.map(v => `<tr>
+                    <td><strong>${escapeHtml(v.plate)}</strong></td>
+                    <td><span class="violation-tag">${escapeHtml(violationLabel(v.type))}</span></td>
+                    <td>${confBar(v.confidence)}</td>
+                    <td><span class="review-badge ${escapeHtml(v.review_status)}">${escapeHtml(v.review_status)}</span></td>
+                    <td><button class="icon-btn" onclick="openDetail(${v.id})">Review</button></td>
+                  </tr>`).join("")
+                : `<tr><td colspan="5" class="empty-note" style="padding:18px 0">No violations recorded in this run.</td></tr>`;
+
+            const stat = (label, val) =>
+                `<div class="stat-card"><div class="stat-num">${val}</div><div class="stat-label">${label}</div></div>`;
+
+            document.getElementById("modalRoot").innerHTML = `
+              <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+                <div class="modal" role="dialog" aria-modal="true">
+                  <div class="modal-head">
+                    <div>
+                      <h2>Processing run</h2>
+                      <div class="sub">${escapeHtml(d.source || d.id)} · <span class="session-status ${escapeHtml(d.status || "")}">${escapeHtml(d.status || "")}</span></div>
+                      <div class="sub">${formatTime(d.started_at)}${d.ended_at ? " → " + formatTime(d.ended_at) : ""}</div>
+                      ${d.model_version ? `<div class="sub">Model ${escapeHtml(d.model_version)}${d.pipeline_version ? " · pipeline " + escapeHtml(d.pipeline_version) : ""}</div>` : ""}
+                    </div>
+                    <button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>
+                  </div>
+
+                  <div class="stat-grid" style="margin-bottom:16px">
+                    ${stat("Frames", d.frames_processed || 0)}
+                    ${stat("Vehicles", d.vehicles_tracked || 0)}
+                    ${stat("FPS", d.processing_fps != null ? d.processing_fps.toFixed(1) : "—")}
+                  </div>
+                  ${d.error ? `<div class="error-msg" style="margin-bottom:16px">${escapeHtml(d.error)}</div>` : ""}
+
+                  <div class="cb-title" style="font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-3);margin-bottom:8px">Violations from this run</div>
+                  <div class="table-wrap"><table>
+                    <thead><tr><th>Plate</th><th>Violation</th><th>Confidence</th><th>Review</th><th></th></tr></thead>
+                    <tbody>${rows}</tbody></table></div>
+                </div>
+              </div>`;
         }
 
         function currentFilters() {
@@ -1496,6 +1801,17 @@
             }, 300);
         });
         document.getElementById("refreshDash").addEventListener("click", loadDashboard);
+        document.getElementById("refreshSessions").addEventListener("click", loadSessions);
+
+        // Analytics is collapsed by default and fetched on first expand.
+        document.getElementById("toggleAnalytics").addEventListener("click", (e) => {
+            analyticsShown = !analyticsShown;
+            const panel = document.getElementById("analytics");
+            panel.hidden = !analyticsShown;
+            e.target.textContent = analyticsShown ? "Hide ▴" : "Show ▾";
+            e.target.setAttribute("aria-expanded", analyticsShown ? "true" : "false");
+            if (analyticsShown) loadAnalytics();
+        });
 
         // Dashboard is the default tab, so load it on first paint.
         loadDashboard();

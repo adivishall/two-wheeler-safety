@@ -255,6 +255,32 @@ def test_api_review_flow(client):
                        json={"review_status": "confirmed"}).status_code == 404
 
 
+def test_api_analytics_shape_and_real_counts(client):
+    _record(client, violation="no_helmet")
+    _record(client, plate="KA05CD9", violation="overspeed")
+    data = client.get("/api/analytics").get_json()
+    for key in ("over_time", "by_type", "review_outcomes", "confidence",
+                "plate_recognition", "sessions"):
+        assert key in data
+    assert sum(d["n"] for d in data["over_time"]) == 2
+    assert data["confidence"]["missing"] == 2  # /detect stores no confidence
+    assert data["review_outcomes"]["pending"] == 2
+
+
+def test_api_session_detail_includes_violations(client):
+    # Create a session directly and attach a violation to it via the DB layer,
+    # then confirm the endpoint drills down into that run.
+    import app as app_module
+    app_module.db.create_session("sess-xyz", source="clip.mp4")
+    app_module.db.record_fine("MH12AB1234", "no_helmet", "e.jpg",
+                              session_id="sess-xyz")
+    detail = client.get("/api/sessions/sess-xyz").get_json()
+    assert detail["id"] == "sess-xyz"
+    assert detail["violations"]["total"] == 1
+    assert detail["violations"]["items"][0]["plate"] == "MH12AB1234"
+    assert client.get("/api/sessions/nope").status_code == 404
+
+
 def test_video_cancel_unknown_job_is_404(client):
     assert client.post("/video_cancel/does-not-exist").status_code == 404
 

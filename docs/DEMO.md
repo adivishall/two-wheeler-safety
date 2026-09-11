@@ -3,9 +3,37 @@
 A five-minute tour that exercises the whole system end to end. Everything runs
 in one browser window; no terminal needed after startup.
 
+## One command (no model, no weights)
+
+```bash
+make demo         # or: python3 demo.py
+```
+
+This seeds a small, self-contained **demo dataset** and starts the app at
+<http://127.0.0.1:5000>. It needs only the model-free deps
+(`pip install -r requirements-ci.txt -c constraints-ci.txt`) — **no torch, no
+weights** — so it works on a fresh clone in seconds. It populates every panel so
+there's something real to click:
+
+- **5 vehicles**, ~14 violations across the three types, spread over 10 days;
+- confidence scores spanning ~0.44–0.97 (fills the distribution histogram);
+- a mix of **pending / confirmed / dismissed** reviews and a few **paid** fines;
+- **2 processing sessions** with throughput stats (so Analytics + the per-session
+  drill-down are meaningful);
+- real bundled plate photos as evidence (`MH02DL4596`, `MH12HS8818`, …).
+
+The seeded data is **synthetic demo data**, clearly labelled as such on stdout —
+the confidence scores and sessions are illustrative, not real detections. For a
+genuine end-to-end run with the actual detector, use `make demo-real`
+(= `python3 demo.py --real`), which needs the weights + full stack and delegates
+to `seed_demo.py`. Flags: `--no-serve` (seed only), `--keep` (don't wipe),
+`--port N`.
+
+The rest of this page is the **manual** walkthrough with the real model.
+
 ## 0. Prerequisites
 
-- Python 3.10+
+- Python 3.11–3.13
 - Trained weights at `runs/detect/traffic_model-2/weights/best.pt` (or set
   `MODEL_PATH`). Train with `train_traffic.py` if you don't have them.
 
