@@ -503,6 +503,156 @@ class Database:
             "recent": [dict(r) for r in recent],
         }
 
+    def analytics(self, *, days: int = 30, conf_buckets: int = 10) -> dict:
+        """Deeper dashboard analytics, all computed from real rows (never
+        fabricated). Returns:
+
+        * ``over_time``   — violations + fine total per calendar day (UTC),
+          oldest first, for the last ``days`` days that have data.
+        * ``by_type`` / ``by_payment_status`` / ``by_review_status`` — counts.
+        * ``review_outcomes`` — pending / confirmed / dismissed with the
+          confirmation rate over *decided* rows (dismissed counts against it).
+        * ``confidence`` — a histogram of the stored confidence scores over
+          ``conf_buckets`` equal bins in [0, 1], plus count/mean and how many
+          rows carried no score. Scores are raw model outputs, NOT calibrated
+          probabilities (see docs/EVALUATION.md).
+        * ``plate_recognition`` — how many vehicles decoded to a registration
+          region vs. not (an honest proxy for OCR/plate success on stored
+          fines; true OCR accuracy is measured offline by evaluate_ocr.py).
+        * ``sessions`` — run counts by status, throughput (processing_fps)
+          summary over completed runs, totals, and a per-model breakdown.
+        """
+        conf_buckets = max(1, min(int(conf_buckets), 50))
+        days = max(1, min(int(days), 3650))
+        conn = self._connect()
+        try:
+            over_time = conn.execute(
+                """SELECT date(timestamp) AS day, COUNT(*) AS n,
+                          COALESCE(SUM(amount), 0) AS amount
+                   FROM violations
+                   WHERE timestamp >= date('now', ?)
+                   GROUP BY day ORDER BY day""",
+                (f"-{days - 1} days",),
+            ).fetchall()
+
+            by_type = conn.execute(
+                "SELECT type, COUNT(*) AS n, COALESCE(SUM(amount),0) AS amount "
+                "FROM violations GROUP BY type ORDER BY n DESC"
+            ).fetchall()
+            by_payment = conn.execute(
+                "SELECT status, COUNT(*) AS n FROM violations GROUP BY status"
+            ).fetchall()
+            by_review = conn.execute(
+                "SELECT review_status, COUNT(*) AS n "
+                "FROM violations GROUP BY review_status"
+            ).fetchall()
+
+            # Confidence histogram. A score of exactly 1.0 lands in the top bin
+            # rather than a phantom bucket past the end.
+            conf_rows = conn.execute(
+                "SELECT confidence FROM violations WHERE confidence IS NOT NULL"
+            ).fetchall()
+            missing_conf = conn.execute(
+                "SELECT COUNT(*) AS n FROM violations WHERE confidence IS NULL"
+            ).fetchone()["n"]
+
+            plate_reco = conn.execute(
+                """SELECT
+                     SUM(CASE WHEN registration_state IS NOT NULL
+                              AND registration_state != '' THEN 1 ELSE 0 END) AS decoded,
+                     COUNT(*) AS total
+                   FROM vehicles"""
+            ).fetchone()
+
+            sess_by_status = conn.execute(
+                "SELECT status, COUNT(*) AS n FROM sessions GROUP BY status"
+            ).fetchall()
+            sess_fps = conn.execute(
+                """SELECT COUNT(*) AS n, AVG(processing_fps) AS avg_fps,
+                          MIN(processing_fps) AS min_fps, MAX(processing_fps) AS max_fps
+                   FROM sessions
+                   WHERE status='completed' AND processing_fps IS NOT NULL"""
+            ).fetchone()
+            sess_totals = conn.execute(
+                """SELECT COALESCE(SUM(frames_processed),0) AS frames,
+                          COALESCE(SUM(vehicles_tracked),0) AS vehicles,
+                          COALESCE(SUM(violations_detected),0) AS violations
+                   FROM sessions"""
+            ).fetchone()
+            sess_by_model = conn.execute(
+                """SELECT COALESCE(model_version, 'unknown') AS model,
+                          COUNT(*) AS runs
+                   FROM sessions GROUP BY model_version ORDER BY runs DESC"""
+            ).fetchall()
+        finally:
+            conn.close()
+
+        # Bucket confidence in Python: portable and exact about the [1.0] edge.
+        hist = [0] * conf_buckets
+        conf_values = [r["confidence"] for r in conf_rows]
+        for score in conf_values:
+            idx = int(score * conf_buckets)
+            if idx >= conf_buckets:
+                idx = conf_buckets - 1
+            if idx < 0:
+                idx = 0
+            hist[idx] += 1
+        confidence = {
+            "buckets": conf_buckets,
+            "histogram": hist,
+            "edges": [round(i / conf_buckets, 3) for i in range(conf_buckets + 1)],
+            "count": len(conf_values),
+            "missing": missing_conf,
+            "mean": round(sum(conf_values) / len(conf_values), 4) if conf_values else None,
+        }
+
+        def _round(value, ndigits=3):
+            return round(value, ndigits) if value is not None else None
+
+        review_map = {r["review_status"]: r["n"] for r in by_review}
+        confirmed = review_map.get("confirmed", 0)
+        dismissed = review_map.get("dismissed", 0)
+        decided = confirmed + dismissed
+        review_outcomes = {
+            "pending": review_map.get("pending", 0),
+            "confirmed": confirmed,
+            "dismissed": dismissed,
+            "decided": decided,
+            "confirmation_rate": round(confirmed / decided, 4) if decided else None,
+        }
+
+        decoded = (plate_reco["decoded"] or 0) if plate_reco else 0
+        veh_total = (plate_reco["total"] or 0) if plate_reco else 0
+
+        return {
+            "over_time": [dict(r) for r in over_time],
+            "by_type": [dict(r) for r in by_type],
+            "by_payment_status": {r["status"]: r["n"] for r in by_payment},
+            "by_review_status": review_map,
+            "review_outcomes": review_outcomes,
+            "confidence": confidence,
+            "plate_recognition": {
+                "decoded": decoded,
+                "total": veh_total,
+                "rate": round(decoded / veh_total, 4) if veh_total else None,
+            },
+            "sessions": {
+                "by_status": {r["status"]: r["n"] for r in sess_by_status},
+                "throughput_fps": {
+                    "runs": sess_fps["n"],
+                    "avg": _round(sess_fps["avg_fps"]),
+                    "min": _round(sess_fps["min_fps"]),
+                    "max": _round(sess_fps["max_fps"]),
+                },
+                "totals": {
+                    "frames": sess_totals["frames"],
+                    "vehicles_tracked": sess_totals["vehicles"],
+                    "violations_detected": sess_totals["violations"],
+                },
+                "by_model": [dict(r) for r in sess_by_model],
+            },
+        }
+
     # -- filtered / paginated listing ---------------------------------------
 
     # Columns a caller may sort by, whitelisted so ``sort`` can never inject SQL.
@@ -515,6 +665,7 @@ class Database:
         violation_type: str | None = None,
         status: str | None = None,
         review_status: str | None = None,
+        session_id: str | None = None,
         min_confidence: float | None = None,
         max_confidence: float | None = None,
         date_from: str | None = None,
@@ -551,6 +702,9 @@ class Database:
         if review_status:
             where.append("v.review_status = ?")
             params.append(review_status)
+        if session_id:
+            where.append("v.session_id = ?")
+            params.append(session_id)
         if min_confidence is not None:
             where.append("v.confidence IS NOT NULL AND v.confidence >= ?")
             params.append(float(min_confidence))
