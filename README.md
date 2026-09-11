@@ -404,6 +404,7 @@ and `reports/`, and local experiment scratch — all large and/or regenerable.
 - [docs/MODEL_VERSIONING.md](docs/MODEL_VERSIONING.md) — weights ↔ manifest ↔ evidence
 - [docs/DATASET.md](docs/DATASET.md) — dataset provenance & caveats
 - [docs/BASELINE.md](docs/BASELINE.md) — pre-upgrade baseline audit
+- [CHANGELOG.md](CHANGELOG.md) — release notes (v1.0.0-rc1)
 
 ## Tech stack
 
