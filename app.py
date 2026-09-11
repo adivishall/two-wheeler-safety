@@ -5,7 +5,7 @@ import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
-from modules.config import load_config
+from modules.config import PIPELINE_VERSION, load_config
 from modules.db import Database
 from modules.jobs import JobManager
 from modules.logging_setup import configure_logging, get_logger
@@ -274,6 +274,7 @@ def analyze_video():
         return jsonify({"error": "unsupported video type"}), 400
 
     suffix = safe_extension(upload.filename, VIDEO_EXTENSIONS, ".mp4")
+    source_id = os.path.basename(upload.filename or "upload")
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
     upload.save(tmp_path)
@@ -295,6 +296,13 @@ def analyze_video():
                 record_fn=record_fine, progress_cb=progress_cb,
                 cancel_check=cancel_check, max_seconds=MAX_VIDEO_SECONDS,
                 model_version=MODEL_VERSION,
+                pipeline_version=PIPELINE_VERSION,
+                source_id=source_id,
+                config_snapshot={
+                    "conf_threshold": config.detection.conf_threshold,
+                    "streak_threshold": config.detection.streak_threshold,
+                    "speed_limit_kmh": config.detection.speed_limit_kmh,
+                },
             )
         finally:
             try:

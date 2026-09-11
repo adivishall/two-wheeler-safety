@@ -27,6 +27,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+# Version of the detection/evidence pipeline code. Bumped when the pipeline's
+# behaviour or evidence format changes; stamped into every evidence package so a
+# fine records which code produced it (distinct from the model version, which
+# records which weights). Single source of truth for the project version.
+PIPELINE_VERSION = "1.0.0"
+
 # Default location of the trained YOLO weights. Nothing in the repo ships the
 # weights (they are gitignored); this is where ``train_traffic.py`` writes them
 # by default and where every entry point looks unless ``MODEL_PATH`` overrides.
