@@ -3,13 +3,21 @@
 Base URL in local dev: `http://127.0.0.1:5000`. All responses are JSON unless
 noted. Fields shown are representative; see `app.py` for the source of truth.
 
-**Auth.** Only `/detect` can be protected: if `DETECT_API_KEY` is set, requests
-must send a matching `X-API-Key` header (401 otherwise). All other routes are
-unauthenticated (local prototype).
+**Auth.** Two independent mechanisms, both **off by default** for local use:
+- `/detect` can require a matching `X-API-Key` header if `DETECT_API_KEY` is set
+  (401 otherwise).
+- Role-based access (viewer < reviewer < admin) via role keys: once configured,
+  the mutating review/payment endpoints require **reviewer** and `/api/audit`
+  requires **admin** (403 otherwise). With no role keys set, every request is
+  treated as an anonymous admin (unchanged local/demo behaviour). See
+  [SECURITY.md](SECURITY.md).
 
 **Rate limiting.** The write/upload routes (`/detect`, `/analyze`,
-`/analyze_video`, `/api/violations/<id>/review`) are limited per IP to
-`RATE_LIMIT_PER_MIN` requests/minute (429 when exceeded).
+`/analyze_video`, `/api/violations/<id>/review`, `/api/violations/<id>/payment`)
+are limited per IP to `RATE_LIMIT_PER_MIN` requests/minute (429 when exceeded).
+
+**Errors.** 404 / 405 / 413 / 500 return generic JSON (`{"error": …}`), never an
+HTML page or a traceback.
 
 ---
 
@@ -143,6 +151,33 @@ Dashboard overview (all real aggregates).
 
 Optional query: `recent` (count of recent rows, default 5).
 
+## GET /api/analytics
+
+Deeper dashboard analytics, all computed from stored rows (nothing fabricated).
+Optional query: `days` (over-time window, default 30), `conf_buckets`
+(histogram bins, default 10).
+
+```json
+{
+  "over_time": [{ "day": "2026-09-10", "n": 3, "amount": 1700 }],
+  "by_type": [{ "type": "no_helmet", "n": 3, "amount": 1500 }],
+  "by_payment_status": { "unpaid": 4, "paid": 1 },
+  "by_review_status": { "pending": 4, "confirmed": 1 },
+  "review_outcomes": { "pending": 4, "confirmed": 1, "dismissed": 0,
+                       "decided": 1, "confirmation_rate": 1.0 },
+  "confidence": { "buckets": 10, "histogram": [0,0,1,2,…], "edges": [0.0,0.1,…],
+                  "count": 5, "missing": 0, "mean": 0.68 },
+  "plate_recognition": { "decoded": 4, "total": 5, "rate": 0.8 },
+  "sessions": { "by_status": { "completed": 2 },
+                "throughput_fps": { "runs": 2, "avg": 11.9, "min": 9.2, "max": 14.6 },
+                "totals": { "frames": 2760, "vehicles_tracked": 55, "violations_detected": 14 },
+                "by_model": [{ "model": "traffic-4class@1.0.0", "runs": 2 }] }
+}
+```
+
+`confidence.histogram` is over **raw scores**, not calibrated probabilities
+(see [EVALUATION.md](EVALUATION.md)).
+
 ## GET /api/violations
 
 Filtered, paginated list. All query params optional:
@@ -153,6 +188,7 @@ Filtered, paginated list. All query params optional:
 | `type` | `no_helmet` / `triple_riding` / `overspeed` / … |
 | `status` | `unpaid` / `paid` |
 | `review_status` | `pending` / `confirmed` / `dismissed` |
+| `session_id` | only violations produced by that processing run |
 | `min_confidence`, `max_confidence` | 0–1 (rows with NULL confidence excluded) |
 | `date_from`, `date_to` | timestamp bounds (`YYYY-MM-DD[ HH:MM:SS]`) |
 | `sort` | `id` / `timestamp` / `amount` / `confidence` / `type` / `status` (whitelisted) |
@@ -200,6 +236,50 @@ Body: `review_status` (required, one of `pending`/`confirmed`/`dismissed`),
 `decision` (optional), `notes` (optional). Returns
 `{ "message": "review recorded", "review_status": "confirmed" }`. `400` for a
 missing/invalid status; `404` for an unknown id.
+
+## POST /api/violations/&lt;id&gt;/payment
+
+Move a violation along its **payment** lifecycle (independent of review):
+`unpaid → paid | cancelled`; `paid`/`cancelled` are terminal. Reviewer role
+required when auth is on; rate-limited.
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/violations/5/payment \
+  -H "Content-Type: application/json" -d '{"status":"paid"}'
+```
+
+Body: `status` (required, one of `unpaid`/`paid`/`cancelled`). `400` for an
+unknown status or an illegal transition; `404` for an unknown id.
+
+## GET /api/violations/&lt;id&gt;/trace
+
+The bounded per-frame detection trace supporting a confirmed violation
+(reconstructs *why* it was confirmed). Returns
+`{ "trace": [{ "track_id", "label", "confidence", "box", "frame_index", "timestamp" }] }`.
+
+## GET /api/sessions
+
+Processing sessions, most recent first. Optional `limit` (default 50).
+Returns `{ "sessions": [ … ] }`.
+
+## GET /api/sessions/&lt;id&gt;
+
+One session plus the violations it produced (per-run drill-down). Optional
+`limit` (default 100) on the embedded violations. `404` if not found.
+
+```json
+{ "id": "…", "source": "clip.mp4", "status": "completed",
+  "model_version": "traffic-4class@1.0.0", "processing_fps": 14.6,
+  "frames_processed": 1820, "vehicles_tracked": 37,
+  "violations": { "items": [ … ], "total": 9, "limit": 100, "offset": 0 } }
+```
+
+## GET /api/audit
+
+Recent audit-log events (append-only). **Admin role required when auth is on.**
+Optional query: `limit` (default 100), `record_id` (filter to one record).
+Returns `{ "events": [{ "event", "record_type", "record_id", "actor",
+"timestamp", "metadata" }] }`.
 
 ## GET /evidence/&lt;file&gt;
 

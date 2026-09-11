@@ -141,6 +141,30 @@ def _security_headers(response):
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     return response
 
+
+# JSON, non-leaking error responses. Without these, Flask renders HTML error
+# pages; a 500 in particular must never expose a traceback (debug is off, but
+# these make the contract explicit and keep the API JSON-consistent).
+@app.errorhandler(404)
+def _err_404(_e):
+    return jsonify({"error": "not found"}), 404
+
+
+@app.errorhandler(405)
+def _err_405(_e):
+    return jsonify({"error": "method not allowed"}), 405
+
+
+@app.errorhandler(413)
+def _err_413(_e):
+    return jsonify({"error": "payload too large"}), 413
+
+
+@app.errorhandler(500)
+def _err_500(_e):
+    # Log server-side (Flask already logs the exception); return a generic body.
+    return jsonify({"error": "internal server error"}), 500
+
 # =====================================
 # HOME PAGE
 # =====================================
@@ -352,6 +376,8 @@ def analyze_video():
                 session_id=session_id,
                 trace_enabled=config.detection.trace_enabled,
                 trace_max_frames=config.detection.trace_max_frames,
+                ocr_lock_confidence=config.detection.ocr_lock_confidence,
+                ocr_lock_min_observations=config.detection.ocr_lock_min_observations,
             )
             now = datetime.now(timezone.utc).isoformat()
             db.update_session(
@@ -393,6 +419,12 @@ def video_status(job_id):
     job = job_manager.status(job_id)
     if job is None:
         return jsonify({"error": "unknown job"}), 404
+    # Never surface a raw exception string to the browser — it can leak internal
+    # paths/state. The full detail is already logged (JobManager.log.exception)
+    # and stored server-side on the session/job record; the client only needs to
+    # know the run failed.
+    if job.get("status") == "error":
+        job = {**job, "error": "video processing failed"}
     return jsonify(job)
 
 
@@ -453,6 +485,17 @@ def api_stats():
     return jsonify(db.stats(recent_limit=_arg_int("recent", 5)))
 
 
+@app.route("/api/analytics")
+def api_analytics():
+    """Deeper dashboard analytics: violations over time, breakdowns, review
+    outcomes, confidence distribution, plate-recognition rate, and processing
+    throughput/model stats. Every number is computed from stored rows."""
+    return jsonify(db.analytics(
+        days=_arg_int("days", 30),
+        conf_buckets=_arg_int("conf_buckets", 10),
+    ))
+
+
 @app.route("/api/violations")
 def api_violations():
     """Filtered, paginated violation list. All filters are optional query
@@ -463,6 +506,7 @@ def api_violations():
         violation_type=request.args.get("type"),
         status=request.args.get("status"),
         review_status=request.args.get("review_status"),
+        session_id=request.args.get("session_id"),
         min_confidence=_arg_float("min_confidence"),
         max_confidence=_arg_float("max_confidence"),
         date_from=request.args.get("date_from"),
@@ -566,9 +610,14 @@ def api_sessions():
 
 @app.route("/api/sessions/<session_id>")
 def api_session_detail(session_id):
+    """One processing session plus the violations it produced (most recent
+    first, bounded), so the dashboard can show a per-run drill-down."""
     s = db.get_session(session_id)
     if s is None:
         return jsonify({"error": "session not found"}), 404
+    s["violations"] = db.list_violations(
+        session_id=session_id, limit=_arg_int("limit", 100)
+    )
     return jsonify(s)
 
 

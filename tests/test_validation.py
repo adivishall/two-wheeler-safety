@@ -41,6 +41,11 @@ def test_safe_evidence_name_blocks_traversal_and_bad_types():
     assert safe_evidence_name("note.txt") is None
     assert safe_evidence_name("") is None
     assert safe_evidence_name(None) is None
+    # A name that reduces to "." / ".." is rejected, and an embedded NUL is
+    # stripped out even with an allowed extension (defense-in-depth guards).
+    assert safe_evidence_name("foo/.") is None
+    assert safe_evidence_name("..") is None
+    assert safe_evidence_name("a\x00.jpg") is None
 
 
 def test_validate_plate():

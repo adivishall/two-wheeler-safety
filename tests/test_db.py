@@ -71,6 +71,83 @@ def test_confidence_and_track_id_persist(tmp_path):
     assert abs(row[0] - 0.97) < 1e-6 and row[1] == 3
 
 
+def test_analytics_confidence_histogram_and_review_outcomes(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    # Three confidences that fall in distinct 10-way bins, one with no score.
+    db.record_fine("MH12AB1234", "no_helmet", "e.jpg", confidence=0.05)
+    db.record_fine("MH12AB1234", "overspeed", "e.jpg", confidence=0.55)
+    db.record_fine("KA05CD9", "triple_riding", "e.jpg", confidence=1.0)
+    db.record_fine("KA05CD9", "no_helmet", "e.jpg")  # confidence NULL
+
+    a = db.analytics(conf_buckets=10)
+    conf = a["confidence"]
+    assert conf["count"] == 3
+    assert conf["missing"] == 1
+    assert sum(conf["histogram"]) == 3
+    assert conf["histogram"][0] == 1   # 0.05 -> first bin
+    assert conf["histogram"][5] == 1   # 0.55 -> sixth bin
+    assert conf["histogram"][9] == 1   # 1.0 clamps into the top bin, not past it
+    assert abs(conf["mean"] - (0.05 + 0.55 + 1.0) / 3) < 1e-3  # mean rounded to 4dp
+
+    # Review outcomes: confirm two, dismiss one -> rate 2/3 over decided rows.
+    ids = [v["id"] for v in db.list_violations()["items"]]
+    db.set_review(ids[0], "confirmed")
+    db.set_review(ids[1], "confirmed")
+    db.set_review(ids[2], "dismissed")
+    ro = db.analytics()["review_outcomes"]
+    assert ro["confirmed"] == 2 and ro["dismissed"] == 1
+    assert ro["decided"] == 3
+    assert abs(ro["confirmation_rate"] - 2 / 3) < 1e-3  # rate rounded to 4dp
+
+
+def test_analytics_sessions_and_over_time(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.create_session("s1", source="clip.mp4", model_version="traffic-4class@1")
+    db.update_session("s1", status="completed", processing_fps=12.0,
+                      frames_processed=100, vehicles_tracked=4,
+                      violations_detected=2)
+    db.record_fine("MH12AB1234", "no_helmet", "e.jpg", session_id="s1")
+
+    a = db.analytics()
+    assert a["sessions"]["by_status"].get("completed") == 1
+    assert a["sessions"]["throughput_fps"]["avg"] == 12.0
+    assert a["sessions"]["totals"]["frames"] == 100
+    assert a["sessions"]["by_model"][0]["model"] == "traffic-4class@1"
+    # over_time has one calendar day with a single violation today.
+    assert sum(d["n"] for d in a["over_time"]) == 1
+
+
+def test_list_violations_confidence_and_date_filters(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.record_fine("MH12AB1234", "no_helmet", "e.jpg", confidence=0.30,
+                   timestamp="2026-01-01 10:00:00")
+    db.record_fine("KA05CD9", "overspeed", "e.jpg", confidence=0.90,
+                   timestamp="2026-06-01 10:00:00")
+    db.record_fine("DL8CAF5031", "no_helmet", "e.jpg")  # confidence NULL
+
+    # Confidence range excludes the low one and the NULL one (a range check on
+    # NULL is undefined, so those rows are dropped by design).
+    hi = db.list_violations(min_confidence=0.5)
+    assert hi["total"] == 1 and hi["items"][0]["plate"] == "KA05CD9"
+    band = db.list_violations(min_confidence=0.2, max_confidence=0.5)
+    assert band["total"] == 1 and band["items"][0]["plate"] == "MH12AB1234"
+
+    # Date range (inclusive) selects only the January row.
+    jan = db.list_violations(date_from="2026-01-01", date_to="2026-02-01")
+    assert jan["total"] == 1 and jan["items"][0]["plate"] == "MH12AB1234"
+
+
+def test_list_violations_filter_by_session(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.create_session("s1")
+    db.create_session("s2")
+    db.record_fine("MH12AB1234", "no_helmet", "e.jpg", session_id="s1")
+    db.record_fine("KA05CD9", "overspeed", "e.jpg", session_id="s2")
+    res = db.list_violations(session_id="s1")
+    assert res["total"] == 1
+    assert res["items"][0]["plate"] == "MH12AB1234"
+
+
 def test_reset_clears_records_but_keeps_schema(tmp_path):
     db = Database(str(tmp_path / "t.db"))
     db.record_fine("MH12AB1234", "no_helmet", "e.jpg")
