@@ -25,12 +25,14 @@ opencv-python-headless==4.13.0.92
 numpy==2.4.6
 PyYAML==6.0.3
 pytest==9.1.1
+pytest-cov==7.1.0
 ruff==0.16.5
 mypy==2.3.1
 
 # --- transitive closure (pinned for reproducibility) ---
 blinker==1.9.0
 click==8.4.1
+coverage==7.16.0
 iniconfig==2.3.0
 itsdangerous==2.2.0
 Jinja2==3.1.6

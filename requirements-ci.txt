@@ -10,5 +10,6 @@ opencv-python-headless~=4.13
 numpy
 pyyaml
 pytest~=9.1
+pytest-cov~=7.1
 ruff~=0.16
 mypy~=2.3

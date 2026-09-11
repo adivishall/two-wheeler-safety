@@ -48,5 +48,5 @@ jobs:
       - name: Type check (mypy, core modules)
         run: mypy
 
-      - name: Run tests
-        run: pytest tests/ -q
+      - name: Run tests (with branch coverage gate)
+        run: pytest tests/ -q --cov --cov-report=term-missing
