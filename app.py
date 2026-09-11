@@ -453,6 +453,17 @@ def api_stats():
     return jsonify(db.stats(recent_limit=_arg_int("recent", 5)))
 
 
+@app.route("/api/analytics")
+def api_analytics():
+    """Deeper dashboard analytics: violations over time, breakdowns, review
+    outcomes, confidence distribution, plate-recognition rate, and processing
+    throughput/model stats. Every number is computed from stored rows."""
+    return jsonify(db.analytics(
+        days=_arg_int("days", 30),
+        conf_buckets=_arg_int("conf_buckets", 10),
+    ))
+
+
 @app.route("/api/violations")
 def api_violations():
     """Filtered, paginated violation list. All filters are optional query
@@ -463,6 +474,7 @@ def api_violations():
         violation_type=request.args.get("type"),
         status=request.args.get("status"),
         review_status=request.args.get("review_status"),
+        session_id=request.args.get("session_id"),
         min_confidence=_arg_float("min_confidence"),
         max_confidence=_arg_float("max_confidence"),
         date_from=request.args.get("date_from"),
@@ -566,9 +578,14 @@ def api_sessions():
 
 @app.route("/api/sessions/<session_id>")
 def api_session_detail(session_id):
+    """One processing session plus the violations it produced (most recent
+    first, bounded), so the dashboard can show a per-run drill-down."""
     s = db.get_session(session_id)
     if s is None:
         return jsonify({"error": "session not found"}), 404
+    s["violations"] = db.list_violations(
+        session_id=session_id, limit=_arg_int("limit", 100)
+    )
     return jsonify(s)
 
 
