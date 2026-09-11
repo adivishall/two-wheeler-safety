@@ -230,10 +230,15 @@ environment. Every variable the project reads:
 ## Running locally
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python3 -m venv .venv && source .venv/bin/activate   # Python 3.11–3.13
+pip install -r requirements.txt -c constraints-runtime.txt
 python3 app.py            # http://127.0.0.1:5000
 ```
+
+The full stack is platform-specific because of torch (install the CUDA build
+first on an NVIDIA host). Reproducible, pinned setup for every profile —
+contributor/test, full runtime, production — is in
+[docs/INSTALL.md](docs/INSTALL.md).
 
 The UI has four tabs: **Dashboard** (stats, violations, review), **Photo**
 (server-side detection on an upload), **Video** (background processing with a
@@ -264,8 +269,8 @@ No weights, datasets, or videos ship in the repo (all gitignored). Train first
 ## Testing
 
 ```bash
-pip install -r requirements-dev.txt
-pytest                     # 174 tests
+pip install -r requirements-ci.txt -c constraints-ci.txt   # model-free, pinned
+pytest                     # 291 tests, ~3s
 ```
 
 The suite is **model-free by design** — heavy inference (torch/ultralytics/
