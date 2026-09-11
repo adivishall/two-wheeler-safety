@@ -282,7 +282,7 @@ No weights, datasets, or videos ship in the repo (all gitignored). Train first
 
 ```bash
 pip install -r requirements-ci.txt -c constraints-ci.txt   # model-free, pinned
-pytest                     # 291 tests, ~3s
+pytest                     # 299 tests, ~3s
 ```
 
 The suite is **model-free by design** — heavy inference (torch/ultralytics/
@@ -389,9 +389,16 @@ and `reports/`, and local experiment scratch — all large and/or regenerable.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — components & data flow
 - [docs/DECISIONS.md](docs/DECISIONS.md) — engineering decision records
 - [docs/API.md](docs/API.md) — HTTP API reference
-- [docs/DEMO.md](docs/DEMO.md) — step-by-step demo
+- [docs/INSTALL.md](docs/INSTALL.md) — reproducible install profiles & pins
+- [docs/DEMO.md](docs/DEMO.md) — one-command demo + step-by-step walkthrough
+- [docs/EVALUATION.md](docs/EVALUATION.md) — measured detector/OCR/system/speed/perf results
+- [docs/ERROR_ANALYSIS.md](docs/ERROR_ANALYSIS.md) — failure modes & how they're contained
+- [docs/TESTING.md](docs/TESTING.md) — test strategy & coverage
+- [docs/SECURITY.md](docs/SECURITY.md) — threat model & controls
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — running in production
 - [docs/PRIVACY.md](docs/PRIVACY.md) — data & privacy
+- [docs/MODEL_VERSIONING.md](docs/MODEL_VERSIONING.md) — weights ↔ manifest ↔ evidence
+- [docs/DATASET.md](docs/DATASET.md) — dataset provenance & caveats
 - [docs/BASELINE.md](docs/BASELINE.md) — pre-upgrade baseline audit
 
 ## Tech stack

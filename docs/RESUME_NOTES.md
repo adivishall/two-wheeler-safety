@@ -49,7 +49,7 @@ fill in the real figures.
   background-job system for long video processing.*
 - *Wrote a reproducible model-evaluation + error-analysis tool (per-class P/R,
   mAP, confusion matrix, helmet-confusion and confidence-vs-correctness analysis)
-  and a model-free test suite (174 tests) with lean GitHub Actions CI.*
+  and a model-free test suite (299 tests) with lean GitHub Actions CI.*
 
 ## Technologies actually used
 
@@ -66,7 +66,7 @@ camera calibration for speed, REST API design, background job management.
   separation (correct vs wrong).
 - Image inference latency, OCR latency, video throughput (FPS, ms/frame), peak
   memory (`benchmark.py`).
-- Test count and CI status (174 tests; CI green on a model-free install).
+- Test count and CI status (299 tests; CI green on a model-free install).
 
 ## Limitations to state honestly (don't overclaim)
 
