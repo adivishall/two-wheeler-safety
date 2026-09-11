@@ -5,7 +5,7 @@ import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
-from modules.config import load_config
+from modules.config import PIPELINE_VERSION, load_config
 from modules.db import Database
 from modules.jobs import JobManager
 from modules.logging_setup import configure_logging, get_logger
@@ -50,10 +50,46 @@ def _rate_limited() -> bool:
 # plate. Unset by default so local dev/demo usage is unaffected.
 DETECT_API_KEY = config.server.detect_api_key
 
+# Role-based access (Phase 16). viewer < reviewer < admin. When no role keys are
+# configured the app is open (unchanged local/demo behaviour); once configured,
+# mutation endpoints require at least the reviewer role so review data is not
+# publicly writable in a deployment.
+_ROLE_LEVELS = {"viewer": 1, "reviewer": 2, "admin": 3}
+
+
+def _current_actor():
+    """Return (role, actor_label) for the request's API key.
+
+    When auth is disabled, every request is treated as an anonymous admin so
+    local/demo usage keeps working. When enabled, the role comes from the key
+    (or None if the key is missing/unknown)."""
+    if not config.server.auth_enabled:
+        return "admin", "anonymous"
+    role = config.server.role_for_key(request.headers.get("X-API-Key"))
+    return role, (role or "unknown")
+
+
+def _require_role(min_role: str):
+    """Return None if the caller meets ``min_role``, else a Flask (json, code)
+    error response to return from the endpoint."""
+    role, _actor = _current_actor()
+    if role is None or _ROLE_LEVELS[role] < _ROLE_LEVELS[min_role]:
+        return jsonify({"error": f"{min_role} role required"}), 403
+    return None
+
 DB_PATH = config.db_path
 
 # Weights the /analyze upload route runs detection with; override with MODEL_PATH.
 MODEL_PATH = config.model_path
+
+# Best-effort model version (name@version) resolved from the checkpoint's
+# manifest (modules/model_manifest.py). Stamped onto every evidence package so a
+# fine is traceable to the exact weights that raised it; None if no manifest.
+from modules.model_manifest import model_version_string, resolve_manifest  # noqa: E402
+
+MODEL_VERSION = model_version_string(resolve_manifest(MODEL_PATH))
+if MODEL_VERSION:
+    log.info("detection model version: %s", MODEL_VERSION)
 
 # Normalized SQLite store (vehicles / violations / evidence / jobs). Creating it
 # initializes the schema and migrates any legacy flat `fines` table in place.
@@ -80,10 +116,19 @@ def get_models():
     return _models
 
 
-def record_fine(plate, violation, image_path):
+def record_fine(plate, violation, image_path, **extra):
     """Insert one fine and return the amount charged. Kept as a thin wrapper so
-    the CLIs and video pipeline can pass it as a ``record_fn`` callback."""
-    return db.record_fine(plate, violation, image_path)
+    the CLIs and video pipeline can pass it as a ``record_fn`` callback. Accepts
+    keyword-only extras (confidence, track_id, session_id, detection_trace) that
+    the video pipeline supplies; the photo/detect routes call it with three
+    positional args and no extras, unchanged."""
+    return db.record_fine(
+        plate, violation, image_path,
+        confidence=extra.get("confidence"),
+        track_id=extra.get("track_id"),
+        session_id=extra.get("session_id"),
+        detection_trace=extra.get("detection_trace"),
+    )
 
 @app.after_request
 def _security_headers(response):
@@ -265,6 +310,7 @@ def analyze_video():
         return jsonify({"error": "unsupported video type"}), 400
 
     suffix = safe_extension(upload.filename, VIDEO_EXTENSIONS, ".mp4")
+    source_id = os.path.basename(upload.filename or "upload")
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
     upload.save(tmp_path)
@@ -275,17 +321,54 @@ def analyze_video():
 
     out_name = f"annotated_{uuid.uuid4().hex}.mp4"
 
+    # A processing session (Phase 14) + durable job record (Phase 15) tie this
+    # run to the model, config, metrics, and violations it produces. Keyed by a
+    # session id so the record survives independently of the in-process worker.
+    session_id = uuid.uuid4().hex
+    db.create_session(session_id, source=source_id, model_version=MODEL_VERSION,
+                      pipeline_version=PIPELINE_VERSION)
+    db.create_job(session_id, "video", source=source_id)
+
     def target(progress_cb, cancel_check):
+        from datetime import datetime, timezone
+
         from modules.video_detector import process_video
         try:
             model, reader = get_models()
             # pixels_per_meter unset: speed/overspeed needs calibration, so it's
             # skipped rather than reporting a meaningless number (same as CLI).
-            return process_video(
+            summary = process_video(
                 tmp_path, model, reader, os.path.join(EVIDENCE_DIR, out_name),
                 record_fn=record_fine, progress_cb=progress_cb,
                 cancel_check=cancel_check, max_seconds=MAX_VIDEO_SECONDS,
+                model_version=MODEL_VERSION,
+                pipeline_version=PIPELINE_VERSION,
+                source_id=source_id,
+                config_snapshot={
+                    "conf_threshold": config.detection.conf_threshold,
+                    "streak_threshold": config.detection.streak_threshold,
+                    "speed_limit_kmh": config.detection.speed_limit_kmh,
+                },
+                session_id=session_id,
+                trace_enabled=config.detection.trace_enabled,
+                trace_max_frames=config.detection.trace_max_frames,
             )
+            now = datetime.now(timezone.utc).isoformat()
+            db.update_session(
+                session_id, ended_at=now, status="completed",
+                frames_processed=summary.get("frames", 0),
+                vehicles_tracked=summary.get("plates_tracked", 0),
+                violations_detected=len(summary.get("violations", [])),
+                processing_fps=summary.get("fps"),
+                output_path=summary.get("output"),
+            )
+            db.update_job(session_id, status="completed", progress=1.0,
+                          completed_at=now, output=summary.get("output"))
+            return summary
+        except Exception as exc:  # record the failure durably, then re-raise
+            db.update_session(session_id, status="failed", error=str(exc))
+            db.update_job(session_id, status="failed", error=str(exc))
+            raise
         finally:
             try:
                 os.remove(tmp_path)
@@ -295,11 +378,14 @@ def analyze_video():
     job_id = job_manager.submit("video", target)
     if job_id is None:
         os.remove(tmp_path)
+        db.update_session(session_id, status="rejected",
+                          error="concurrency cap reached")
+        db.update_job(session_id, status="rejected")
         log.warning("video job rejected: concurrency cap reached")
         return jsonify({"error": "server busy: too many concurrent video jobs"}), 503
 
-    log.info("video job %s accepted", job_id)
-    return jsonify({"job_id": job_id})
+    log.info("video job %s accepted (session %s)", job_id, session_id)
+    return jsonify({"job_id": job_id, "session_id": session_id})
 
 
 @app.route("/video_status/<job_id>")
@@ -405,6 +491,9 @@ def api_review(violation_id):
     Separates automated detection from human confirmation — CV predictions are
     not ground truth, so a violation stays 'pending' until a person confirms or
     dismisses it."""
+    denied = _require_role("reviewer")
+    if denied:
+        return denied
     if _rate_limited():
         return jsonify({"error": "rate limit exceeded"}), 429
 
@@ -413,12 +502,14 @@ def api_review(violation_id):
     if not review_status:
         return jsonify({"error": "review_status is required"}), 400
 
+    _role, actor = _current_actor()
     try:
         updated = db.set_review(
             violation_id,
             review_status,
             reviewer_decision=data.get("decision"),
             notes=data.get("notes"),
+            actor=actor,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -426,8 +517,65 @@ def api_review(violation_id):
     if not updated:
         return jsonify({"error": "violation not found"}), 404
 
-    log.info("violation %s reviewed: %s", violation_id, review_status)
+    log.info("violation %s reviewed: %s by %s", violation_id, review_status, actor)
     return jsonify({"message": "review recorded", "review_status": review_status})
+
+
+@app.route("/api/violations/<int:violation_id>/payment", methods=["POST"])
+def api_payment(violation_id):
+    """Update a violation's PAYMENT status (independent of review). Body:
+    {status: unpaid|paid|cancelled}. Reviewer role required when auth is on."""
+    denied = _require_role("reviewer")
+    if denied:
+        return denied
+    if _rate_limited():
+        return jsonify({"error": "rate limit exceeded"}), 429
+
+    data = request.get_json(silent=True) or {}
+    status = data.get("status")
+    if not status:
+        return jsonify({"error": "status is required"}), 400
+
+    _role, actor = _current_actor()
+    try:
+        updated = db.set_payment_status(violation_id, status, actor=actor)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not updated:
+        return jsonify({"error": "violation not found"}), 404
+    return jsonify({"message": "payment status updated", "status": status})
+
+
+@app.route("/api/audit")
+def api_audit():
+    """Recent audit-log events (admin role required when auth is on)."""
+    denied = _require_role("admin")
+    if denied:
+        return denied
+    return jsonify({"events": db.list_audit(
+        limit=_arg_int("limit", 100),
+        record_id=request.args.get("record_id"),
+    )})
+
+
+@app.route("/api/sessions")
+def api_sessions():
+    """Processing sessions (most recent first)."""
+    return jsonify({"sessions": db.list_sessions(limit=_arg_int("limit", 50))})
+
+
+@app.route("/api/sessions/<session_id>")
+def api_session_detail(session_id):
+    s = db.get_session(session_id)
+    if s is None:
+        return jsonify({"error": "session not found"}), 404
+    return jsonify(s)
+
+
+@app.route("/api/violations/<int:violation_id>/trace")
+def api_violation_trace(violation_id):
+    """The supporting detection trace for a confirmed violation (Phase 12)."""
+    return jsonify({"trace": db.get_detection_trace(violation_id)})
 
 # =====================================
 # RUN

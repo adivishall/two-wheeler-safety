@@ -69,14 +69,57 @@ class Database:
                         amount INTEGER NOT NULL,
                         confidence REAL,
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        -- Payment lifecycle (kept as `status` for backwards
+                        -- compatibility): unpaid -> paid | cancelled.
                         status TEXT NOT NULL DEFAULT 'unpaid',
                         track_id INTEGER,
-                        -- Human-in-the-loop review (CV predictions are not ground
-                        -- truth): pending -> confirmed | dismissed.
+                        -- Three independent lifecycles, never overloaded onto
+                        -- one field (Phase 18):
+                        --  detection_status: the pipeline's own state
+                        --      (confirmed when persisted).
+                        --  review_status: human-in-the-loop
+                        --      pending -> confirmed | dismissed.
+                        --  status (above): payment.
+                        detection_status TEXT NOT NULL DEFAULT 'confirmed',
                         review_status TEXT NOT NULL DEFAULT 'pending',
                         reviewer_decision TEXT,
                         reviewed_at DATETIME,
-                        review_notes TEXT
+                        review_notes TEXT,
+                        session_id TEXT REFERENCES sessions(id)
+                    );
+
+                    -- One processing session per source run (Phase 14): ties a
+                    -- video/image run to the violations, model, and metrics it
+                    -- produced.
+                    CREATE TABLE IF NOT EXISTS sessions (
+                        id TEXT PRIMARY KEY,
+                        source TEXT,
+                        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        ended_at DATETIME,
+                        model_version TEXT,
+                        pipeline_version TEXT,
+                        frames_processed INTEGER DEFAULT 0,
+                        vehicles_tracked INTEGER DEFAULT 0,
+                        violations_detected INTEGER DEFAULT 0,
+                        violations_confirmed INTEGER DEFAULT 0,
+                        violations_dismissed INTEGER DEFAULT 0,
+                        processing_fps REAL,
+                        output_path TEXT,
+                        status TEXT DEFAULT 'processing',
+                        error TEXT
+                    );
+
+                    -- Append-only audit trail for important state changes
+                    -- (Phase 17): who did what, when. Separate from model
+                    -- evidence.
+                    CREATE TABLE IF NOT EXISTS audit_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        event TEXT NOT NULL,
+                        record_type TEXT,
+                        record_id TEXT,
+                        actor TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        metadata TEXT
                     );
 
                     CREATE TABLE IF NOT EXISTS evidence (
@@ -88,26 +131,36 @@ class Database:
                         metadata_path TEXT
                     );
 
+                    -- Durable job metadata (Phase 15). Worker state stays
+                    -- in-process (JobManager); this table is the persisted
+                    -- record for observability and restart diagnostics.
                     CREATE TABLE IF NOT EXISTS processing_jobs (
                         id TEXT PRIMARY KEY,
                         type TEXT,
                         status TEXT,
                         progress REAL DEFAULT 0,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        started_at DATETIME,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         completed_at DATETIME,
-                        error TEXT
+                        error TEXT,
+                        output TEXT,
+                        source TEXT
                     );
 
-                    -- Reserved for future per-detection logging; not written by
-                    -- the current pipeline (which aggregates detections into
-                    -- confirmed violations before persisting).
+                    -- Per-detection trace supporting a confirmed violation
+                    -- (Phase 12): lets an engineer reconstruct why a violation
+                    -- was confirmed. Bounded per violation (see config); NOT a
+                    -- log of every detection in a video.
                     CREATE TABLE IF NOT EXISTS detections (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         violation_id INTEGER REFERENCES violations(id),
+                        track_id INTEGER,
                         label TEXT,
                         confidence REAL,
                         box TEXT,
-                        frame_index INTEGER
+                        frame_index INTEGER,
+                        timestamp REAL
                     );
 
                     CREATE INDEX IF NOT EXISTS idx_vehicles_norm
@@ -144,19 +197,35 @@ class Database:
         ``initialize``'s transaction). New databases already have them from the
         CREATE above and skip every branch.
         """
-        existing = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(violations)").fetchall()
-        }
-        added = {
+        self._add_missing_columns(conn, "violations", {
             "review_status": "TEXT NOT NULL DEFAULT 'pending'",
             "reviewer_decision": "TEXT",
             "reviewed_at": "DATETIME",
             "review_notes": "TEXT",
+            "detection_status": "TEXT NOT NULL DEFAULT 'confirmed'",
+            "session_id": "TEXT",
+        })
+        self._add_missing_columns(conn, "processing_jobs", {
+            "started_at": "DATETIME",
+            "updated_at": "DATETIME",
+            "output": "TEXT",
+            "source": "TEXT",
+        })
+        self._add_missing_columns(conn, "detections", {
+            "track_id": "INTEGER",
+            "timestamp": "REAL",
+        })
+
+    @staticmethod
+    def _add_missing_columns(conn, table: str, columns: dict) -> None:
+        """Idempotently ALTER TABLE ADD COLUMN for any column not already present
+        (CREATE TABLE IF NOT EXISTS never alters an existing table)."""
+        existing = {
+            row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
         }
-        for column, decl in added.items():
+        for column, decl in columns.items():
             if column not in existing:
-                conn.execute(f"ALTER TABLE violations ADD COLUMN {column} {decl}")
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     def _migrate_legacy_fines(self, conn: sqlite3.Connection) -> None:
         has_legacy = conn.execute(
@@ -223,21 +292,24 @@ class Database:
         status: str = "unpaid",
         timestamp: str | None = None,
         evidence: dict | None = None,
+        session_id: str | None = None,
     ) -> int:
         vehicle_id = self._upsert_vehicle(conn, plate)
         if timestamp is not None:
             cur = conn.execute(
                 """INSERT INTO violations
-                   (vehicle_id, type, amount, confidence, status, track_id, timestamp)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (vehicle_id, violation, amount, confidence, status, track_id, timestamp),
+                   (vehicle_id, type, amount, confidence, status, track_id,
+                    session_id, timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (vehicle_id, violation, amount, confidence, status, track_id,
+                 session_id, timestamp),
             )
         else:
             cur = conn.execute(
                 """INSERT INTO violations
-                   (vehicle_id, type, amount, confidence, status, track_id)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (vehicle_id, violation, amount, confidence, status, track_id),
+                   (vehicle_id, type, amount, confidence, status, track_id, session_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (vehicle_id, violation, amount, confidence, status, track_id, session_id),
             )
         violation_id = cur.lastrowid
         ev = evidence or {}
@@ -267,14 +339,17 @@ class Database:
         status: str = "unpaid",
         timestamp: str | None = None,
         evidence: dict | None = None,
+        session_id: str | None = None,
+        detection_trace: list | None = None,
     ) -> int:
-        """Insert one fine (vehicle upserted, violation + evidence in a single
-        transaction). Returns the amount charged."""
+        """Insert one fine (vehicle upserted, violation + evidence + optional
+        detection trace in a single transaction). Returns the amount charged."""
+        import json as _json
         amt = amount if amount is not None else fine_amount(violation)
         conn = self._connect()
         try:
             with conn:
-                self._insert_violation(
+                violation_id = self._insert_violation(
                     conn,
                     plate=plate,
                     violation=violation,
@@ -285,6 +360,24 @@ class Database:
                     status=status,
                     timestamp=timestamp,
                     evidence=evidence,
+                    session_id=session_id,
+                )
+                for r in detection_trace or []:
+                    box = r.get("box")
+                    conn.execute(
+                        """INSERT INTO detections
+                           (violation_id, track_id, label, confidence, box,
+                            frame_index, timestamp)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (violation_id, r.get("track_id"), r.get("label"),
+                         r.get("confidence"),
+                         _json.dumps(box) if box is not None else None,
+                         r.get("frame_index"), r.get("timestamp")),
+                    )
+                self._log_event(
+                    conn, "violation_created", "violation", str(violation_id),
+                    "system", {"type": violation, "amount": amt,
+                               "session_id": session_id},
                 )
         finally:
             conn.close()
@@ -554,6 +647,7 @@ class Database:
         *,
         reviewer_decision: str | None = None,
         notes: str | None = None,
+        actor: str | None = None,
     ) -> bool:
         """Record a human review decision on a violation. Returns True if a row
         was updated, False if the id doesn't exist. Raises ValueError for an
@@ -584,37 +678,137 @@ class Database:
                            WHERE id = ?""",
                         (review_status, reviewer_decision, notes, violation_id),
                     )
+                if cur.rowcount > 0:
+                    self._log_event(
+                        conn, f"violation_review_{review_status}", "violation",
+                        str(violation_id), actor,
+                        {"reviewer_decision": reviewer_decision, "notes": notes},
+                    )
             return cur.rowcount > 0
         finally:
             conn.close()
 
-    # -- processing jobs ----------------------------------------------------
+    # -- payment lifecycle (Phase 18) ---------------------------------------
 
-    def create_job(self, job_id: str, job_type: str) -> None:
+    # Payment status is kept in `status` for backwards compatibility; it is a
+    # dedicated lifecycle, independent of detection_status and review_status.
+    PAYMENT_STATES = {"unpaid", "paid", "cancelled"}
+    _PAYMENT_TRANSITIONS = {
+        "unpaid": {"paid", "cancelled", "unpaid"},
+        "paid": {"paid"},           # terminal
+        "cancelled": {"cancelled"},  # terminal
+    }
+
+    @classmethod
+    def valid_payment_transition(cls, current: str, new: str) -> bool:
+        return new in cls._PAYMENT_TRANSITIONS.get(current, set())
+
+    def set_payment_status(
+        self, violation_id: int, new_status: str, *, actor: str | None = None
+    ) -> bool:
+        """Move a violation's payment status along its lifecycle
+        (unpaid -> paid | cancelled; paid/cancelled are terminal). Raises
+        ValueError for an unknown status or an illegal transition. Returns False
+        if the violation doesn't exist."""
+        if new_status not in self.PAYMENT_STATES:
+            raise ValueError(
+                f"payment status must be one of {sorted(self.PAYMENT_STATES)}"
+            )
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT status FROM violations WHERE id = ?", (violation_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            current = row["status"]
+            if not self.valid_payment_transition(current, new_status):
+                raise ValueError(
+                    f"illegal payment transition {current!r} -> {new_status!r}"
+                )
+            with conn:
+                conn.execute(
+                    "UPDATE violations SET status = ? WHERE id = ?",
+                    (new_status, violation_id),
+                )
+                self._log_event(
+                    conn, f"payment_{new_status}", "violation",
+                    str(violation_id), actor, {"from": current},
+                )
+            return True
+        finally:
+            conn.close()
+
+    # -- audit log (Phase 17) -----------------------------------------------
+
+    @staticmethod
+    def _log_event(conn, event, record_type, record_id, actor, metadata=None):
+        """Append one audit row inside an existing transaction/connection."""
+        import json as _json
+        conn.execute(
+            "INSERT INTO audit_log (event, record_type, record_id, actor, metadata) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (event, record_type, record_id, actor,
+             _json.dumps(metadata) if metadata is not None else None),
+        )
+
+    def log_event(
+        self, event: str, *, record_type: str | None = None,
+        record_id: str | None = None, actor: str | None = None,
+        metadata: dict | None = None,
+    ) -> None:
+        """Append an audit event (its own transaction)."""
+        conn = self._connect()
+        try:
+            with conn:
+                self._log_event(conn, event, record_type, record_id, actor, metadata)
+        finally:
+            conn.close()
+
+    def list_audit(self, *, limit: int = 100, record_id: str | None = None) -> list:
+        limit = max(1, min(int(limit), 1000))
+        conn = self._connect()
+        try:
+            if record_id is not None:
+                rows = conn.execute(
+                    "SELECT * FROM audit_log WHERE record_id = ? "
+                    "ORDER BY id DESC LIMIT ?", (record_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)
+                ).fetchall()
+        finally:
+            conn.close()
+        return [dict(r) for r in rows]
+
+    # -- processing sessions (Phase 14) -------------------------------------
+
+    def create_session(
+        self, session_id: str, *, source: str | None = None,
+        model_version: str | None = None, pipeline_version: str | None = None,
+    ) -> None:
         conn = self._connect()
         try:
             with conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO processing_jobs (id, type, status, progress) "
-                    "VALUES (?, ?, 'processing', 0)",
-                    (job_id, job_type),
+                    """INSERT OR REPLACE INTO sessions
+                       (id, source, model_version, pipeline_version, status)
+                       VALUES (?, ?, ?, ?, 'processing')""",
+                    (session_id, source, model_version, pipeline_version),
                 )
         finally:
             conn.close()
 
-    def reset(self) -> None:
-        """Delete all vehicles/violations/evidence. Used by the demo seeder's
-        wipe mode; does not touch the schema or the legacy table."""
-        conn = self._connect()
-        try:
-            with conn:
-                conn.execute("DELETE FROM evidence")
-                conn.execute("DELETE FROM violations")
-                conn.execute("DELETE FROM vehicles")
-        finally:
-            conn.close()
+    _SESSION_FIELDS = {
+        "source", "ended_at", "model_version", "pipeline_version",
+        "frames_processed", "vehicles_tracked", "violations_detected",
+        "violations_confirmed", "violations_dismissed", "processing_fps",
+        "output_path", "status", "error",
+    }
 
-    def update_job(self, job_id: str, **fields) -> None:
+    def update_session(self, session_id: str, **fields) -> None:
+        fields = {k: v for k, v in fields.items() if k in self._SESSION_FIELDS}
         if not fields:
             return
         cols = ", ".join(f"{k} = ?" for k in fields)
@@ -622,9 +816,150 @@ class Database:
         try:
             with conn:
                 conn.execute(
-                    f"UPDATE processing_jobs SET {cols} WHERE id = ?",
-                    (*fields.values(), job_id),
+                    f"UPDATE sessions SET {cols} WHERE id = ?",
+                    (*fields.values(), session_id),
                 )
+        finally:
+            conn.close()
+
+    def get_session(self, session_id: str) -> dict | None:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+        return dict(row) if row else None
+
+    def list_sessions(self, *, limit: int = 50) -> list:
+        limit = max(1, min(int(limit), 500))
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM sessions ORDER BY started_at DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [dict(r) for r in rows]
+
+    # -- detection trace (Phase 12) -----------------------------------------
+
+    def add_detection_trace(self, violation_id: int, rows: list) -> int:
+        """Persist the supporting per-frame detections for a confirmed
+        violation. ``rows`` is a list of dicts with keys track_id, label,
+        confidence, box (any JSON-able), frame_index, timestamp. Returns the
+        number stored. Bounded by the caller (see config trace retention)."""
+        import json as _json
+        conn = self._connect()
+        try:
+            with conn:
+                for r in rows:
+                    box = r.get("box")
+                    conn.execute(
+                        """INSERT INTO detections
+                           (violation_id, track_id, label, confidence, box,
+                            frame_index, timestamp)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (violation_id, r.get("track_id"), r.get("label"),
+                         r.get("confidence"),
+                         _json.dumps(box) if box is not None else None,
+                         r.get("frame_index"), r.get("timestamp")),
+                    )
+        finally:
+            conn.close()
+        return len(rows)
+
+    def get_detection_trace(self, violation_id: int) -> list:
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT track_id, label, confidence, box, frame_index, timestamp "
+                "FROM detections WHERE violation_id = ? ORDER BY frame_index, id",
+                (violation_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [dict(r) for r in rows]
+
+    # -- processing jobs (Phase 15: durable metadata) -----------------------
+
+    _JOB_FIELDS = {
+        "type", "status", "progress", "started_at", "updated_at",
+        "completed_at", "error", "output", "source",
+    }
+
+    def create_job(self, job_id: str, job_type: str, *, source: str | None = None) -> None:
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    """INSERT OR REPLACE INTO processing_jobs
+                       (id, type, status, progress, started_at, updated_at, source)
+                       VALUES (?, ?, 'processing', 0,
+                               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)""",
+                    (job_id, job_type, source),
+                )
+        finally:
+            conn.close()
+
+    def update_job(self, job_id: str, **fields) -> None:
+        # Whitelist columns so an unexpected key can never build bad SQL.
+        fields = {k: v for k, v in fields.items() if k in self._JOB_FIELDS}
+        if not fields:
+            return
+        fields.setdefault("updated_at", None)  # placeholder replaced below
+        set_parts = []
+        values = []
+        for k, v in fields.items():
+            if k == "updated_at" and v is None:
+                set_parts.append("updated_at = CURRENT_TIMESTAMP")
+            else:
+                set_parts.append(f"{k} = ?")
+                values.append(v)
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    f"UPDATE processing_jobs SET {', '.join(set_parts)} WHERE id = ?",
+                    (*values, job_id),
+                )
+        finally:
+            conn.close()
+
+    def get_job(self, job_id: str) -> dict | None:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM processing_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+        return dict(row) if row else None
+
+    def list_jobs(self, *, limit: int = 50) -> list:
+        limit = max(1, min(int(limit), 500))
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM processing_jobs ORDER BY created_at DESC, id DESC "
+                "LIMIT ?", (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [dict(r) for r in rows]
+
+    def reset(self) -> None:
+        """Delete all vehicles/violations/evidence/detections. Used by the demo
+        seeder's wipe mode; does not touch the schema or the legacy table."""
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute("DELETE FROM detections")
+                conn.execute("DELETE FROM evidence")
+                conn.execute("DELETE FROM violations")
+                conn.execute("DELETE FROM vehicles")
         finally:
             conn.close()
 
