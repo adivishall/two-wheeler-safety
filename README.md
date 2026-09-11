@@ -229,6 +229,18 @@ environment. Every variable the project reads:
 
 ## Running locally
 
+**Fastest look (no model, no weights):** seed a self-contained demo and serve it
+with only the model-free deps installed —
+
+```bash
+pip install -r requirements-ci.txt -c constraints-ci.txt
+make demo                 # or: python3 demo.py   → http://127.0.0.1:5000
+```
+
+This populates the dashboard, analytics, sessions, review flow, and plate lookup
+with clearly-labelled synthetic demo data so there's something to click. See
+[docs/DEMO.md](docs/DEMO.md). For the real detector on your own footage:
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate   # Python 3.11–3.13
 pip install -r requirements.txt -c constraints-runtime.txt
