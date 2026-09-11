@@ -81,6 +81,9 @@ def process_video(
     session_id=None,
     trace_enabled=False,
     trace_max_frames=20,
+    profiler=None,
+    ocr_lock_confidence=0.90,
+    ocr_lock_min_observations=5,
 ):
     """Detect two-wheeler violations across a video.
 
@@ -103,8 +106,10 @@ def process_video(
     Returns a summary dict: frames processed, vehicle count, output path, fps,
     and the list of recorded violations (plate, violation, amount, evidence).
     """
+    from modules.profiling import NULL
     from modules.speed import SpeedEstimator
 
+    prof = profiler or NULL
     tracker = VehicleTracker()
     speed_estimator = (
         SpeedEstimator(pixels_per_meter=pixels_per_meter) if pixels_per_meter else None
@@ -167,30 +172,32 @@ def process_video(
         )
         track.violation_history.append(conf)
 
-        pkg = build_evidence(
-            evidence_dir,
-            plate=plate,
-            violation=violation,
-            original=original,
-            annotated=annotated,
-            plate_box=track.plate_box,
-            violation_box=violation_box,
-            frame_index=frame_idx,
-            track_id=tid,
-            confidence=conf.as_dict(),
-            speed=speed,
-            model_version=model_version,
-            pipeline_version=pipeline_version,
-            source_id=source_id,
-            config_snapshot=config_snapshot,
-        )
+        with prof.stage("evidence"):
+            pkg = build_evidence(
+                evidence_dir,
+                plate=plate,
+                violation=violation,
+                original=original,
+                annotated=annotated,
+                plate_box=track.plate_box,
+                violation_box=violation_box,
+                frame_index=frame_idx,
+                track_id=tid,
+                confidence=conf.as_dict(),
+                speed=speed,
+                model_version=model_version,
+                pipeline_version=pipeline_version,
+                source_id=source_id,
+                config_snapshot=config_snapshot,
+            )
         primary = os.path.join(evidence_dir, pkg.primary_path) if pkg.primary_path else ""
         trace = list(traces.get(tid, [])) if trace_enabled else None
-        amount = record_fn(
-            plate, violation, primary,
-            confidence=conf.final, track_id=tid,
-            session_id=session_id, detection_trace=trace,
-        )
+        with prof.stage("db"):
+            amount = record_fn(
+                plate, violation, primary,
+                confidence=conf.final, track_id=tid,
+                session_id=session_id, detection_trace=trace,
+            )
         track.evidence_frames[violation] = pkg.metadata_path
         log.info(
             "confirmed %s for track %s (plate=%s, conf=%.2f)",
@@ -209,7 +216,8 @@ def process_video(
         })
 
     while True:
-        ret, frame = cap.read()
+        with prof.stage("read"):
+            ret, frame = cap.read()
         if not ret:
             break
         frame_idx += 1
@@ -241,7 +249,8 @@ def process_video(
         # evidence); draw boxes/labels onto a copy that gets written out.
         annotated = frame.copy()
 
-        results = model(frame, verbose=False)[0]
+        with prof.stage("yolo"):
+            results = model(frame, verbose=False)[0]
 
         dets = []
         for box in results.boxes:
@@ -251,7 +260,8 @@ def process_video(
             dets.append(DetBox(label, (x1, y1, x2, y2), conf))
             cv2.rectangle(annotated, (x1, y1), (x2, y2), _LABEL_COLORS.get(label, _GREEN), 2)
 
-        tracks = tracker.update(dets, frame_idx)
+        with prof.stage("track"):
+            tracks = tracker.update(dets, frame_idx)
         seen = set()
 
         for track in tracks:
@@ -263,22 +273,38 @@ def process_video(
             # detail=1 gives per-box confidence; the weakest group gates the
             # reading's confidence. The stabilizer votes across frames, so a
             # single noisy frame can't set the plate we fine on.
+            # Skip OCR once this track's plate is locked: the temporal
+            # stabilizer already elected a high-confidence plate over enough
+            # readings, so another frame's OCR can't change the fined plate
+            # (measured ~63% of video time; this removes the redundant calls).
+            stab_existing = stabilizers.get(tid)
+            plate_locked = (
+                track.stable_plate is not None
+                and track.plate_confidence >= ocr_lock_confidence
+                and stab_existing is not None
+                and stab_existing.num_observations >= ocr_lock_min_observations
+            )
             if track.plate_box is not None:
                 px1, py1, px2, py2 = track.plate_box
-                crop = frame[max(0, py1):py2, max(0, px1):px2]
-                ocr = reader.readtext(crop, detail=1) if crop.size else []
-                if ocr:
-                    joined = "".join(text for _, text, _ in ocr)
-                    conf = min(float(c) for _, _, c in ocr)
-                    stab = stabilizers.setdefault(tid, PlateStabilizer())
-                    stab.add(joined, conf)
-                    res = stab.result()
-                    track.stable_plate = res.stable
-                    track.plate_confidence = res.confidence
-                    track.plate_observations = stab.observations
-                    display = res.stable or res.normalized
-                    if display:
-                        _put_label(annotated, display, (px1, py2 + 20), (255, 255, 0))
+                display = track.stable_plate  # last known, for locked frames
+                if not plate_locked:
+                    crop = frame[max(0, py1):py2, max(0, px1):px2]
+                    with prof.stage("ocr"):
+                        ocr = reader.readtext(crop, detail=1) if crop.size else []
+                    if ocr:
+                        joined = "".join(text for _, text, _ in ocr)
+                        conf = min(float(c) for _, _, c in ocr)
+                        stab = stabilizers.setdefault(tid, PlateStabilizer())
+                        stab.add(joined, conf)
+                        res = stab.result()
+                        track.stable_plate = res.stable
+                        track.plate_confidence = res.confidence
+                        track.plate_observations = stab.observations
+                        display = res.stable or res.normalized
+                # Draw the plate label every frame (locked or not) so a
+                # skipped-OCR frame is still annotated with the known plate.
+                if display:
+                    _put_label(annotated, display, (px1, py2 + 20), (255, 255, 0))
 
             # Fine only on the temporally-voted stable plate, never a raw frame.
             plate = track.stable_plate
@@ -379,11 +405,13 @@ def process_video(
             if key not in seen:
                 streak[key] = 0
 
-        writer.write(annotated)
+        with prof.stage("encode"):
+            writer.write(annotated)
 
         if progress_cb and frame_idx % 5 == 0:
             progress_cb(frame_idx, total_frames)
 
+    prof.set_wall(time.monotonic() - start_wall)
     cap.release()
     if writer:
         writer.release()
@@ -394,10 +422,14 @@ def process_video(
         "video done: %d frames, %d vehicle(s) confirmed, %d violation(s) recorded",
         frame_idx, len(confirmed_ids), len(recorded),
     )
-    return {
+    summary = {
         "frames": frame_idx,
         "plates_tracked": len(confirmed_ids),
         "fps": round(src_fps, 1),
         "output": "/evidence/" + os.path.basename(output_path),
         "violations": recorded,
     }
+    profile = prof.summary()
+    if profile:  # only present when a real profiler was passed (benchmark)
+        summary["profile"] = profile
+    return summary
