@@ -10,6 +10,10 @@ and surfaces everything in a review dashboard.
 > truth, and are meant to be confirmed by a human before any action. See
 > [Limitations](#limitations) and [docs/PRIVACY.md](docs/PRIVACY.md).
 
+![Review dashboard — overview stats, per-type breakdown, processing sessions, and the filterable violations table with confidence scores and human-review state](docs/images/dashboard.png)
+
+<sub>The review dashboard (populated with the one-command demo). Try it in ~30 s with `make demo` — no model or weights required.</sub>
+
 ---
 
 ## What it does
