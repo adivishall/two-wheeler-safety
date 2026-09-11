@@ -26,6 +26,7 @@ numpy==2.4.6
 PyYAML==6.0.3
 pytest==9.1.1
 ruff==0.16.5
+mypy==2.3.1
 
 # --- transitive closure (pinned for reproducibility) ---
 blinker==1.9.0
@@ -34,7 +35,10 @@ iniconfig==2.3.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.3
+mypy_extensions==1.1.0
 packaging==26.2
+pathspec==1.1.1
 pluggy==1.6.0
 Pygments==2.20.0
+typing_extensions==4.15.0
 Werkzeug==3.1.8

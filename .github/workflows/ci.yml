@@ -45,5 +45,8 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
+      - name: Type check (mypy, core modules)
+        run: mypy
+
       - name: Run tests
         run: pytest tests/ -q

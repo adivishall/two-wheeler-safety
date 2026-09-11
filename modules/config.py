@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import overload
 
 # Version of the detection/evidence pipeline code. Bumped when the pipeline's
 # behaviour or evidence format changes; stamped into every evidence package so a
@@ -79,7 +80,13 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+@overload
+def _env_str(name: str, default: str) -> str: ...
+@overload
+def _env_str(name: str, default: None) -> str | None: ...
 def _env_str(name: str, default: str | None) -> str | None:
+    # A non-None default guarantees a non-None result (overloads let a caller
+    # like host=_env_str("HOST", "127.0.0.1") stay typed as str).
     raw = os.environ.get(name)
     return raw if raw not in (None, "") else default
 

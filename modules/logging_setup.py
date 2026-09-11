@@ -60,8 +60,8 @@ def configure_logging(level: str | int | None = None) -> None:
         handler.setFormatter(logging.Formatter(_FORMAT, datefmt=_DATEFMT))
         root.addHandler(handler)
     else:
-        for handler in root.handlers:
-            handler.setLevel(level)
+        for existing in root.handlers:
+            existing.setLevel(level)
 
     _CONFIGURED = True
 
