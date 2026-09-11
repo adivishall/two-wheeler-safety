@@ -71,6 +71,53 @@ class LinearPlaneCalibration:
         ppm = self.far_ppm + (self.near_ppm - self.far_ppm) * t
         return max(1e-6, ppm)
 
+    def metric_distance(self, p1, p2):
+        """Metres between two image points, using the pixels-per-metre at their
+        vertical midpoint. Matches the estimator's historical midpoint formula."""
+        (x1, y1), (x2, y2) = p1, p2
+        ppm = self((y1 + y2) / 2.0)
+        return math.hypot(x2 - x1, y2 - y1) / ppm
+
+
+class HomographyPlaneCalibration:
+    """Full road-plane homography calibration.
+
+    Given four image points (px) and the four real-world ground-plane points
+    they correspond to (metres), this fits the 3x3 homography that maps image
+    pixels to world-plane metres. Unlike :class:`LinearPlaneCalibration` (which
+    only corrects for row, i.e. distance-from-camera), a homography corrects for
+    perspective in *both* axes, so it also handles motion toward/away from the
+    camera and off-axis lanes. This is the standard "known reference points on
+    the road" calibration workflow.
+
+    Distance between two image points is measured by projecting *both* endpoints
+    to the world plane and taking their Euclidean distance there — which is why
+    it is exposed as :meth:`metric_distance` rather than a per-row scalar.
+    """
+
+    def __init__(self, image_points, world_points):
+        import cv2
+        import numpy as np
+
+        img = np.asarray(image_points, dtype=np.float32)
+        world = np.asarray(world_points, dtype=np.float32)
+        if img.shape != (4, 2) or world.shape != (4, 2):
+            raise ValueError("image_points and world_points must each be 4x2")
+        self._matrix = cv2.getPerspectiveTransform(img, world)
+
+    def project(self, x, y):
+        """Map one image point (px) to world-plane coordinates (metres)."""
+        import numpy as np
+
+        vec = self._matrix @ np.array([x, y, 1.0], dtype=np.float64)
+        w = vec[2] if vec[2] != 0 else 1e-9
+        return (float(vec[0] / w), float(vec[1] / w))
+
+    def metric_distance(self, p1, p2):
+        wx1, wy1 = self.project(*p1)
+        wx2, wy2 = self.project(*p2)
+        return math.hypot(wx2 - wx1, wy2 - wy1)
+
 
 @dataclass(frozen=True)
 class SpeedConfig:
@@ -157,8 +204,16 @@ class SpeedEstimator:
             pt, pcx, pcy = hist[-1]
             dt = timestamp - pt
             if dt > 0:
-                ppm = self._ppm((cy + pcy) / 2.0)
-                meters = math.hypot(cx - pcx, cy - pcy) / ppm
+                # A calibration that can measure a metric distance between two
+                # image points (perspective-aware) is used directly; otherwise
+                # fall back to the scalar pixels-per-metre at the row midpoint.
+                if self.calibration is not None and hasattr(
+                    self.calibration, "metric_distance"
+                ):
+                    meters = self.calibration.metric_distance((pcx, pcy), (cx, cy))
+                else:
+                    ppm = self._ppm((cy + pcy) / 2.0)
+                    meters = math.hypot(cx - pcx, cy - pcy) / ppm
                 inst = (meters / dt) * 3.6
                 if 0.0 <= inst <= self.config.max_plausible_kmh:
                     recent.append(inst)  # reject physically impossible jumps
