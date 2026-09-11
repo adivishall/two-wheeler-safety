@@ -20,6 +20,7 @@ via ``/evidence/<name>``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -28,6 +29,16 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
 import cv2
+
+
+def sha256_file(path: str, *, chunk: int = 1 << 20) -> str:
+    """``sha256:<hex>`` of a file, read in chunks. Used to make evidence
+    artifacts tamper-evident."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(chunk), b""):
+            h.update(block)
+    return f"sha256:{h.hexdigest()}"
 
 
 def _safe_token(text: str, fallback: str = "UNKNOWN") -> str:
@@ -81,6 +92,10 @@ def build_evidence(
     confidence: dict | None = None,
     speed: dict | None = None,
     timestamp: datetime | None = None,
+    model_version: str | None = None,
+    pipeline_version: str | None = None,
+    config_snapshot: dict | None = None,
+    source_id: str | None = None,
 ) -> EvidencePackage:
     """Write an evidence package and return the paths (as basenames)."""
     os.makedirs(evidence_root, exist_ok=True)
@@ -111,6 +126,13 @@ def build_evidence(
         if v is not None
     }
 
+    # SHA-256 of every written image so tampering with an evidence artifact after
+    # the fact is detectable (see verify_evidence).
+    hashes = {
+        key: sha256_file(os.path.join(evidence_root, name))
+        for key, name in files.items()
+    }
+
     metadata = {
         "evidence_id": evidence_id,
         "plate": plate,
@@ -118,9 +140,14 @@ def build_evidence(
         "track_id": track_id,
         "frame_index": frame_index,
         "timestamp": ts.isoformat(),
+        "model_version": model_version,
+        "pipeline_version": pipeline_version,
+        "source_id": source_id,
+        "config_snapshot": config_snapshot,
         "confidence": confidence,
         "speed": speed,
         "files": files,
+        "hashes": hashes,
     }
     metadata_name = f"{base}.json"
     with open(os.path.join(evidence_root, metadata_name), "w") as fh:
@@ -141,6 +168,44 @@ def build_evidence(
 def load_metadata(evidence_root: str, metadata_name: str) -> dict:
     with open(os.path.join(evidence_root, metadata_name)) as fh:
         return json.load(fh)
+
+
+@dataclass
+class IntegrityResult:
+    ok: bool
+    checked: int
+    mismatched: list  # [(key, expected, actual|"MISSING"), ...]
+
+    def as_dict(self) -> dict:
+        return {"ok": self.ok, "checked": self.checked, "mismatched": self.mismatched}
+
+
+def verify_evidence(evidence_root: str, metadata_name: str) -> IntegrityResult:
+    """Re-hash each artifact and compare to the hash recorded at creation.
+
+    Returns ``ok=True`` only if every referenced file is present and its SHA-256
+    matches. A modified, replaced, or deleted artifact makes ``ok=False`` and is
+    listed in ``mismatched``. Metadata with no ``hashes`` block (pre-integrity)
+    verifies vacuously ok with ``checked=0``.
+    """
+    meta = load_metadata(evidence_root, metadata_name)
+    files = meta.get("files", {})
+    hashes = meta.get("hashes", {})
+    mismatched: list = []
+    checked = 0
+    for key, name in files.items():
+        expected = hashes.get(key)
+        if expected is None:
+            continue  # nothing recorded to check against
+        checked += 1
+        path = os.path.join(evidence_root, name)
+        if not os.path.exists(path):
+            mismatched.append((key, expected, "MISSING"))
+            continue
+        actual = sha256_file(path)
+        if actual != expected:
+            mismatched.append((key, expected, actual))
+    return IntegrityResult(ok=not mismatched, checked=checked, mismatched=mismatched)
 
 
 # Re-export for callers that want to serialize a confidence dataclass cheaply.

@@ -18,6 +18,7 @@ plate" heuristic, which mis-assigns when bikes are close together.
 
 import os
 import time
+from collections import deque
 
 import cv2
 
@@ -73,6 +74,13 @@ def process_video(
     max_frames=None,
     cancel_check=None,
     max_seconds=None,
+    model_version=None,
+    pipeline_version=None,
+    source_id=None,
+    config_snapshot=None,
+    session_id=None,
+    trace_enabled=False,
+    trace_max_frames=20,
 ):
     """Detect two-wheeler violations across a video.
 
@@ -80,9 +88,11 @@ def process_video(
         video_path:   input video file.
         model, reader: loaded YOLO model + EasyOCR reader.
         output_path:  where to write the annotated (H.264/avc1) video.
-        record_fn:    callable(plate, violation, evidence_path) -> amount.
-                      Called once per confirmed (vehicle, violation); this is
-                      how a fine gets persisted.
+        record_fn:    callable(plate, violation, evidence_path, **extra) -> amount.
+                      Called once per confirmed (vehicle, violation); this is how
+                      a fine gets persisted. ``extra`` carries keyword-only
+                      metadata (confidence, track_id, session_id,
+                      detection_trace); a recorder may ignore any it doesn't use.
         progress_cb:  callable(frames_done, total_frames) for a progress bar.
         pixels_per_meter: speed calibration; speed/overspeed is skipped if None.
         max_width:    frames wider than this are downscaled before processing.
@@ -110,6 +120,7 @@ def process_video(
     helmet_sms = {}  # track_id -> HelmetStateMachine (Phase 4)
     triple_sms = {}  # track_id -> TripleRidingStateMachine (Phase 5)
     confirmed_ids = set()  # distinct vehicles that reached CONFIRMED
+    traces = {}  # track_id -> deque of supporting detections (Phase 12)
 
     evidence_dir = os.path.dirname(output_path) or "evidence"
     os.makedirs(evidence_dir, exist_ok=True)
@@ -168,9 +179,18 @@ def process_video(
             track_id=tid,
             confidence=conf.as_dict(),
             speed=speed,
+            model_version=model_version,
+            pipeline_version=pipeline_version,
+            source_id=source_id,
+            config_snapshot=config_snapshot,
         )
         primary = os.path.join(evidence_dir, pkg.primary_path) if pkg.primary_path else ""
-        amount = record_fn(plate, violation, primary)
+        trace = list(traces.get(tid, [])) if trace_enabled else None
+        amount = record_fn(
+            plate, violation, primary,
+            confidence=conf.final, track_id=tid,
+            session_id=session_id, detection_trace=trace,
+        )
         track.evidence_frames[violation] = pkg.metadata_path
         log.info(
             "confirmed %s for track %s (plate=%s, conf=%.2f)",
@@ -264,6 +284,28 @@ def process_video(
             plate = track.stable_plate
 
             body = track.body
+
+            # ---- detection trace (Phase 12): record the frame's violation
+            # signal for this track so a confirmed fine is reconstructable.
+            if trace_enabled and body is not None:
+                if body.no_helmet_violation:
+                    tlabel, tconf = "WithoutHelmet", body.no_helmet_conf
+                elif body.has_triple:
+                    tlabel, tconf = "TripleRiding", body.triple_conf
+                elif body.has_helmet:
+                    tlabel, tconf = "WithHelmet", 0.0
+                else:
+                    tlabel, tconf = None, 0.0
+                if tlabel is not None:
+                    traces.setdefault(tid, deque(maxlen=trace_max_frames)).append({
+                        "track_id": tid,
+                        "label": tlabel,
+                        "confidence": round(float(tconf), 4),
+                        "box": list(track.box),
+                        "frame_index": frame_idx,
+                        "timestamp": round(frame_idx / src_fps, 3),
+                    })
+
             # Association confidence: how well the plate sits under the rider.
             assoc = (
                 horizontal_overlap_ratio(track.plate_box, body.box)

@@ -1,0 +1,86 @@
+{
+  "checksum": "sha256:d49f79833cb86eda7d098b86679e02aced9c31c23b4eb20a18b06097fb712cbd",
+  "classes": [
+    "Plate",
+    "WithHelmet",
+    "WithoutHelmet",
+    "TripleRiding"
+  ],
+  "created_at": "2026-09-11T08:00:28.623406+00:00",
+  "dataset": {
+    "class_counts": {
+      "Plate": 6983,
+      "TripleRiding": 4999,
+      "WithHelmet": 4916,
+      "WithoutHelmet": 5176
+    },
+    "classes": [
+      "Plate",
+      "WithHelmet",
+      "WithoutHelmet",
+      "TripleRiding"
+    ],
+    "instances": 22074,
+    "label_files": 11772,
+    "path": "master_traffic_violation_dataset/data.yaml",
+    "version": "sha256:8d09bcd1fc2392ff"
+  },
+  "git_commit": "e877f81",
+  "metrics": {
+    "map50": 0.6967,
+    "map50_95": 0.5021,
+    "mean_precision": 0.7828,
+    "mean_recall": 0.7398,
+    "per_class": {
+      "Plate": {
+        "map50": 0.8106,
+        "map50_95": 0.4284,
+        "precision": 0.9414,
+        "recall": 0.7801
+      },
+      "TripleRiding": {
+        "map50": 0.8458,
+        "map50_95": 0.6545,
+        "precision": 0.9218,
+        "recall": 0.8539
+      },
+      "WithHelmet": {
+        "map50": 0.4427,
+        "map50_95": 0.3606,
+        "precision": 0.4196,
+        "recall": 0.6296
+      },
+      "WithoutHelmet": {
+        "map50": 0.6878,
+        "map50_95": 0.5649,
+        "precision": 0.8483,
+        "recall": 0.6957
+      }
+    },
+    "source": "reports/eval_traffic_model-2_val.json",
+    "split": "val"
+  },
+  "name": "traffic-4class",
+  "training_config": {
+    "amp": true,
+    "batch": 16,
+    "close_mosaic": 10,
+    "cos_lr": false,
+    "data": "master_traffic_violation_dataset/data.yaml",
+    "deterministic": true,
+    "device": "mps",
+    "epochs": 15,
+    "fraction": 1.0,
+    "imgsz": 640,
+    "lr0": 0.01,
+    "model": "yolov8n.pt",
+    "optimizer": "auto",
+    "patience": 100,
+    "seed": 0,
+    "single_cls": false,
+    "workers": 4
+  },
+  "training_date": "2026-06-19T13:04:15.967262+00:00",
+  "version": "1.0.0",
+  "weights": "runs/detect/traffic_model-2/weights/best.pt"
+}

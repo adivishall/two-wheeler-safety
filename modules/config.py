@@ -27,6 +27,12 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+# Version of the detection/evidence pipeline code. Bumped when the pipeline's
+# behaviour or evidence format changes; stamped into every evidence package so a
+# fine records which code produced it (distinct from the model version, which
+# records which weights). Single source of truth for the project version.
+PIPELINE_VERSION = "1.0.0"
+
 # Default location of the trained YOLO weights. Nothing in the repo ships the
 # weights (they are gitignored); this is where ``train_traffic.py`` writes them
 # by default and where every entry point looks unless ``MODEL_PATH`` overrides.
@@ -78,6 +84,13 @@ def _env_str(name: str, default: str | None) -> str | None:
     return raw if raw not in (None, "") else default
 
 
+def _env_keys(name: str) -> tuple[str, ...]:
+    """Parse a comma-separated list of API keys from an env var (empty tuple if
+    unset). Whitespace around each key is stripped; blanks are dropped."""
+    raw = os.environ.get(name) or ""
+    return tuple(k.strip() for k in raw.split(",") if k.strip())
+
+
 @dataclass(frozen=True)
 class ServerConfig:
     """Flask server + upload/rate-limit/job knobs (formerly inline in app.py)."""
@@ -92,6 +105,14 @@ class ServerConfig:
     job_max_age_s: int = 3600
     max_video_mb: int = 100
     max_video_seconds: int = 300
+    # Role-based API keys (Phase 16). Each is a set of accepted keys; a request's
+    # X-API-Key is resolved to the HIGHEST role it appears in. When none of these
+    # are set, auth is disabled and the app behaves exactly as before (open
+    # local/demo usage). In a deployment, set at least the reviewer/admin keys so
+    # mutation endpoints are not publicly writable.
+    viewer_api_keys: tuple[str, ...] = ()
+    reviewer_api_keys: tuple[str, ...] = ()
+    admin_api_keys: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -106,7 +127,30 @@ class ServerConfig:
             job_max_age_s=_env_int("JOB_MAX_AGE_S", 3600),
             max_video_mb=_env_int("MAX_VIDEO_MB", 100),
             max_video_seconds=_env_int("MAX_VIDEO_SECONDS", 300),
+            viewer_api_keys=_env_keys("VIEWER_API_KEYS"),
+            reviewer_api_keys=_env_keys("REVIEWER_API_KEYS"),
+            admin_api_keys=_env_keys("ADMIN_API_KEYS"),
         )
+
+    @property
+    def auth_enabled(self) -> bool:
+        """True once any role key is configured; otherwise the app is open."""
+        return bool(
+            self.viewer_api_keys or self.reviewer_api_keys or self.admin_api_keys
+        )
+
+    def role_for_key(self, key: str | None) -> str | None:
+        """Resolve an API key to its highest role, or None if unrecognised.
+        Admin keys also count as reviewer/viewer, reviewer keys as viewer."""
+        if key is None:
+            return None
+        if key in self.admin_api_keys:
+            return "admin"
+        if key in self.reviewer_api_keys:
+            return "reviewer"
+        if key in self.viewer_api_keys:
+            return "viewer"
+        return None
 
 
 @dataclass(frozen=True)
@@ -125,6 +169,11 @@ class DetectionConfig:
     speed_limit_kmh: float = 40.0
     max_video_width: int = 1280  # frames wider than this are downscaled
     contradiction_iou: float = 0.1  # helmet/no-helmet overlap = same rider
+    # Detection-trace retention (Phase 12): persist the last N supporting frames
+    # for each confirmed violation so a decision is reconstructable. Bounded so a
+    # long video never stores every detection forever; set enabled False to skip.
+    trace_enabled: bool = True
+    trace_max_frames: int = 20
 
     @classmethod
     def from_env(cls) -> "DetectionConfig":
@@ -136,6 +185,8 @@ class DetectionConfig:
             speed_limit_kmh=_env_float("SPEED_LIMIT_KMH", 40.0),
             max_video_width=_env_int("MAX_VIDEO_WIDTH", 1280),
             contradiction_iou=_env_float("CONTRADICTION_IOU", 0.1),
+            trace_enabled=_env_bool("DETECTION_TRACE_ENABLED", True),
+            trace_max_frames=_env_int("DETECTION_TRACE_MAX_FRAMES", 20),
         )
 
 

@@ -62,13 +62,44 @@ def parse_args(argv=None):
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--device", default="auto", help="cuda | mps | cpu | auto")
     ap.add_argument("--name", default="traffic_model", help="experiment name")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="random seed for reproducible runs (default: 0)")
     ap.add_argument("--patience", type=int, default=None,
                     help="early-stopping patience (epochs with no val improvement)")
+    ap.add_argument("--conf", type=float, default=None,
+                    help="confidence threshold for the post-training val")
+    ap.add_argument("--iou", type=float, default=None,
+                    help="IoU threshold for the post-training val / NMS")
     ap.add_argument("--resume", action="store_true",
                     help="resume the last run with this --name")
     ap.add_argument("--no-validate", action="store_true",
                     help="skip the post-training validation summary")
+    ap.add_argument("--no-manifest", action="store_true",
+                    help="skip writing the model provenance manifest")
+    ap.add_argument("--model-version", default="0.1.0",
+                    help="semantic version recorded in the model manifest")
+
+    # Augmentation knobs. Left as None means "use the Ultralytics default", so
+    # omitting all of these reproduces the historical training behaviour exactly;
+    # setting any is passed straight through to model.train() for an experiment.
+    aug = ap.add_argument_group("augmentation (unset = Ultralytics default)")
+    aug.add_argument("--hsv-h", type=float, default=None, help="hue jitter fraction")
+    aug.add_argument("--hsv-s", type=float, default=None, help="saturation jitter")
+    aug.add_argument("--hsv-v", type=float, default=None, help="value/brightness jitter")
+    aug.add_argument("--degrees", type=float, default=None, help="rotation degrees")
+    aug.add_argument("--translate", type=float, default=None, help="translation fraction")
+    aug.add_argument("--scale", type=float, default=None, help="scale gain")
+    aug.add_argument("--fliplr", type=float, default=None, help="horizontal flip prob")
+    aug.add_argument("--mosaic", type=float, default=None, help="mosaic prob")
+    aug.add_argument("--mixup", type=float, default=None, help="mixup prob")
     return ap.parse_args(argv)
+
+
+# CLI augmentation flag -> Ultralytics train() kwarg. Only forwarded when set.
+_AUG_KEYS = (
+    "hsv_h", "hsv_s", "hsv_v", "degrees", "translate", "scale",
+    "fliplr", "mosaic", "mixup",
+)
 
 
 def main(argv=None) -> int:
@@ -99,10 +130,17 @@ def main(argv=None) -> int:
         device=device,
         workers=args.workers,
         name=args.name,
+        seed=args.seed,
+        deterministic=True,  # with a fixed seed this makes runs reproducible
         resume=args.resume,
     )
     if args.patience is not None:
         train_kwargs["patience"] = args.patience
+    # Forward only the augmentation knobs the caller actually set.
+    for key in _AUG_KEYS:
+        val = getattr(args, key)
+        if val is not None:
+            train_kwargs[key] = val
 
     results = model.train(**train_kwargs)
 
@@ -115,13 +153,45 @@ def main(argv=None) -> int:
     print(f"Best weights:  {best}")
     print("Point MODEL_PATH (or --model on the CLIs) at that best.pt.")
 
+    metrics = None
     if not args.no_validate:
         log.info("running validation on the best checkpoint")
-        val = model.val(data=args.data, imgsz=args.imgsz, device=device, verbose=False)
-        print(f"Validation mAP@50 = {float(val.box.map50):.4f}  "
-              f"mAP@50-95 = {float(val.box.map):.4f}")
+        val_kwargs = dict(data=args.data, imgsz=args.imgsz, device=device, verbose=False)
+        if args.conf is not None:
+            val_kwargs["conf"] = args.conf
+        if args.iou is not None:
+            val_kwargs["iou"] = args.iou
+        val = model.val(**val_kwargs)
+        metrics = {
+            "split": "val",
+            "map50": round(float(val.box.map50), 4),
+            "map50_95": round(float(val.box.map), 4),
+            "mean_precision": round(float(val.box.mp), 4),
+            "mean_recall": round(float(val.box.mr), 4),
+        }
+        print(f"Validation mAP@50 = {metrics['map50']:.4f}  "
+              f"mAP@50-95 = {metrics['map50_95']:.4f}")
         print("For per-class error analysis run: "
               f"python3 evaluate_model.py --model {best} --data {args.data}")
+
+    if not args.no_manifest and os.path.exists(best):
+        # Record provenance (training config, dataset version, git commit,
+        # checksum, val metrics) so the checkpoint is auditable and the runtime
+        # can stamp its version onto evidence. See modules/model_manifest.py.
+        from modules.model_manifest import (
+            build_manifest,
+            model_version_string,
+            write_manifest,
+        )
+
+        manifest = build_manifest(
+            best, name=args.name, version=args.model_version,
+            data_yaml=args.data, metrics=metrics,
+        )
+        beside, registry = write_manifest(manifest, best)
+        print(f"Model manifest: {beside}")
+        print(f"           and: {registry}")
+        print(f"Model version:  {model_version_string(manifest)}")
 
     return 0
 

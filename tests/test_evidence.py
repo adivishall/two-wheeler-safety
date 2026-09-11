@@ -4,7 +4,12 @@ import json
 
 import numpy as np
 
-from modules.evidence import build_evidence, load_metadata
+from modules.evidence import (
+    build_evidence,
+    load_metadata,
+    sha256_file,
+    verify_evidence,
+)
 
 
 def _frame(w=200, h=200):
@@ -73,3 +78,67 @@ def test_unsafe_plate_is_sanitized_in_filenames(tmp_path):
     pkg = build_evidence(str(tmp_path), plate="../../etc/passwd", violation="no_helmet",
                          original=_frame(), annotated=_frame(), frame_index=1)
     assert "/" not in pkg.base and ".." not in pkg.base
+
+
+def test_model_version_is_recorded_in_metadata(tmp_path):
+    pkg = build_evidence(str(tmp_path), plate="MH02DL4596", violation="no_helmet",
+                         original=_frame(), annotated=_frame(), frame_index=1,
+                         model_version="traffic-4class@1.0.0")
+    meta = load_metadata(str(tmp_path), pkg.metadata_path)
+    assert meta["model_version"] == "traffic-4class@1.0.0"
+
+
+def test_model_version_defaults_to_none(tmp_path):
+    pkg = build_evidence(str(tmp_path), plate="MH02DL4596", violation="no_helmet",
+                         original=_frame(), annotated=_frame(), frame_index=1)
+    meta = load_metadata(str(tmp_path), pkg.metadata_path)
+    assert meta["model_version"] is None
+
+
+# -- integrity (Phase 13) ---------------------------------------------------
+
+def test_integrity_fields_and_hashes_are_recorded(tmp_path):
+    pkg = build_evidence(
+        str(tmp_path), plate="MH02DL4596", violation="no_helmet",
+        original=_frame(), annotated=_frame(), frame_index=5,
+        model_version="traffic-4class@1.0.0", pipeline_version="1.0.0",
+        source_id="clip.mp4", config_snapshot={"conf_threshold": 0.25},
+    )
+    meta = load_metadata(str(tmp_path), pkg.metadata_path)
+    assert meta["pipeline_version"] == "1.0.0"
+    assert meta["source_id"] == "clip.mp4"
+    assert meta["config_snapshot"] == {"conf_threshold": 0.25}
+    # a hash for every written artifact, matching the file on disk
+    assert set(meta["hashes"]) == set(meta["files"])
+    for key, name in meta["files"].items():
+        assert meta["hashes"][key] == sha256_file(str(tmp_path / name))
+
+
+def test_verify_evidence_passes_on_untampered_package(tmp_path):
+    pkg = build_evidence(str(tmp_path), plate="KA05AB1", violation="triple_riding",
+                         original=_frame(), annotated=_frame(), frame_index=1)
+    result = verify_evidence(str(tmp_path), pkg.metadata_path)
+    assert result.ok
+    assert result.checked >= 2
+    assert result.mismatched == []
+
+
+def test_verify_evidence_detects_a_modified_artifact(tmp_path):
+    pkg = build_evidence(str(tmp_path), plate="KA05AB1", violation="no_helmet",
+                         original=_frame(), annotated=_frame(), frame_index=1)
+    # tamper: overwrite the annotated image with different pixels
+    import cv2
+    tampered = np.full((200, 200, 3), 255, dtype=np.uint8)
+    cv2.imwrite(str(tmp_path / pkg.annotated_path), tampered)
+    result = verify_evidence(str(tmp_path), pkg.metadata_path)
+    assert not result.ok
+    assert any(key == "annotated" for key, _e, _a in result.mismatched)
+
+
+def test_verify_evidence_detects_a_deleted_artifact(tmp_path):
+    pkg = build_evidence(str(tmp_path), plate="KA05AB1", violation="no_helmet",
+                         original=_frame(), annotated=_frame(), frame_index=1)
+    (tmp_path / pkg.original_path).unlink()
+    result = verify_evidence(str(tmp_path), pkg.metadata_path)
+    assert not result.ok
+    assert any(actual == "MISSING" for _k, _e, actual in result.mismatched)
