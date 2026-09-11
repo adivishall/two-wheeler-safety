@@ -412,6 +412,16 @@ def main(argv=None) -> int:
             log.exception("official val() failed: %s", exc)
 
     split_dir = _split_dir(data, args.split)
+    need_predict = (not args.no_error_analysis) or args.benchmark
+    if need_predict and payload.get("official") is not None:
+        # torch>=2.6 (seen on 2.12 / MPS) raises "Inference tensors do not track
+        # version counter" if .predict() runs on a YOLO object that already ran
+        # .val(). val() leaves the fused weights as inference tensors, which the
+        # predict forward pass then trips over. Reloading gives the predict
+        # passes clean weights; val()'s authoritative numbers are already saved.
+        log.info("reloading model for the predict-based passes (post-val())")
+        model = YOLO(args.model)
+
     if not args.no_error_analysis:
         if split_dir and os.path.isdir(split_dir):
             payload["error_analysis"] = run_error_analysis(
