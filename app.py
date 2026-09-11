@@ -352,6 +352,8 @@ def analyze_video():
                 session_id=session_id,
                 trace_enabled=config.detection.trace_enabled,
                 trace_max_frames=config.detection.trace_max_frames,
+                ocr_lock_confidence=config.detection.ocr_lock_confidence,
+                ocr_lock_min_observations=config.detection.ocr_lock_min_observations,
             )
             now = datetime.now(timezone.utc).isoformat()
             db.update_session(

@@ -110,15 +110,22 @@ def benchmark_image(model, reader, image_path, iterations) -> dict:
 def benchmark_video(model, reader, video_path, max_frames) -> dict:
     import tempfile
 
+    from modules.profiling import StageProfiler
     from modules.video_detector import process_video
 
     fd, out_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
+    # A real profiler makes process_video time each stage (YOLO/OCR/track/
+    # evidence/DB/encode/read); it's a no-op unless one is passed, so the web
+    # path pays nothing. The evidence/DB stages only fire on a confirmed
+    # violation, so their share depends on the clip.
+    profiler = StageProfiler()
     try:
         t0 = time.perf_counter()
         summary = process_video(
             video_path, model, reader, out_path,
             record_fn=lambda *a, **k: 0, max_frames=max_frames,
+            profiler=profiler,
         )
         elapsed = time.perf_counter() - t0
     finally:
@@ -133,6 +140,7 @@ def benchmark_video(model, reader, video_path, max_frames) -> dict:
         "wall_seconds": round(elapsed, 2),
         "throughput_fps": round(frames / elapsed, 2) if elapsed else 0.0,
         "ms_per_frame": round(elapsed * 1000.0 / frames, 2) if frames else 0.0,
+        "stage_profile": summary.get("profile", {}),
     }
 
 
@@ -220,8 +228,24 @@ def _print_summary(p: dict) -> None:
     if vb:
         print(f"Video: {vb['frames']} frames in {vb['wall_seconds']}s "
               f"-> {vb['throughput_fps']} FPS ({vb['ms_per_frame']} ms/frame)")
+        _print_stage_profile(vb.get("stage_profile") or {})
     if p.get("peak_rss_mb") is not None:
         print(f"Peak memory: {p['peak_rss_mb']} MB")
+
+
+def _print_stage_profile(profile: dict) -> None:
+    """Print where per-frame time went, most expensive first, so a bottleneck
+    is obvious. ``unaccounted`` is honest slack (drawing, state machines, glue),
+    never folded into a stage."""
+    stages = profile.get("stages") or {}
+    if not stages:
+        return
+    print("  Stage breakdown (% of video wall time):")
+    for name, s in stages.items():
+        print(f"    {name:<9} {s['pct_of_wall']:>5.1f}%  "
+              f"({s['seconds']}s, {s['ms_per_call']} ms/call x{s['calls']})")
+    print(f"    {'other':<9} {profile.get('unaccounted_pct_of_wall', 0.0):>5.1f}%  "
+          f"({profile.get('unaccounted_seconds', 0.0)}s)")
 
 
 if __name__ == "__main__":
