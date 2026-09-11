@@ -81,6 +81,7 @@ def build_evidence(
     confidence: dict | None = None,
     speed: dict | None = None,
     timestamp: datetime | None = None,
+    model_version: str | None = None,
 ) -> EvidencePackage:
     """Write an evidence package and return the paths (as basenames)."""
     os.makedirs(evidence_root, exist_ok=True)
@@ -118,6 +119,7 @@ def build_evidence(
         "track_id": track_id,
         "frame_index": frame_index,
         "timestamp": ts.isoformat(),
+        "model_version": model_version,
         "confidence": confidence,
         "speed": speed,
         "files": files,

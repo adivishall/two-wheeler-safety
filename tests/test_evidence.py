@@ -73,3 +73,18 @@ def test_unsafe_plate_is_sanitized_in_filenames(tmp_path):
     pkg = build_evidence(str(tmp_path), plate="../../etc/passwd", violation="no_helmet",
                          original=_frame(), annotated=_frame(), frame_index=1)
     assert "/" not in pkg.base and ".." not in pkg.base
+
+
+def test_model_version_is_recorded_in_metadata(tmp_path):
+    pkg = build_evidence(str(tmp_path), plate="MH02DL4596", violation="no_helmet",
+                         original=_frame(), annotated=_frame(), frame_index=1,
+                         model_version="traffic-4class@1.0.0")
+    meta = load_metadata(str(tmp_path), pkg.metadata_path)
+    assert meta["model_version"] == "traffic-4class@1.0.0"
+
+
+def test_model_version_defaults_to_none(tmp_path):
+    pkg = build_evidence(str(tmp_path), plate="MH02DL4596", violation="no_helmet",
+                         original=_frame(), annotated=_frame(), frame_index=1)
+    meta = load_metadata(str(tmp_path), pkg.metadata_path)
+    assert meta["model_version"] is None

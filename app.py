@@ -55,6 +55,15 @@ DB_PATH = config.db_path
 # Weights the /analyze upload route runs detection with; override with MODEL_PATH.
 MODEL_PATH = config.model_path
 
+# Best-effort model version (name@version) resolved from the checkpoint's
+# manifest (modules/model_manifest.py). Stamped onto every evidence package so a
+# fine is traceable to the exact weights that raised it; None if no manifest.
+from modules.model_manifest import model_version_string, resolve_manifest  # noqa: E402
+
+MODEL_VERSION = model_version_string(resolve_manifest(MODEL_PATH))
+if MODEL_VERSION:
+    log.info("detection model version: %s", MODEL_VERSION)
+
 # Normalized SQLite store (vehicles / violations / evidence / jobs). Creating it
 # initializes the schema and migrates any legacy flat `fines` table in place.
 db = Database(DB_PATH)
@@ -285,6 +294,7 @@ def analyze_video():
                 tmp_path, model, reader, os.path.join(EVIDENCE_DIR, out_name),
                 record_fn=record_fine, progress_cb=progress_cb,
                 cancel_check=cancel_check, max_seconds=MAX_VIDEO_SECONDS,
+                model_version=MODEL_VERSION,
             )
         finally:
             try:

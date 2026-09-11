@@ -73,6 +73,7 @@ def process_video(
     max_frames=None,
     cancel_check=None,
     max_seconds=None,
+    model_version=None,
 ):
     """Detect two-wheeler violations across a video.
 
@@ -168,6 +169,7 @@ def process_video(
             track_id=tid,
             confidence=conf.as_dict(),
             speed=speed,
+            model_version=model_version,
         )
         primary = os.path.join(evidence_dir, pkg.primary_path) if pkg.primary_path else ""
         amount = record_fn(plate, violation, primary)
