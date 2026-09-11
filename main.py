@@ -120,14 +120,14 @@ def _make_recorder(api_url, api_key, report):
     from modules.config import fine_amount
 
     if not report:
-        def _local(plate, violation, evidence_path):
+        def _local(plate, violation, evidence_path, **_extra):
             log.info("recorded (local only): %s for %s", violation, plate)
             return fine_amount(violation)
         return _local
 
     import requests
 
-    def _post(plate, violation, evidence_path):
+    def _post(plate, violation, evidence_path, **_extra):
         image_name = os.path.basename(evidence_path) if evidence_path else None
         try:
             resp = requests.post(

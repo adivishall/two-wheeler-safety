@@ -100,8 +100,8 @@ def stub_video_io(monkeypatch):
 def test_video_pipeline_records_confirmed_no_helmet(stub_video_io, tmp_path):
     recorded = []
 
-    def record_fn(plate, violation, evidence_path):
-        recorded.append((plate, violation, evidence_path))
+    def record_fn(plate, violation, evidence_path, **extra):
+        recorded.append((plate, violation, evidence_path, extra))
         return 500
 
     out = str(tmp_path / "out.mp4")
@@ -127,8 +127,10 @@ def test_video_pipeline_records_confirmed_no_helmet(stub_video_io, tmp_path):
 
     # record_fn was called once, and a real evidence file exists on disk.
     assert len(recorded) == 1
-    plate, violation, evidence_path = recorded[0]
+    plate, violation, evidence_path, extra = recorded[0]
     assert plate == PLATE_TEXT and violation == "no_helmet"
+    # the pipeline threads through keyword metadata (confidence, track_id, ...)
+    assert "confidence" in extra and "track_id" in extra
     import os
     assert os.path.exists(evidence_path)
 
@@ -149,7 +151,7 @@ def test_contradiction_is_not_recorded(stub_video_io, tmp_path):
     out = str(tmp_path / "out.mp4")
     summary = process_video(
         "unused.mp4", _ContradictingModel(), _FakeReader(), out,
-        record_fn=lambda *a: recorded.append(a) or 500, streak_threshold=3,
+        record_fn=lambda *a, **k: recorded.append(a) or 500, streak_threshold=3,
     )
     assert recorded == []
     assert summary["violations"] == []
@@ -166,4 +168,4 @@ def test_could_not_open_video_raises(monkeypatch, tmp_path):
     monkeypatch.setattr(cv2, "VideoWriter", _FakeWriter)
     with pytest.raises(ValueError):
         process_video("nope.mp4", _FakeModel(), _FakeReader(),
-                      str(tmp_path / "o.mp4"), record_fn=lambda *a: 0)
+                      str(tmp_path / "o.mp4"), record_fn=lambda *a, **k: 0)

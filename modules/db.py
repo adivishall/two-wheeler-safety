@@ -374,6 +374,11 @@ class Database:
                          _json.dumps(box) if box is not None else None,
                          r.get("frame_index"), r.get("timestamp")),
                     )
+                self._log_event(
+                    conn, "violation_created", "violation", str(violation_id),
+                    "system", {"type": violation, "amount": amt,
+                               "session_id": session_id},
+                )
         finally:
             conn.close()
         return amt
