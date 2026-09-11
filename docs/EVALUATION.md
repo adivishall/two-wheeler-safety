@@ -76,26 +76,97 @@ python3 evaluate_ocr.py --labels ocr_eval.csv --compare-preprocess
 Provide `ocr_eval.csv` to produce them; the temporal OCR voting used at runtime
 (`modules/plate_recognizer.py`) is separately unit-tested.
 
-## 3. Whole system — end-to-end evaluation
+## 3. Whole system — end-to-end evaluation (`evaluate_system.py`)
 
 Raw detector mAP is not the same question as *"how often does the complete
-pipeline (detect → track → associate → OCR → temporal confirm → confidence →
-violation → evidence) emit a correct, attributable fine?"* The end-to-end
-evaluation framework (`modules/system_eval.py`, added in the CV-engineering
-upgrade) answers that on deterministic synthetic scenarios and reports
-system-level TP / FP / FN, wrong-vehicle and wrong-plate attribution, and
-duplicate fines — deliberately separate from the YOLO numbers above. See its
-module docstring and tests for the scenario definitions.
+pipeline (track → associate → OCR-vote → temporal confirm → confidence →
+violation → attribution) emit a correct, attributable fine?"* `modules/system_eval.py`
+answers that by driving the **real** tracker, association, OCR stabiliser,
+state machines and confidence over deterministic synthetic multi-bike scenarios
+— so it measures the *pipeline logic*, isolated from detector quality, with no
+model weights. Run it with `python3 evaluate_system.py`.
 
-## Confidence is a score, not a probability
+### Measured results (synthetic scenarios)
 
-The pipeline treats `confidence` as an ordering score, never a calibrated
-probability, and the UI/labels reflect that. The measured +0.248 separation
-above says the score is *useful for ranking* review queues, not that "0.8 means
-80% correct". Calibration (reliability curve, ECE, Brier) is an optional,
-labelled-data experiment; until it is run and passes, no probability
-interpretation is exposed. Speed is likewise labelled an **estimate**, not radar
-truth (see [ARCHITECTURE.md](ARCHITECTURE.md) / speed validation).
+| scenario | TP | FP | FN | ID switches | assoc acc |
+|----------|---:|---:|---:|------------:|----------:|
+| single_no_helmet | 1 | 0 | 0 | 0 | 1.00 |
+| single_triple | 1 | 0 | 0 | 0 | 1.00 |
+| late_plate | 1 | 0 | 0 | 0 | 1.00 |
+| clean_helmet | 0 | 0 | 0 | 0 | 1.00 |
+| two_adjacent | 1 | 0 | 0 | 0 | 1.00 |
+| crossing | 2 | 0 | 0 | **4** | **0.85** |
+| three_bikes | 1 | 0 | 0 | 0 | 1.00 |
+| occlusion | 1 | 0 | 0 | 0 | 1.00 |
+| **totals** | **8** | **0** | **0** | | |
+
+**System precision = recall = 1.0** across the suite. The honest findings:
+
+* **The `crossing` scenario is the tracker's weak point** — when two bikes
+  overlap heavily mid-cross, association merges their bodies (accuracy 0.85) and
+  the tracker records 4 ID switches. Yet temporal confirmation + OCR voting
+  still attribute both fines to the correct plate: the *pipeline* absorbs a
+  *tracker* failure. This is why the design confirms over a streak and votes the
+  plate rather than trusting any single frame.
+* A **2-frame occlusion is survived with no ID switch** (`max_age` keeps the
+  track LOST then re-confirms the same id).
+* A **late plate** (readable only from frame 4) still produces the fine, because
+  the pipeline records on the *confirmed* state, not the transition frame.
+* A dedicated test injects a consistently-misread plate and confirms it is
+  scored as `wrong_plate` + false positive, never a true positive.
+
+These are logic-level numbers on hand-built scenarios; they show the runtime
+*plumbing* is correct, not that field accuracy is perfect — field accuracy is
+bounded by the detector (§1).
+
+## 4. Speed estimation (`modules/speed_eval.py`)
+
+Speed is validated on synthetic constant-speed trajectories on a perspective
+ground plane (known ground truth), comparing three calibrations — constant
+pixels-per-metre, `LinearPlaneCalibration`, and the new
+`HomographyPlaneCalibration` — by MAE / RMSE / bias and overspeed
+precision/recall (limit 40 km/h), with detection noise added.
+
+| motion | calibration | MAE (km/h) | overspeed recall |
+|--------|-------------|-----------:|-----------------:|
+| toward camera | constant ppm | ~42 | **0.0** |
+| toward camera | linear plane | ~40 | 0.0 |
+| toward camera | **homography** | **~11** | **1.0** |
+| lateral | constant ppm | ~1.8 | 1.0 |
+| lateral | **linear plane** | **~0.9** | 1.0 |
+| lateral | homography | ~3.2 | 1.0 |
+
+**Reading:** for motion *toward/away from* the camera — the common enforcement
+geometry — a single pixels-per-metre is perspective-blind and misses every
+overspeeder; the homography is the only usable option. For purely *lateral*
+motion at the calibrated depth, the simpler calibrations are already accurate and
+the homography adds a little noise. So the homography is kept as the right
+general-purpose calibration, and **speed remains labelled an estimate, not radar
+truth**.
+
+## 5. Confidence calibration (`calibrate_confidence.py`)
+
+`modules/calibration.py` measures whether the violation confidence *score* could
+become a calibrated *probability*: reliability curve, ECE, MCE, Brier, plus Platt
+and isotonic calibrators (`fit_and_evaluate` compares raw vs calibrated and picks
+the best). The tooling is validated on synthetic data (an overconfident set has
+ECE ≈ 0.25 which Platt/isotonic materially reduce; an already-calibrated set
+keeps ECE < 0.02).
+
+**No calibration is applied by default** — there is no labelled violation-outcome
+dataset yet (it would come from the human-review workflow: each stored
+`confidence` joined to the reviewer's confirmed/dismissed decision). Until that
+is run and shown to help, confidence stays a score and no probability is claimed.
+
+## Principles
+
+* **Confidence is a score, not a probability.** The measured +0.248
+  separation (§1) says the score is useful for *ranking* review queues, not that
+  "0.8 = 80% correct"; §5 is the only path to a probability, and only after
+  validation.
+* **Speed is an estimate, not radar truth** (§4).
+* **Component ≠ system.** §1/§2 bound accuracy; §3 shows the plumbing is correct.
+  A strong pipeline around a mediocre detector is still bounded by the detector.
 
 ## Regenerating everything
 
