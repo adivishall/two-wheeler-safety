@@ -117,6 +117,26 @@ def test_analytics_sessions_and_over_time(tmp_path):
     assert sum(d["n"] for d in a["over_time"]) == 1
 
 
+def test_list_violations_confidence_and_date_filters(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    db.record_fine("MH12AB1234", "no_helmet", "e.jpg", confidence=0.30,
+                   timestamp="2026-01-01 10:00:00")
+    db.record_fine("KA05CD9", "overspeed", "e.jpg", confidence=0.90,
+                   timestamp="2026-06-01 10:00:00")
+    db.record_fine("DL8CAF5031", "no_helmet", "e.jpg")  # confidence NULL
+
+    # Confidence range excludes the low one and the NULL one (a range check on
+    # NULL is undefined, so those rows are dropped by design).
+    hi = db.list_violations(min_confidence=0.5)
+    assert hi["total"] == 1 and hi["items"][0]["plate"] == "KA05CD9"
+    band = db.list_violations(min_confidence=0.2, max_confidence=0.5)
+    assert band["total"] == 1 and band["items"][0]["plate"] == "MH12AB1234"
+
+    # Date range (inclusive) selects only the January row.
+    jan = db.list_violations(date_from="2026-01-01", date_to="2026-02-01")
+    assert jan["total"] == 1 and jan["items"][0]["plate"] == "MH12AB1234"
+
+
 def test_list_violations_filter_by_session(tmp_path):
     db = Database(str(tmp_path / "t.db"))
     db.create_session("s1")

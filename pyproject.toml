@@ -19,6 +19,25 @@ select = ["E", "F", "W", "I"]
 testpaths = ["tests"]
 addopts = "-q"
 
+# Branch coverage (Phase 25). Run: `pytest --cov=modules --cov-branch`.
+# The model-free suite structurally CANNOT cover the two modules that only run
+# once torch/EasyOCR are loaded (modules/detector.py loads the models;
+# modules/plate_ocr.py is a thin model-dependent wrapper), so they are omitted
+# from the headline number rather than dragging it down with code no unit test
+# is meant to exercise. Their behaviour is covered by the offline evaluation
+# tooling and the integration test (with fakes), not by unit coverage.
+[tool.coverage.run]
+branch = true
+source = ["modules"]
+omit = ["modules/detector.py", "modules/plate_ocr.py"]
+
+[tool.coverage.report]
+# Don't let an un-exercised branch pass silently: fail the report under this
+# floor. The measured branch coverage of the covered modules is ~95%.
+fail_under = 90
+show_missing = true
+skip_covered = true
+
 # Static typing (Phase 24). Scoped to the core-logic modules — the parts where a
 # type error would be a real bug (DB, config, confidence, association, tracking
 # math, state machines, validation) — rather than the whole tree, so the check
