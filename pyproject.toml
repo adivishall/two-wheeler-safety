@@ -18,3 +18,41 @@ select = ["E", "F", "W", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+# Static typing (Phase 24). Scoped to the core-logic modules — the parts where a
+# type error would be a real bug (DB, config, confidence, association, tracking
+# math, state machines, validation) — rather than the whole tree, so the check
+# is fast and its green bar is meaningful. cv2/torch/ultralytics/easyocr ship no
+# (or partial) stubs, so their imports are ignored; that does not weaken checking
+# of our own code. Run: `python3 -m mypy` (config-driven) or `mypy modules`.
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "modules/config.py",
+    "modules/db.py",
+    "modules/confidence.py",
+    "modules/association.py",
+    "modules/geometry.py",
+    "modules/violation_state.py",
+    "modules/validation.py",
+    "modules/jobs.py",
+    "modules/plate_info.py",
+    "modules/plate_recognizer.py",
+    "modules/evidence.py",
+    "modules/model_manifest.py",
+    "modules/profiling.py",
+    "modules/logging_setup.py",
+    "modules/ocr_preprocess.py",
+    "modules/speed.py",
+    "modules/calibration.py",
+]
+explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = true
+# Pragmatic strictness: catch the real mistakes without demanding a fully
+# annotated codebase everywhere.
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+warn_unreachable = true

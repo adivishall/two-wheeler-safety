@@ -11,3 +11,4 @@ numpy
 pyyaml
 pytest~=9.1
 ruff~=0.16
+mypy~=2.3

@@ -277,6 +277,7 @@ class Database:
                 info.get("rto"),
             ),
         )
+        assert cur.lastrowid is not None  # INSERT always sets a rowid
         return cur.lastrowid
 
     def _insert_violation(
@@ -312,6 +313,7 @@ class Database:
                 (vehicle_id, violation, amount, confidence, status, track_id, session_id),
             )
         violation_id = cur.lastrowid
+        assert violation_id is not None  # INSERT always sets a rowid
         ev = evidence or {}
         conn.execute(
             """INSERT INTO evidence
