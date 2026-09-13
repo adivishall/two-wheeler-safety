@@ -34,6 +34,12 @@ import sys
 import time
 from datetime import datetime, timezone
 
+from modules.confidence_analysis import (
+    ScoredPrediction,
+    analyse,
+    render_histogram,
+)
+from modules.eval_artifacts import ArtifactWriter, FailureCase, categorise
 from modules.evaluation import (
     ConfidenceStats,
     ConfusionMatrix,
@@ -158,12 +164,21 @@ def run_official_val(model, data_path, split, imgsz, conf, iou, device) -> dict:
     }
 
 
-def run_error_analysis(model, split_dir, class_names, conf, iou, max_images) -> dict:
-    """Second pass: match predictions to GT for confusions + FP/FN + confidence."""
+def run_error_analysis(
+    model, split_dir, class_names, conf, iou, max_images,
+    *, artifacts: ArtifactWriter | None = None, low_conf_threshold: float = 0.45,
+) -> dict:
+    """Second pass: match predictions to GT for confusions + FP/FN + confidence.
+
+    When ``artifacts`` is given, each representative failure is also written to
+    disk as an annotated context crop (see ``modules/eval_artifacts.py``), so the
+    numbers in the report can be inspected rather than taken on trust.
+    """
     import cv2
 
     cm = ConfusionMatrix(len(class_names))
     conf_stats = ConfidenceStats()
+    scored: list[ScoredPrediction] = []
     fp_examples: list[dict] = []
     fn_examples: list[dict] = []
     n_images = 0
@@ -191,9 +206,21 @@ def run_error_analysis(model, split_dir, class_names, conf, iou, max_images) -> 
         cm.add_matches(matches)
         for m in matches:
             if m.pred_class is not None and m.gt_class is not None:
-                conf_stats.add(m.pred_class == m.gt_class, m.score)
+                correct = m.pred_class == m.gt_class
+                conf_stats.add(correct, m.score)
+                # A prediction's correctness is judged against the class it was
+                # predicted as, so the per-class curve answers "when the model
+                # says X with score s, how often is it right?".
+                scored.append(ScoredPrediction(
+                    score=m.score, correct=correct,
+                    class_name=class_names[m.pred_class],
+                ))
             elif m.pred_class is not None:  # false positive
                 conf_stats.add(False, m.score)
+                scored.append(ScoredPrediction(
+                    score=m.score, correct=False,
+                    class_name=class_names[m.pred_class],
+                ))
                 if len(fp_examples) < 20:
                     fp_examples.append({
                         "image": os.path.relpath(image_path),
@@ -206,6 +233,27 @@ def run_error_analysis(model, split_dir, class_names, conf, iou, max_images) -> 
                         "image": os.path.relpath(image_path),
                         "missed": class_names[m.gt_class],
                     })
+
+            if artifacts is not None:
+                category = categorise(
+                    m.pred_class, m.gt_class, m.score,
+                    low_conf_threshold=low_conf_threshold,
+                )
+                if category and artifacts.room_for(category):
+                    artifacts.add(category, img, FailureCase(
+                        category=category,
+                        source_image=os.path.relpath(image_path),
+                        predicted_class=(
+                            class_names[m.pred_class] if m.pred_class is not None else None
+                        ),
+                        expected_class=(
+                            class_names[m.gt_class] if m.gt_class is not None else None
+                        ),
+                        score=m.score,
+                        box=m.pred_box,
+                        gt_box=m.gt_box,
+                        iou=m.iou,
+                    ))
         n_images += 1
 
     reports = build_class_reports(cm, class_names)
@@ -221,15 +269,20 @@ def run_error_analysis(model, split_dir, class_names, conf, iou, max_images) -> 
     except ValueError:
         pass
 
-    return {
+    out = {
         "images": n_images,
         "confusion_matrix": cm.as_list(),
         "class_report": [r.__dict__ for r in reports],
         "helmet_confusion": helmet_confusion,
         "confidence": conf_stats.summary(),
+        "confidence_curve": analyse(scored),
         "false_positive_examples": fp_examples,
         "false_negative_examples": fn_examples,
     }
+    if artifacts is not None:
+        out["artifacts"] = artifacts.summary()
+        out["artifacts"]["index"] = artifacts.write_index()
+    return out
 
 
 def benchmark_inference(model, split_dir, n: int) -> dict:
@@ -267,10 +320,28 @@ def write_reports(out_dir: str, name: str, payload: dict) -> tuple[str, str]:
     return md_path, json_path
 
 
+def build_curve_from_dict(d: dict):
+    """Rebuild a :class:`ConfidenceCurve` from its serialised form.
+
+    The report renderer works from the JSON payload (so a stored report can be
+    re-rendered without re-running the model), and the histogram helper wants the
+    object, not the dict.
+    """
+    from modules.confidence_analysis import Bin, ConfidenceCurve
+
+    return ConfidenceCurve(
+        label=d["label"],
+        bins=[Bin(low=b["low"], high=b["high"], n=b["n"], correct=b["correct"])
+              for b in d["bins"]],
+    )
+
+
 def _render_markdown(p: dict) -> str:
     lines = [f"# Model evaluation — {p['name']}", ""]
     lines.append(f"- Generated: {p['generated_at']}")
-    lines.append(f"- Model: `{p['model']}`")
+    lines.append(f"- Model: `{p['model']}`" +
+                 (f" (version **{p['model_version']}**)" if p.get("model_version")
+                  else " (no manifest found — version not recorded)"))
     lines.append(f"- Data: `{p['data']}` (split: {p['split']})")
     lines.append(f"- conf={p['conf']}, iou={p['iou']}, imgsz={p['imgsz']}, device={p['device']}")
     lines.append("")
@@ -311,6 +382,43 @@ def _render_markdown(p: dict) -> str:
                       f"{hc['withhelmet_as_withouthelmet']}",
                       f"- WithoutHelmet predicted as WithHelmet: "
                       f"{hc['withouthelmet_as_withhelmet']}", ""]
+        cc = ea.get("confidence_curve")
+        if cc:
+            lines += ["### Confidence vs correctness (binned)", "",
+                      cc["note"], "",
+                      "```"]
+            lines += render_histogram(
+                build_curve_from_dict(cc["overall"])
+            )
+            lines += ["```", "",
+                      f"- Spearman(score rank, accuracy rank) = "
+                      f"**{cc['overall']['spearman']}**",
+                      f"- top-bin minus bottom-bin accuracy = "
+                      f"**{cc['overall']['top_minus_bottom_bin_accuracy']}**",
+                      f"- monotonicity violations: "
+                      f"{cc['overall']['monotonic_violations']}",
+                      f"- verdict: *{cc['overall']['verdict']}*", "",
+                      "| Class | n | Spearman | top-bottom gap | verdict |",
+                      "|---|---:|---:|---:|---|"]
+            for cname, cur in cc["per_class"].items():
+                lines.append(
+                    f"| {cname} | {cur['n']} | {cur['spearman']} | "
+                    f"{cur['top_minus_bottom_bin_accuracy']} | {cur['verdict']} |"
+                )
+            lines.append("")
+
+        art = ea.get("artifacts")
+        if art:
+            lines += ["### Saved failure artifacts", "",
+                      f"Annotated crops under `{art['root']}/` "
+                      f"(index: `{art['index']}`), red box = prediction, "
+                      "green box = ground truth.", "",
+                      "| Category | Saved |", "|---|---:|"]
+            for cat, n in art["counts"].items():
+                capped = " (capped)" if cat in art["truncated"] else ""
+                lines.append(f"| `{cat}` | {n}{capped} |")
+            lines.append("")
+
         c = ea["confidence"]
         lines += ["### Confidence vs correctness", "",
                   f"- mean confidence when correct: {c['mean_conf_correct']} "
@@ -357,6 +465,16 @@ def parse_args(argv=None):
     ap.add_argument("--name", default=None, help="report name (default: eval_<timestamp>)")
     ap.add_argument("--max-images", type=int, default=0,
                     help="cap images in the error-analysis pass (0 = all)")
+    ap.add_argument("--save-artifacts", metavar="DIR", nargs="?", const="eval",
+                    default=None,
+                    help="write annotated crops of representative FP / FN / class "
+                         "confusions / low-confidence detections under DIR "
+                         "(default: eval/)")
+    ap.add_argument("--artifacts-per-category", type=int, default=30,
+                    help="cap saved cases per failure category (default: 30)")
+    ap.add_argument("--low-conf-threshold", type=float, default=0.45,
+                    help="a correct detection below this score is saved as "
+                         "low_confidence (default: 0.45)")
     ap.add_argument("--benchmark", action="store_true",
                     help="also measure inference latency")
     ap.add_argument("--benchmark-images", type=int, default=50)
@@ -390,7 +508,17 @@ def main(argv=None) -> int:
     log.info("loading model %s on %s", args.model, device)
     model = YOLO(args.model)
 
+    # Resolve the model's manifest version so every report says which weights
+    # produced it; None (not a guess) when no manifest matches the checksum.
+    try:
+        from modules.model_manifest import model_version_string, resolve_manifest
+
+        model_version = model_version_string(resolve_manifest(args.model))
+    except Exception:  # noqa: BLE001 - a missing manifest must not fail evaluation
+        model_version = None
+
     payload = {
+        "model_version": model_version,
         "name": args.name or f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model": args.model,
@@ -403,7 +531,9 @@ def main(argv=None) -> int:
         "class_names": class_names,
     }
 
+    val_attempted = False
     if not args.no_official:
+        val_attempted = True
         try:
             payload["official"] = run_official_val(
                 model, args.data, args.split, args.imgsz, args.conf, args.iou, device
@@ -413,7 +543,12 @@ def main(argv=None) -> int:
 
     split_dir = _split_dir(data, args.split)
     need_predict = (not args.no_error_analysis) or args.benchmark
-    if need_predict and payload.get("official") is not None:
+    # Reload whenever val() was *attempted*, not only when it returned: a val()
+    # that raises part-way has already fused the weights into inference tensors,
+    # and the predict pass then dies with "Inference tensors do not track version
+    # counter". Gating on success let a failed val() take the error analysis down
+    # with it.
+    if need_predict and val_attempted:
         # torch>=2.6 (seen on 2.12 / MPS) raises "Inference tensors do not track
         # version counter" if .predict() runs on a YOLO object that already ran
         # .val(). val() leaves the fused weights as inference tensors, which the
@@ -422,10 +557,19 @@ def main(argv=None) -> int:
         log.info("reloading model for the predict-based passes (post-val())")
         model = YOLO(args.model)
 
+    artifacts = None
+    if args.save_artifacts:
+        artifacts = ArtifactWriter(
+            root=args.save_artifacts,
+            per_category=args.artifacts_per_category,
+            model_version=payload.get("model_version"),
+        )
+
     if not args.no_error_analysis:
         if split_dir and os.path.isdir(split_dir):
             payload["error_analysis"] = run_error_analysis(
-                model, split_dir, class_names, args.conf, args.iou, args.max_images
+                model, split_dir, class_names, args.conf, args.iou, args.max_images,
+                artifacts=artifacts, low_conf_threshold=args.low_conf_threshold,
             )
         else:
             log.warning("split dir not found (%s); skipping error analysis", split_dir)
