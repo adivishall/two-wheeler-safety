@@ -23,7 +23,7 @@ from modules.logging_setup import configure_logging, get_logger
 
 log = get_logger("cli")
 
-DEFAULT_IMAGE_PATH = "plate8.jpeg"
+DEFAULT_IMAGE_PATH = "samples/plate8.jpeg"
 DEFAULT_API_URL = "http://127.0.0.1:5000/detect"
 
 

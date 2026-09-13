@@ -168,7 +168,7 @@ run on this machine — nothing is hard-coded.
 **Machine:** Apple Silicon, device `mps`, torch 2.12, model
 `traffic-4class@1.0.0`. Model load ≈ 2.7 s (one-time).
 
-**Single-image (test.jpg, 15 iters):** inference 21.5 ms mean (≈ 46 FPS,
+**Single-image (samples/test.jpg, 15 iters):** inference 21.5 ms mean (≈ 46 FPS,
 p90 22.2 ms); EasyOCR on the plate crop 12.1 ms mean.
 
 **Where the per-frame time goes** depends entirely on whether a plate is on
@@ -204,7 +204,7 @@ The fine is byte-identical; only redundant work was removed. Disable with
 
 ```
 python3 benchmark.py --model runs/detect/traffic_model-2/weights/best.pt \
-    --image test.jpg --video demo_traffic.mp4 --max-frames 300
+    --image samples/test.jpg --video demo_traffic.mp4 --max-frames 300
 ```
 
 ## Principles

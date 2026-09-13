@@ -27,14 +27,14 @@ MODEL_PATH = os.environ.get(
 # Each entry: a source photo, and the violations to record for the plate the
 # detector reads from it. (violation, amount ₹, status, days_ago)
 DEMO_RECORDS = [
-    ("plate4.jpeg", [
+    ("samples/plate4.jpeg", [
         ("no_helmet", 500, "unpaid", 3),
         ("overspeed", 700, "unpaid", 1),
     ]),
-    ("plate8.jpeg", [
+    ("samples/plate8.jpeg", [
         ("triple_riding", 1000, "unpaid", 6),
     ]),
-    ("plate11.jpeg", [
+    ("samples/plate11.jpeg", [
         ("no_helmet", 500, "paid", 12),
     ]),
 ]

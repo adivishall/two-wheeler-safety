@@ -332,9 +332,39 @@ mAP@50 / mAP@50-95, and a second matching pass (`modules/evaluation.py`) for wha
 negatives, and whether confidence separates correct from wrong predictions. A
 Markdown + JSON report lands in `reports/`.
 
-**No metrics are committed to this repo** — they depend on your weights + data,
-which aren't tracked. Run the tool locally to fill in the numbers. Performance
-(latency/throughput/memory) is measured by `benchmark.py`.
+Performance (latency/throughput/memory) is measured by `benchmark.py`. Trained
+weights and the dataset are not tracked in git, so re-running on your own data
+will not reproduce the figures below exactly.
+
+### Two different questions — don't read one as the other
+
+The most common way to misread a project like this is to treat a system-level
+number as a computer-vision result. They are separate measurements, and only one
+of them is about real footage. Full detail in [docs/EVALUATION.md](docs/EVALUATION.md).
+
+| | **Model performance** | **System engineering** |
+|---|---|---|
+| **Question** | How good is the detector on real images? | Does the pipeline around the model behave correctly? |
+| **Data** | Real annotated dataset, held-out val split | **Deterministic synthetic scenarios** |
+| **Headline** | mAP@50 **0.697**, mAP@50-95 **0.502**, mean P **0.783**, mean R **0.740** | precision = recall = **1.0** across the suite |
+| **What it means** | Middling, and honestly so — see the caveats below | The plumbing is correct: tracking, association, temporal confirmation, de-duplication |
+| **What it does *not* mean** | — | **Nothing about field accuracy.** A 1.0 here is a statement about synthetic inputs, not about real roads |
+
+**Caveats that matter more than the headline:**
+
+- **`WithHelmet` is weak (P=0.42, mAP@50=0.44)** on only **27** validation
+  instances. That class is under-trained and the number is unstable at that `n`.
+- The dataset has known **class imbalance and leakage caveats** (see
+  [docs/DATASET.md](docs/DATASET.md)); mAP@50 of 0.697 is a *baseline on this
+  dataset*, not a claim about field accuracy.
+- **Speed validation is synthetic** — constant-velocity trajectories on a
+  perspective grid, not surveyed ground truth.
+- **Confidence is a score, not a calibrated probability.** 0.8 does not mean
+  "80% likely correct."
+
+The engineering claim this project actually supports is the *system* one: the
+detection → tracking → association → temporal-confirmation → evidence path is
+correct and tested. The CV claim is a baseline, not a result.
 
 ## Limitations
 
