@@ -37,18 +37,100 @@
       },
       {
         "best_trial_f1": 1.0,
-        "description": "plate not read on a frame (plate recall failure)",
+        "description": "plate not read on a frame (plate detection/OCR miss)",
         "f1_drop": 0.0034,
         "injected_rate": 0.3,
         "mean_f1": 0.9966,
         "share_of_measured_sensitivity": 0.0057,
-        "stage": "association_ocr",
+        "stage": "plate_recall",
         "worst_trial_f1": 0.9655
       }
     ],
     "trials_per_injection": 20
   },
-  "generated_at": "2026-09-13T12:56:47.419792+00:00",
+  "generated_at": "2026-09-13T13:15:53.063323+00:00",
+  "headroom": {
+    "note": "Both policies see identical detections. The naive policy is handed perfect plate-to-vehicle association for free, which a real single-frame system would not have, so the pipeline's measured advantage is a lower bound.",
+    "rates": {
+      "0.00": {
+        "naive": {
+          "f1": 0.9116,
+          "mean_false_positives": 1.5,
+          "precision": 0.8377,
+          "recall": 1.0
+        },
+        "pipeline": {
+          "f1": 1.0,
+          "mean_false_positives": 0.0,
+          "precision": 1.0,
+          "recall": 1.0
+        },
+        "pipeline_f1_advantage": 0.0884
+      },
+      "0.10": {
+        "naive": {
+          "f1": 0.8402,
+          "mean_false_positives": 3.425,
+          "precision": 0.7345,
+          "recall": 1.0
+        },
+        "pipeline": {
+          "f1": 0.9943,
+          "mean_false_positives": 0.025,
+          "precision": 0.9975,
+          "recall": 0.9917
+        },
+        "pipeline_f1_advantage": 0.1541
+      },
+      "0.20": {
+        "naive": {
+          "f1": 0.8198,
+          "mean_false_positives": 4.075,
+          "precision": 0.708,
+          "recall": 1.0
+        },
+        "pipeline": {
+          "f1": 0.9619,
+          "mean_false_positives": 0.225,
+          "precision": 0.976,
+          "recall": 0.9528
+        },
+        "pipeline_f1_advantage": 0.1421
+      },
+      "0.30": {
+        "naive": {
+          "f1": 0.8105,
+          "mean_false_positives": 4.4,
+          "precision": 0.6966,
+          "recall": 1.0
+        },
+        "pipeline": {
+          "f1": 0.9128,
+          "mean_false_positives": 0.3,
+          "precision": 0.9624,
+          "recall": 0.8833
+        },
+        "pipeline_f1_advantage": 0.1023
+      },
+      "0.40": {
+        "naive": {
+          "f1": 0.8084,
+          "mean_false_positives": 4.475,
+          "precision": 0.6941,
+          "recall": 1.0
+        },
+        "pipeline": {
+          "f1": 0.8486,
+          "mean_false_positives": 0.725,
+          "precision": 0.903,
+          "recall": 0.8194
+        },
+        "pipeline_f1_advantage": 0.0402
+      }
+    },
+    "seed": 11,
+    "trials_per_rate": 20
+  },
   "ocr": {
     "default_noise": {
       "frames_per_sequence": 10,
@@ -425,6 +507,7 @@
   "sections": [
     "system",
     "violations",
+    "headroom",
     "budget",
     "ocr",
     "speed"

@@ -28,11 +28,11 @@
       {
         "f1_drop": 0.0034,
         "share": 0.0057,
-        "stage": "association_ocr"
+        "stage": "plate_recall"
       }
     ]
   },
-  "generated_at": "2026-09-13T12:56:47.419792+00:00",
+  "generated_at": "2026-09-13T13:15:53.063323+00:00",
   "ocr_policy": {
     "best_conf": {
       "answered_accuracy": 0.7,
@@ -69,5 +69,11 @@
       "precision": 1.0,
       "recall": 1.0
     }
+  },
+  "vs_single_frame": {
+    "clean_naive_f1": 0.9116,
+    "clean_pipeline_f1": 1.0,
+    "noisy_naive_f1": 0.8198,
+    "noisy_pipeline_f1": 0.9619
   }
 }

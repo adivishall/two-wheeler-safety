@@ -32,7 +32,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-SECTIONS = ("system", "violations", "budget", "ocr", "speed")
+SECTIONS = ("system", "violations", "headroom", "budget", "ocr", "speed")
 
 
 def run_system() -> dict:
@@ -48,6 +48,13 @@ def run_violations(trials: int) -> dict:
 
     full = evaluate_all(trials=trials)
     return {"helmet": full["helmet"], "triple_riding": full["triple_riding"]}
+
+
+def run_headroom(trials: int) -> dict:
+    """Head-to-head: naive single-frame fining vs the full pipeline."""
+    from modules.pipeline_eval import pipeline_vs_single_frame
+
+    return pipeline_vs_single_frame(trials=trials)
 
 
 def run_budget(trials: int) -> dict:
@@ -111,6 +118,13 @@ def flatten_rows(payload: dict) -> list[dict]:
             add("violations", key, block["decision"])
             for window, m in block["confirm_window_sweep"]["windows"].items():
                 add("violations", f"{key}.confirm_window={window}", m)
+
+    head = payload.get("headroom")
+    if head:
+        for rate, block in head["rates"].items():
+            for policy in ("naive", "pipeline"):
+                add("pipeline_vs_single_frame", f"noise={rate}.{policy}",
+                    block[policy])
 
     budget = payload.get("budget")
     if budget:
@@ -190,6 +204,30 @@ def render_markdown(p: dict) -> str:
                              f"{m['recall']} |")
         lines.append("")
 
+    head = p.get("headroom")
+    if head:
+        lines += ["## Is the pipeline better than a single-frame detector?", "",
+                  "Both policies see **identical** detections, degraded by the "
+                  "same helmet class-confusion noise. `naive` fines whenever any "
+                  "single frame shows a violation box — no tracking, no temporal "
+                  "confirmation, no contradiction check.", "",
+                  head["note"], "",
+                  "| detector noise | naive P | naive R | naive F1 | naive FPs | "
+                  "pipeline P | pipeline R | pipeline F1 | pipeline FPs | F1 gain |",
+                  "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for rate, block in head["rates"].items():
+            n, pl = block["naive"], block["pipeline"]
+            lines.append(
+                f"| {rate} | {n['precision']} | {n['recall']} | {n['f1']} | "
+                f"{n['mean_false_positives']} | {pl['precision']} | "
+                f"{pl['recall']} | {pl['f1']} | {pl['mean_false_positives']} | "
+                f"**{block['pipeline_f1_advantage']:+.3f}** |"
+            )
+        lines += ["", "The naive policy always scores recall 1.000 because it "
+                  "fines on anything — so the whole difference is precision. "
+                  "The pipeline is a precision machine, and that is the right "
+                  "objective for a system that fines people.", ""]
+
     budget = p.get("budget")
     if budget:
         lines += ["## Error budget (equal-rate fault injection)", "",
@@ -266,6 +304,15 @@ def build_summary(p: dict) -> dict:
                 "f1": v["decision"]["f1"]}
             for k, v in p["violations"].items()
         }
+    if p.get("headroom"):
+        clean = p["headroom"]["rates"].get("0.00") or {}
+        noisy = p["headroom"]["rates"].get("0.20") or {}
+        out["vs_single_frame"] = {
+            "clean_naive_f1": (clean.get("naive") or {}).get("f1"),
+            "clean_pipeline_f1": (clean.get("pipeline") or {}).get("f1"),
+            "noisy_naive_f1": (noisy.get("naive") or {}).get("f1"),
+            "noisy_pipeline_f1": (noisy.get("pipeline") or {}).get("f1"),
+        }
     if p.get("budget"):
         out["error_budget"] = {
             "bottleneck": p["budget"]["bottleneck"],
@@ -316,6 +363,8 @@ def main(argv=None) -> int:
         payload["system"] = run_system()
     if "violations" in sections:
         payload["violations"] = run_violations(args.trials)
+    if "headroom" in sections:
+        payload["headroom"] = run_headroom(args.trials)
     if "budget" in sections:
         payload["budget"] = run_budget(args.trials)
     if "ocr" in sections:
@@ -353,6 +402,15 @@ def main(argv=None) -> int:
             d = block["decision"]
             print(f"{key:14s}: P={d['precision']:.3f} R={d['recall']:.3f} "
                   f"F1={d['f1']:.3f}")
+        if payload.get("headroom"):
+            print("pipeline vs naive single-frame fining:")
+            for rate, block in payload["headroom"]["rates"].items():
+                n, pl = block["naive"], block["pipeline"]
+                print(f"   noise={rate}  naive F1={n['f1']:.3f} "
+                      f"(FP {n['mean_false_positives']:.2f})  "
+                      f"pipeline F1={pl['f1']:.3f} "
+                      f"(FP {pl['mean_false_positives']:.2f})  "
+                      f"gain {block['pipeline_f1_advantage']:+.3f}")
         if payload.get("budget"):
             b = payload["budget"]
             print(f"error budget (baseline F1 {b['baseline_f1']:.3f}), most "

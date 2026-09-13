@@ -353,6 +353,12 @@ four-checkpoint A/B: **[docs/MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)**.
 fine?"* Measured on deterministic synthetic scenarios driven through the **real**
 tracker, association, stabilizer and state machines — no weights needed:
 
+- **The pipeline beats a single-frame detector at every noise level.** Given
+  identical detections, a naive "fine if any frame shows a violation" policy
+  averages **1.50 false positives even at zero detector noise** (precision
+  0.838); the full pipeline has **0.00** (precision 1.000). Under 10% detector
+  class-confusion noise: naive F1 0.840 vs pipeline **0.994**. Naive recall is
+  always 1.000 — it fines on anything — so the entire difference is precision.
 - **End-to-end fines: precision 1.000, recall 1.000** over 8 multi-bike
   scenarios (TP 8, FP 0, FN 0, 0 misattributions).
 - **Temporal confirmation is worth measuring:** fining on a single frame drops
@@ -363,7 +369,8 @@ tracker, association, stabilizer and state machines — no weights needed:
   30%, the shipped stabilizer **2%** — answering 51% of the time instead of 100%.
 - **Error budget:** OCR is the bottleneck at **75.7%** of measured system
   sensitivity, ahead of detector class-confusion (16.7%) and detector recall
-  (7.1%).
+  (7.1%). A *corrupted* plate misattributes a fine; a *missing* one costs almost
+  nothing, because other frames recover it.
 - **Speed:** best MAE 11.3 km/h toward camera (homography); a constant
   pixels-per-metre calibration misses *every* overspeeder in that geometry.
 
