@@ -1,0 +1,584 @@
+{
+  "benchmark": {
+    "fps": 35.0,
+    "images": 50,
+    "mean_ms": 28.57,
+    "p50_ms": 27.57,
+    "p90_ms": 28.61
+  },
+  "class_names": [
+    "Plate",
+    "WithHelmet",
+    "WithoutHelmet",
+    "TripleRiding"
+  ],
+  "conf": 0.25,
+  "data": "eval/clean_splits/data.yaml",
+  "device": "mps",
+  "error_analysis": {
+    "artifacts": {
+      "counts": {
+        "class_confusions": 12,
+        "false_negatives": 30,
+        "false_positives": 30,
+        "low_confidence": 12
+      },
+      "index": "eval/index.json",
+      "per_category_cap": 30,
+      "root": "eval",
+      "truncated": [
+        "false_positives",
+        "false_negatives"
+      ]
+    },
+    "class_report": [
+      {
+        "f1": 0.8837,
+        "fn": 17,
+        "fp": 13,
+        "name": "Plate",
+        "precision": 0.8976,
+        "recall": 0.8702,
+        "tp": 114
+      },
+      {
+        "f1": 0.5185,
+        "fn": 13,
+        "fp": 13,
+        "name": "WithHelmet",
+        "precision": 0.5185,
+        "recall": 0.5185,
+        "tp": 14
+      },
+      {
+        "f1": 0.7156,
+        "fn": 27,
+        "fp": 35,
+        "name": "WithoutHelmet",
+        "precision": 0.6903,
+        "recall": 0.7429,
+        "tp": 78
+      },
+      {
+        "f1": 0.9206,
+        "fn": 1,
+        "fp": 4,
+        "name": "TripleRiding",
+        "precision": 0.8788,
+        "recall": 0.9667,
+        "tp": 29
+      }
+    ],
+    "confidence": {
+      "mean_conf_correct": 0.8104,
+      "mean_conf_wrong": 0.6685,
+      "n_correct": 235,
+      "n_wrong": 65,
+      "separation": 0.1419
+    },
+    "confidence_curve": {
+      "edges": [
+        0.25,
+        0.4,
+        0.55,
+        0.7,
+        0.85,
+        1.0001
+      ],
+      "note": "YOLO confidence is a model score, not a calibrated probability. This measures whether accuracy increases with the score (ranking usefulness), not whether 0.8 means 80% correct.",
+      "overall": {
+        "bins": [
+          {
+            "accuracy": 0.3125,
+            "correct": 5,
+            "high": 0.4,
+            "low": 0.25,
+            "n": 16
+          },
+          {
+            "accuracy": 0.6,
+            "correct": 12,
+            "high": 0.55,
+            "low": 0.4,
+            "n": 20
+          },
+          {
+            "accuracy": 0.4737,
+            "correct": 9,
+            "high": 0.7,
+            "low": 0.55,
+            "n": 19
+          },
+          {
+            "accuracy": 0.8487,
+            "correct": 101,
+            "high": 0.85,
+            "low": 0.7,
+            "n": 119
+          },
+          {
+            "accuracy": 0.8571,
+            "correct": 108,
+            "high": 1.0001,
+            "low": 0.85,
+            "n": 126
+          }
+        ],
+        "label": "all",
+        "monotonic_violations": 1,
+        "n": 300,
+        "spearman": 0.9,
+        "top_minus_bottom_bin_accuracy": 0.5446,
+        "verdict": "higher score => more likely correct (useful ranking signal)"
+      },
+      "per_class": {
+        "Plate": {
+          "bins": [
+            {
+              "accuracy": 0.6667,
+              "correct": 4,
+              "high": 0.4,
+              "low": 0.25,
+              "n": 6
+            },
+            {
+              "accuracy": 0.875,
+              "correct": 7,
+              "high": 0.55,
+              "low": 0.4,
+              "n": 8
+            },
+            {
+              "accuracy": 0.5,
+              "correct": 5,
+              "high": 0.7,
+              "low": 0.55,
+              "n": 10
+            },
+            {
+              "accuracy": 0.962,
+              "correct": 76,
+              "high": 0.85,
+              "low": 0.7,
+              "n": 79
+            },
+            {
+              "accuracy": 0.9167,
+              "correct": 22,
+              "high": 1.0001,
+              "low": 0.85,
+              "n": 24
+            }
+          ],
+          "label": "Plate",
+          "monotonic_violations": 2,
+          "n": 127,
+          "spearman": 0.6,
+          "top_minus_bottom_bin_accuracy": 0.25,
+          "verdict": "higher score => more likely correct (useful ranking signal)"
+        },
+        "TripleRiding": {
+          "bins": [
+            {
+              "accuracy": 0.0,
+              "correct": 0,
+              "high": 0.4,
+              "low": 0.25,
+              "n": 0
+            },
+            {
+              "accuracy": 1.0,
+              "correct": 1,
+              "high": 0.55,
+              "low": 0.4,
+              "n": 1
+            },
+            {
+              "accuracy": 0.0,
+              "correct": 0,
+              "high": 0.7,
+              "low": 0.55,
+              "n": 1
+            },
+            {
+              "accuracy": 0.7143,
+              "correct": 5,
+              "high": 0.85,
+              "low": 0.7,
+              "n": 7
+            },
+            {
+              "accuracy": 0.9583,
+              "correct": 23,
+              "high": 1.0001,
+              "low": 0.85,
+              "n": 24
+            }
+          ],
+          "label": "TripleRiding",
+          "monotonic_violations": 1,
+          "n": 33,
+          "spearman": -0.2,
+          "top_minus_bottom_bin_accuracy": -0.0417,
+          "verdict": "score does NOT separate correct from wrong (do not threshold on it)"
+        },
+        "WithHelmet": {
+          "bins": [
+            {
+              "accuracy": 0.3333,
+              "correct": 1,
+              "high": 0.4,
+              "low": 0.25,
+              "n": 3
+            },
+            {
+              "accuracy": 1.0,
+              "correct": 2,
+              "high": 0.55,
+              "low": 0.4,
+              "n": 2
+            },
+            {
+              "accuracy": 1.0,
+              "correct": 2,
+              "high": 0.7,
+              "low": 0.55,
+              "n": 2
+            },
+            {
+              "accuracy": 0.2857,
+              "correct": 2,
+              "high": 0.85,
+              "low": 0.7,
+              "n": 7
+            },
+            {
+              "accuracy": 0.5385,
+              "correct": 7,
+              "high": 1.0001,
+              "low": 0.85,
+              "n": 13
+            }
+          ],
+          "label": "WithHelmet",
+          "monotonic_violations": 1,
+          "n": 27,
+          "spearman": -0.1539,
+          "top_minus_bottom_bin_accuracy": 0.2051,
+          "verdict": "weak/non-monotonic relationship; threshold with care"
+        },
+        "WithoutHelmet": {
+          "bins": [
+            {
+              "accuracy": 0.0,
+              "correct": 0,
+              "high": 0.4,
+              "low": 0.25,
+              "n": 7
+            },
+            {
+              "accuracy": 0.2222,
+              "correct": 2,
+              "high": 0.55,
+              "low": 0.4,
+              "n": 9
+            },
+            {
+              "accuracy": 0.3333,
+              "correct": 2,
+              "high": 0.7,
+              "low": 0.55,
+              "n": 6
+            },
+            {
+              "accuracy": 0.6923,
+              "correct": 18,
+              "high": 0.85,
+              "low": 0.7,
+              "n": 26
+            },
+            {
+              "accuracy": 0.8615,
+              "correct": 56,
+              "high": 1.0001,
+              "low": 0.85,
+              "n": 65
+            }
+          ],
+          "label": "WithoutHelmet",
+          "monotonic_violations": 0,
+          "n": 113,
+          "spearman": 1.0,
+          "top_minus_bottom_bin_accuracy": 0.8615,
+          "verdict": "higher score => more likely correct (useful ranking signal)"
+        }
+      }
+    },
+    "confusion_matrix": [
+      [
+        114,
+        0,
+        0,
+        0,
+        17
+      ],
+      [
+        0,
+        14,
+        3,
+        0,
+        10
+      ],
+      [
+        0,
+        8,
+        78,
+        1,
+        18
+      ],
+      [
+        0,
+        0,
+        0,
+        29,
+        1
+      ],
+      [
+        13,
+        5,
+        32,
+        3,
+        0
+      ]
+    ],
+    "false_negative_examples": [
+      {
+        "image": "eval/clean_splits/test/images/ds1_4e4168_KBA01EC190872581_jpg.rf.fdf8bc3219354d7e38e68972a43973f5.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_8bb1e2_KBA01EC191005985_jpg.rf.78e45253a8040209277b569e1fa6f7d5.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_f6d995_ADB03EC198699975_jpg.rf.5fa1cb8b7a3432a775ace22a43f20043.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_901eec_ADB03TE193734082_jpg.rf.146cd3aa6845772b6ab5dac845ccdb93.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_ce1f50_CYB00EC198312056_jpg.rf.3be9650ef15ea1d92c6b0561e3bd67ad.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_0ba112_RMD02EC198316235_jpg.rf.217218cf883dba2d21b23c2dfbbe5a54.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_0ebec2_ADB03TE193655459_jpg.rf.6ead2afb1fb4adfcc4d05d50f55a8502.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_0ebec2_ADB03TE193655459_jpg.rf.6ead2afb1fb4adfcc4d05d50f55a8502.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_5afc54_ADB03TE193612965_jpg.rf.df8b72cca1b26b98cc235dea72140796.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_5afc54_ADB03TE193612965_jpg.rf.df8b72cca1b26b98cc235dea72140796.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/dst_c269eb_102_jpg.rf.00367d65e98501d15707e11af65d10fa.jpg",
+        "missed": "TripleRiding"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_98dbd6_ADB04EC198492690_jpg.rf.460c25691504c72e2ee3e78a803deb08.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_45a6b8_KBA01EC191167720_jpg.rf.05f53ab5d1ee0deff9a1d6ebe3269d88.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_18e1a6_BikesHelmets354_png.rf.cfab8538ae357eec28493a5cb37e2298.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_18e1a6_BikesHelmets354_png.rf.cfab8538ae357eec28493a5cb37e2298.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_b09d5d_ADB03TE193637475_jpg.rf.9bd6cf40066ede13a9ad134a26997b42.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_b09d5d_ADB03TE193637475_jpg.rf.9bd6cf40066ede13a9ad134a26997b42.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_eba91f_BikesHelmets144_png.rf.f8d8b05e0a533db48d9722a114fce19a.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_eba91f_BikesHelmets144_png.rf.f8d8b05e0a533db48d9722a114fce19a.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_1ee7e8_BikesHelmets351_png.rf.462f154c654dec84a092a6a426d9bf75.jpg",
+        "missed": "Plate"
+      }
+    ],
+    "false_positive_examples": [
+      {
+        "image": "eval/clean_splits/test/images/ds1_f12fcf_BikesHelmets86_png.rf.ec8064687b5bda317ebb66c85676cb04.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.305
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_f5fa68_CYB01EC198319216_jpg.rf.ab001350384b9bb0b9a0c3666bc34259.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.494
+      },
+      {
+        "image": "eval/clean_splits/test/images/dst_764a4b_overload-351-_jpg.rf.9ff80276f5d729894bbb0801f05f648b.jpg",
+        "predicted": "TripleRiding",
+        "score": 0.781
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_0d7e7c_BikesHelmets721_png.rf.93913ec914f27a6fc3f7253e794a3cb8.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.777
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_8bb1e2_KBA01EC191005985_jpg.rf.78e45253a8040209277b569e1fa6f7d5.jpg",
+        "predicted": "Plate",
+        "score": 0.731
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_4a28ca_ADB03EC199045927_jpg.rf.491f3badcf4c052f3a75f1392293f118.jpg",
+        "predicted": "Plate",
+        "score": 0.64
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_f6d995_ADB03EC198699975_jpg.rf.5fa1cb8b7a3432a775ace22a43f20043.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.91
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_a573d7_KBA01EC190474543_jpg.rf.01b09353842122cea9526c555e3cd6e7.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.784
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_2fa4a3_CYB00EC198322616_jpg.rf.8d5cb931f905864efd7cd8137a68be71.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.764
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_0ebec2_ADB03TE193655459_jpg.rf.6ead2afb1fb4adfcc4d05d50f55a8502.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.348
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_7206c9_CYB00EC198314650_jpg.rf.e0d311dca5e6dc84197534283f2807e6.jpg",
+        "predicted": "Plate",
+        "score": 0.606
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_98f2e1_ADB03EC198592260_jpg.rf.597cdd147c656e17e4e73d1913162eac.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.596
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_155b35_KBA01EC190474679_jpg.rf.0f408b6905169f5223d614230af611c9.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.878
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_b4b985_CYB00EC198313938_jpg.rf.7489383c24fd09814d5c706d620742b8.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.919
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_790116_BikesHelmets563_png.rf.c4d73e827a4bca15e5489f09bc2634da.jpg",
+        "predicted": "Plate",
+        "score": 0.598
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_790116_BikesHelmets563_png.rf.c4d73e827a4bca15e5489f09bc2634da.jpg",
+        "predicted": "Plate",
+        "score": 0.258
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_3bbafa_KBA01EC190504143_jpg.rf.06c6025813ecc3994fd0631a13243614.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.658
+      },
+      {
+        "image": "eval/clean_splits/test/images/dst_c269eb_102_jpg.rf.00367d65e98501d15707e11af65d10fa.jpg",
+        "predicted": "TripleRiding",
+        "score": 0.885
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_6c97cd_KBA01EC190721501_jpg.rf.32634f7d524ccf58e038c8d2bbc4496b.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.256
+      },
+      {
+        "image": "eval/clean_splits/test/images/ds1_3d3742_KBA01EC190474620_jpg.rf.f9b5a24afe75a14333462189e46f2426.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.875
+      }
+    ],
+    "helmet_confusion": {
+      "withhelmet_as_withouthelmet": 3,
+      "withouthelmet_as_withhelmet": 8
+    },
+    "images": 175
+  },
+  "generated_at": "2026-09-13T12:52:11.746889+00:00",
+  "imgsz": 640,
+  "iou": 0.5,
+  "model": "runs/detect/traffic_model-2/weights/best.pt",
+  "model_version": "traffic-4class@1.0.0",
+  "name": "eval_traffic_model-2_test_clean",
+  "official": {
+    "map50": 0.7265,
+    "map50_95": 0.532,
+    "mean_precision": 0.7559,
+    "mean_recall": 0.7846,
+    "per_class": {
+      "Plate": {
+        "map50": 0.863,
+        "map50_95": 0.5028,
+        "precision": 0.8939,
+        "recall": 0.9008
+      },
+      "TripleRiding": {
+        "map50": 0.9502,
+        "map50_95": 0.7613,
+        "precision": 0.8529,
+        "recall": 0.9667
+      },
+      "WithHelmet": {
+        "map50": 0.3873,
+        "map50_95": 0.3103,
+        "precision": 0.5385,
+        "recall": 0.5185
+      },
+      "WithoutHelmet": {
+        "map50": 0.7054,
+        "map50_95": 0.5535,
+        "precision": 0.7383,
+        "recall": 0.7524
+      }
+    },
+    "save_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/runs/detect/val-9"
+  },
+  "split": "test"
+}
