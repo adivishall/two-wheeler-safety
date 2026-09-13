@@ -46,8 +46,8 @@ Absent scaffolding at baseline: `docs/`, `config.py`, `.env.example`,
 | `main_ocr.py` | CLI single-image pipeline | **live (CLI)** |
 | `seed_demo.py` | Seeds `traffic.db` with demo records from real sample photos | **live (demo)** |
 | `train_traffic.py` | YOLOv8n training entry point | tooling |
-| `plate_reader.py` | One-off detect+OCR probe on `test.jpg` | **dead / experimental** |
-| `ocr_test.py` | 6-line EasyOCR probe on `plate3.jpeg` | **dead / experimental** |
+| `plate_reader.py` | One-off detect+OCR probe on `samples/test.jpg` | **dead / experimental** |
+| `ocr_test.py` | 6-line EasyOCR probe on `samples/plate3.jpeg` | **dead / experimental** |
 | `test_traffic.py` | Root-level probe: `model.predict(..., save=True)` at import time | **dead / footgun** (see below) |
 | `_helmet_fix_train.py`, `_helmet_fix_compare.py`, `_retrain_probe.py` | Untracked local retraining experiments | untracked |
 
@@ -79,7 +79,7 @@ of unused/other minor items. No formatter config committed (`ruff`/`black` prese
 unconfigured). No `pyproject.toml`.
 
 ### Single-image pipeline (measured, CPU)
-`analyze_image('plate4.jpeg')`:
+`analyze_image('samples/plate4.jpeg')`:
 - `load_models`: **2.72 s** (one-time YOLO + EasyOCR load)
 - `analyze_image`: **0.32 s**
 - Result: plate `MH02DL4596`, violations `['no_helmet']`, 2 detections (`Plate`, `WithoutHelmet`), annotated evidence written.
@@ -121,7 +121,7 @@ CREATE TABLE fines (
 
 ### Footgun: bare `pytest`
 `test_traffic.py` at the repo root matches pytest's `test_*.py` collection glob and
-runs `YOLO(...).predict(source="plate10.jpeg", save=True)` **at import time**. Running
+runs `YOLO(...).predict(source="samples/plate10.jpeg", save=True)` **at import time**. Running
 `pytest` with no path argument (instead of `pytest tests/`) would load the model and
 run inference — writing into `runs/` — during collection. The project's documented
 command is `pytest tests/`, which scopes collection and avoids this. Flagged for

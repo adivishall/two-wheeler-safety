@@ -108,7 +108,7 @@ itself.
 ### Command-line alternative
 
 ```bash
-python3 main_ocr.py --image plate8.jpeg          # single image → API
+python3 main_ocr.py --image samples/plate8.jpeg          # single image → API
 python3 main.py --source your_clip.mp4           # video (shared pipeline) → API
 ```
 

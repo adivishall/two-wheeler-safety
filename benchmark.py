@@ -8,7 +8,7 @@ device so results are comparable across runs.
 
     python3 benchmark.py \\
         --model runs/detect/traffic_model-2/weights/best.pt \\
-        --image test.jpg --video sample.mp4 --iterations 30
+        --image samples/test.jpg --video sample.mp4 --iterations 30
 
 Sections are skipped cleanly when their input is absent (e.g. no ``--video``),
 so the tool is useful even with just a sample image. The repo ships no weights

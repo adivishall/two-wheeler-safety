@@ -24,7 +24,7 @@ def test_iou_of_non_overlapping_boxes_is_zero():
 
 
 def test_iou_real_contradiction_case():
-    # plate6.jpeg: a real photo of a helmeted rider where the model output
+    # samples/plate6.jpeg: a real photo of a helmeted rider where the model output
     # both WithHelmet and WithoutHelmet on nearly the same box (IoU 0.95),
     # and the higher-confidence one (WithoutHelmet) was the wrong answer.
     without_helmet = (240, 274, 880, 1242)
@@ -33,7 +33,7 @@ def test_iou_real_contradiction_case():
 
 
 def test_iou_real_two_different_riders_case():
-    # test.jpg: two different riders side by side, one helmeted one not --
+    # samples/test.jpg: two different riders side by side, one helmeted one not --
     # these boxes must NOT be treated as a contradiction.
     without_helmet = (884, 102, 1401, 1041)
     with_helmet = (63, 75, 571, 1046)

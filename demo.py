@@ -44,9 +44,9 @@ EVIDENCE_DIR = os.environ.get("EVIDENCE_DIR", "evidence")
 DEMO_IMAGES = {
     "MH02DL4596": ("demo_shots/MH02DL4596_1786603781.jpg", "demo_MH02DL4596.jpg"),
     "MH12HS8818": ("demo_shots/MH12HS8818_1786603782.jpg", "demo_MH12HS8818.jpg"),
-    "KA05CD9876": ("plate4.jpeg", "demo_KA05CD9876.jpg"),
-    "DL8CAF5031": ("plate8.jpeg", "demo_DL8CAF5031.jpg"),
-    "TN22BB4410": ("plate11.jpeg", "demo_TN22BB4410.jpg"),
+    "KA05CD9876": ("samples/plate4.jpeg", "demo_KA05CD9876.jpg"),
+    "DL8CAF5031": ("samples/plate8.jpeg", "demo_DL8CAF5031.jpg"),
+    "TN22BB4410": ("samples/plate11.jpeg", "demo_TN22BB4410.jpg"),
 }
 
 # Two illustrative processing sessions (as if two clips were analysed).
