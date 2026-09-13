@@ -1,0 +1,73 @@
+{
+  "end_to_end": {
+    "false_negatives": 0,
+    "false_positives": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "scenarios": 8,
+    "true_positives": 8
+  },
+  "error_budget": {
+    "bottleneck": "ocr",
+    "stages": [
+      {
+        "f1_drop": 0.4533,
+        "share": 0.7568,
+        "stage": "ocr"
+      },
+      {
+        "f1_drop": 0.0999,
+        "share": 0.1668,
+        "stage": "detection_class"
+      },
+      {
+        "f1_drop": 0.0424,
+        "share": 0.0708,
+        "stage": "detection"
+      },
+      {
+        "f1_drop": 0.0034,
+        "share": 0.0057,
+        "stage": "association_ocr"
+      }
+    ]
+  },
+  "generated_at": "2026-09-13T12:56:47.419792+00:00",
+  "ocr_policy": {
+    "best_conf": {
+      "answered_accuracy": 0.7,
+      "coverage": 1.0
+    },
+    "last": {
+      "answered_accuracy": 0.15,
+      "coverage": 1.0
+    },
+    "temporal": {
+      "answered_accuracy": 0.9804,
+      "coverage": 0.51
+    }
+  },
+  "source": "evaluate_pipeline.py",
+  "speed": {
+    "approach": {
+      "best": "homography",
+      "best_mae": 11.283
+    },
+    "lateral": {
+      "best": "linear",
+      "best_mae": 0.867
+    }
+  },
+  "violations": {
+    "helmet": {
+      "f1": 1.0,
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "triple_riding": {
+      "f1": 1.0,
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  }
+}
