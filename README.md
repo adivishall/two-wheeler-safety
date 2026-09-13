@@ -378,11 +378,13 @@ Full report: **[docs/END_TO_END_EVALUATION.md](docs/END_TO_END_EVALUATION.md)**.
 
 ### Application performance — throughput and latency
 
-*"How fast does it run?"* Apple M4 / MPS: model load ≈ 2.7 s (one-time), single
-image inference 21.5 ms (≈46 FPS), EasyOCR on a plate crop 12.1 ms. Video
-throughput **50.2 FPS** with the OCR lock enabled vs 18.5 FPS without
-(+172%, byte-identical fine). Per-stage breakdown and the measured optimization:
-[docs/EVALUATION.md](docs/EVALUATION.md) §6.
+*"How fast does it run?"* Apple M4 / MPS: model load ≈ 2.9 s (one-time), single
+image inference 20.7 ms (≈48 FPS), EasyOCR on a plate crop 10.9 ms, peak RSS
+941 MB. Video throughput **43.0 FPS** with the OCR lock enabled vs 22.3 FPS
+without — **+92.6%** for 5 OCR calls instead of 120, with an identical recorded
+fine. Per-frame time is 82% YOLO and 15% OCR; everything the project wrote
+around them (tracking, association, evidence, DB, encode) is **under 2%
+combined**. Per-stage breakdown: [docs/EVALUATION.md](docs/EVALUATION.md) §6.
 
 ### Running the evaluations
 
