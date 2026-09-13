@@ -233,3 +233,65 @@ def test_evaluate_all_is_deterministic_and_complete():
     assert set(a) == {"helmet", "triple_riding", "error_budget"}
     assert a["triple_riding"]["rider_count_note"]
     assert "does not count riders" in a["triple_riding"]["rider_count_note"]
+
+
+# ---------------------------------------------------------------------------
+# Pipeline vs a single-frame detector (Phase 30 — the central claim)
+# ---------------------------------------------------------------------------
+
+def test_naive_policy_fines_on_any_single_frame():
+    """The strawman must actually be the strawman: one violation frame in an
+    otherwise clean clip must make it fine."""
+    from modules.pipeline_eval import _flicker_scenario, naive_single_frame_decisions
+
+    sc = _flicker_scenario("flicker")  # clean bike, one TripleRiding frame
+    assert "triple_riding" in naive_single_frame_decisions(sc)[1]
+    # ...and the real pipeline must not.
+    assert "triple_riding" not in run_pipeline_decisions(sc)[1]
+
+
+def test_naive_policy_ignores_the_contradiction_safeguard():
+    from modules.pipeline_eval import helmet_scenarios, naive_single_frame_decisions
+
+    sc = by_name(helmet_scenarios())["helmet_contradiction"]
+    assert "no_helmet" in naive_single_frame_decisions(sc)[1]
+    assert "no_helmet" not in run_pipeline_decisions(sc)[1]
+
+
+def test_pipeline_beats_single_frame_at_every_noise_level():
+    """The project's central claim, as a regression test."""
+    from modules.pipeline_eval import pipeline_vs_single_frame
+
+    out = pipeline_vs_single_frame(trials=5)
+    for rate, block in out["rates"].items():
+        assert block["pipeline_f1_advantage"] > 0, f"no advantage at noise {rate}"
+        assert block["pipeline"]["precision"] > block["naive"]["precision"]
+
+
+def test_advantage_is_precision_not_recall():
+    """The naive policy fines on anything, so it never misses — the entire
+    difference must come from precision. If a future change made the pipeline
+    win on recall instead, the framing in the docs would be wrong."""
+    from modules.pipeline_eval import pipeline_vs_single_frame
+
+    out = pipeline_vs_single_frame(rates=(0.0, 0.2), trials=5)
+    for block in out["rates"].values():
+        assert block["naive"]["recall"] == 1.0
+        assert block["pipeline"]["recall"] <= block["naive"]["recall"]
+        assert block["pipeline"]["mean_false_positives"] < \
+            block["naive"]["mean_false_positives"]
+
+
+def test_headroom_is_deterministic():
+    from modules.pipeline_eval import pipeline_vs_single_frame
+
+    assert pipeline_vs_single_frame(rates=(0.1,), trials=3) == \
+        pipeline_vs_single_frame(rates=(0.1,), trials=3)
+
+
+def test_headroom_states_that_the_naive_policy_is_given_free_association():
+    """The comparison is only honest if it says where it favours the strawman."""
+    from modules.pipeline_eval import pipeline_vs_single_frame
+
+    out = pipeline_vs_single_frame(rates=(0.0,), trials=2)
+    assert "lower bound" in out["note"]

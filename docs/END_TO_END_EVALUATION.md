@@ -38,7 +38,46 @@ python3 evaluate_pipeline.py
 
 ---
 
-## 1. End-to-end fines
+## 1. The headline question: is the pipeline better than the detector alone?
+
+If a multi-frame pipeline cannot beat "believe the detector", none of the rest of
+this project is justified. So it is measured head-to-head.
+
+Both policies see **identical** detections, degraded by the same helmet
+class-confusion noise (the detector's measured failure mode). `naive` fines
+whenever any single frame shows a violation box — no tracking, no temporal
+confirmation, no contradiction check. Averaged over 20 seeded trials:
+
+| detector noise | naive P | naive R | naive F1 | naive FPs | pipeline P | pipeline R | pipeline F1 | pipeline FPs | F1 gain |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.00 | 0.838 | 1.000 | 0.912 | **1.50** | **1.000** | 1.000 | **1.000** | **0.00** | +0.088 |
+| 0.10 | 0.735 | 1.000 | 0.840 | 3.42 | 0.998 | 0.992 | 0.994 | 0.03 | **+0.154** |
+| 0.20 | 0.708 | 1.000 | 0.820 | 4.08 | 0.976 | 0.953 | 0.962 | 0.23 | +0.142 |
+| 0.30 | 0.697 | 1.000 | 0.810 | 4.40 | 0.962 | 0.883 | 0.913 | 0.30 | +0.102 |
+| 0.40 | 0.694 | 1.000 | 0.808 | 4.47 | 0.903 | 0.819 | 0.849 | 0.72 | +0.040 |
+
+**Yes, and the shape of the answer matters more than the size.**
+
+- **Even at zero detector noise** the naive policy averages **1.50 false
+  positives** and precision 0.838, because the scenario suite contains cases the
+  detector genuinely gets wrong on single frames — flicker and the
+  helmet-contradiction bug. The pipeline: **0.00 FPs**.
+- **The naive policy has recall 1.000 at every noise level** — it fines on
+  anything, so it never misses. **The entire difference is precision.** The
+  pipeline is a precision machine, which is the right objective for a system that
+  fines people: a missed violation costs a missed fine, a false one accuses an
+  innocent rider.
+- **The advantage peaks at moderate noise (+0.154 at 10%) and narrows at 40%
+  (+0.040).** That is honest and expected: when the detector is broken enough,
+  there is no consistent signal left for temporal confirmation to confirm. The
+  pipeline degrades gracefully; it does not work miracles.
+- The naive policy is handed **perfect plate-to-vehicle association for free**,
+  which a real single-frame system would not have. So the measured advantage is
+  a **lower bound**.
+
+---
+
+## 2. End-to-end fines
 
 Across 8 multi-bike scenarios (adjacent bikes, crossing bikes, three bikes,
 occlusion, late plate, clean rider, single violations):
@@ -75,7 +114,7 @@ interesting rows are the ones that *nearly* failed:
 
 ---
 
-## 2. Per-violation decisions
+## 3. Per-violation decisions
 
 Scoring the final per-vehicle verdict as a binary classification, over edge cases
 including single-frame flicker, the helmet contradiction bug, plate occlusion,
@@ -103,7 +142,7 @@ count riders**, and does not claim to.
 
 ---
 
-## 3. What temporal confirmation actually buys
+## 4. What temporal confirmation actually buys
 
 `confirm_window=1` is fining on a single frame — the behaviour the temporal layer
 replaces. Sweeping it:
@@ -125,7 +164,7 @@ window of 3+ keeps margin for noisier real footage.
 
 ---
 
-## 4. OCR: single-frame vs temporal voting
+## 5. OCR: single-frame vs temporal voting
 
 The other central claim — that cross-frame plate voting beats reading one frame.
 Measured by corrupting ground-truth plates with a character-level noise model
@@ -164,7 +203,7 @@ averaged away.
 
 ---
 
-## 5. Error budget — where failures come from
+## 6. Error budget — where failures come from
 
 Each stage is degraded by an **equal 30%** and the end-to-end F1 drop measured
 over 20 seeded trials. Clean baseline F1: **1.000**.
@@ -174,7 +213,7 @@ over 20 seeded trials. Clean baseline F1: **1.000**.
 | **`ocr`** | characters corrupted in the plate text | 0.547 | **−0.453** | **75.7%** |
 | `detection_class` | helmet/no-helmet boxes flipped | 0.900 | −0.100 | 16.7% |
 | `detection` | boxes vanish (recall failure) | 0.958 | −0.042 | 7.1% |
-| `association_ocr` | plate not read on a frame | 0.997 | −0.003 | 0.6% |
+| `plate_recall` | plate not read on a frame | 0.997 | −0.003 | 0.6% |
 
 **OCR is the bottleneck, by a factor of four and a half over the next stage.**
 
@@ -198,7 +237,7 @@ actually occur.
 
 ---
 
-## 6. Speed estimation
+## 7. Speed estimation
 
 Synthetic constant-speed trajectories on a perspective ground plane (known ground
 truth), with detection noise, through the real estimator:
@@ -224,7 +263,7 @@ meaningless number.
 
 ---
 
-## 7. Known weaknesses of the pipeline itself
+## 8. Known weaknesses of the pipeline itself
 
 Distinct from the detector's weaknesses ([MODEL_EVALUATION.md](MODEL_EVALUATION.md) §8):
 
@@ -250,7 +289,7 @@ Distinct from the detector's weaknesses ([MODEL_EVALUATION.md](MODEL_EVALUATION.
 
 ---
 
-## 8. Reproducing this page
+## 9. Reproducing this page
 
 ```bash
 python3 evaluate_pipeline.py                    # everything, writes eval/results/

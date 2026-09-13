@@ -21,12 +21,14 @@ number.
 > decision across multi-vehicle scenarios.
 
 > **Proved the temporal layers earn their complexity instead of assuming it.**
-> Measured single-frame fining against multi-frame confirmation (helmet
-> precision **0.67 → 1.00** at no recall cost) and single-frame OCR against
+> Benchmarked the full pipeline head-to-head against a naive single-frame
+> detector on identical inputs: the naive policy averages **1.50 false positives
+> even with a perfect detector** and 4.08 under 20% class-confusion noise, versus
+> **0.00 and 0.23** for the pipeline. Also measured single-frame OCR against
 > cross-frame plate voting (wrong-plate rate **85% → 30% → 2%** across
-> last-frame, best-confidence and the shipped stabilizer at 12% character
-> noise), finding that temporal voting does not raise OCR accuracy but converts
-> errors into abstentions — the correct trade for a system that fines people.
+> last-frame, best-confidence and the shipped stabilizer at 12% character noise),
+> finding that temporal voting does not raise OCR accuracy but converts errors
+> into abstentions — the correct trade for a system that fines people.
 
 > **Built an ML evaluation discipline, not just a model.** Audited the held-out
 > split with perceptual hashing and found **9.8% of the test set were
@@ -98,6 +100,19 @@ python3 compare_models.py --data eval/clean_splits/data.yaml --split test
 | helmet precision at `confirm_window≥2` | **1.00** (no recall cost) |
 | ID switches in the `crossing` scenario | 4 *(absorbed — fines still correct)* |
 
+### Pipeline vs a naive single-frame detector (identical inputs)
+
+| detector noise | naive F1 (mean FPs) | pipeline F1 (mean FPs) |
+|---|---:|---:|
+| 0.00 | 0.912 (1.50) | **1.000 (0.00)** |
+| 0.10 | 0.840 (3.42) | **0.994 (0.03)** |
+| 0.20 | 0.820 (4.08) | **0.962 (0.23)** |
+| 0.40 | 0.808 (4.47) | **0.849 (0.72)** |
+
+Naive recall is 1.000 throughout — it fines on anything — so the whole
+difference is precision. The naive policy is also handed perfect plate↔vehicle
+association for free, so this is a lower bound on the pipeline's advantage.
+
 ### OCR decision policy (simulated character noise, 12% substitution)
 
 | policy | coverage | accuracy when it answers |
@@ -114,6 +129,9 @@ python3 compare_models.py --data eval/clean_splits/data.yaml --split test
 | detector class confusion | −0.100 | 16.7% |
 | detector recall | −0.042 | 7.1% |
 | plate dropout | −0.003 | 0.6% |
+
+A *corrupted* plate is catastrophic (it fines a real but wrong vehicle); a
+*missing* plate is nearly free, because other frames recover it.
 
 ### Speed estimation
 
@@ -141,7 +159,7 @@ assumed optimization.
 
 | metric | value |
 |---|---:|
-| tests | 423, model-free, ~4 s |
+| tests | 429, model-free, ~5 s |
 | lint / types | `ruff` clean, `mypy` clean |
 | CI | GitHub Actions, Python 3.11 + 3.12, no GPU/weights/dataset needed |
 
