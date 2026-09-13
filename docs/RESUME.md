@@ -146,14 +146,25 @@ python3 evaluate_pipeline.py      # all pipeline numbers above
 
 | metric | value |
 |---|---:|
-| video throughput (OCR lock on) | 50.2 FPS |
-| video throughput (OCR every frame) | 18.5 FPS |
-| single-image inference | 21.5 ms (≈46 FPS) |
-| EasyOCR on a plate crop | 12.1 ms |
-| model load (one-time) | ≈2.7 s |
+| video throughput (OCR lock on) | 43.0 FPS (5 OCR calls) |
+| video throughput (OCR every plated frame) | 22.3 FPS (120 OCR calls) |
+| OCR-lock speedup | **+92.6%**, identical recorded fine |
+| single-image inference | 20.7 ms (≈48 FPS) |
+| EasyOCR on a plate crop | 10.9 ms |
+| model load (one-time) | ≈2.9 s |
+| peak RSS | 941 MB |
+| per-frame time split | 82% YOLO, 15% OCR, <2% everything else |
 
-The OCR lock is a **measured** +172% with a byte-identical recorded fine, not an
-assumed optimization.
+```bash
+python3 benchmark.py --model runs/detect/traffic_model-2/weights/best.pt \
+    --image test.jpg --video demo_traffic.mp4 --max-frames 120 --ocr-lock-ab
+```
+
+The OCR lock is a **measured** speedup with an identical recorded fine, not an
+assumed optimization. Worth mentioning in an interview: the previously
+documented "+172%" did not reproduce, because the benchmark never forwarded the
+lock setting and both arms ran with it on. Finding and fixing that is the
+better story.
 
 ### Engineering
 

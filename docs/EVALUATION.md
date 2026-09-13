@@ -194,46 +194,65 @@ time actually goes (`modules/profiling.py`). Every number below is from a real
 run on this machine — nothing is hard-coded.
 
 **Machine:** Apple Silicon, device `mps`, torch 2.12, model
-`traffic-4class@1.0.0`. Model load ≈ 2.7 s (one-time).
+`traffic-4class@1.0.0`. Model load ≈ 2.9 s (one-time).
 
-**Single-image (samples/test.jpg, 15 iters):** inference 21.5 ms mean (≈ 46 FPS,
-p90 22.2 ms); EasyOCR on the plate crop 12.1 ms mean.
+**Single-image (samples/test.jpg):** inference 20.7 ms mean (≈ 48 FPS, p90 21.5 ms);
+EasyOCR on the plate crop 10.9 ms mean. Peak RSS 941 MB.
 
 **Where the per-frame time goes** depends entirely on whether a plate is on
 screen, because OCR only runs on plated tracks:
 
-| Stage | No plate in frame | Plate on screen |
-|-------|------------------:|----------------:|
-| YOLO inference | 67% | 35% |
-| OCR (EasyOCR) | — | **63%** |
-| read / track / evidence / DB / encode | < 12% combined | < 1% combined |
-| unaccounted (draw, state machines, glue) | 21% | 1% |
+Measured on `demo_traffic.mp4` (120 frames, a plate visible throughout), with
+the OCR lock on — i.e. the shipped configuration:
 
-The measured conclusion: **the only two costs that matter are the model forward
-pass and OCR.** Every stage we wrote around them (tracking, association,
-evidence, DB, encode) is together under 1% when a plate is present — so there is
-no orchestration bottleneck worth optimizing, and none was.
+| Stage | % of video wall time | calls |
+|-------|---------------------:|------:|
+| YOLO inference | **82.1%** | 120 |
+| OCR (EasyOCR) | **15.1%** | 5 |
+| frame read | 0.8% | 121 |
+| encode | 0.7% | 120 |
+| tracking + association | 0.2% | 120 |
+| evidence write | 0.1% | 1 |
+| database | 0.0% | 1 |
+| unaccounted (draw, state machines, glue) | 1.1% | — |
+
+With the lock disabled OCR rises to ~50% of wall time (120 calls instead of 5).
+
+The measured conclusion either way: **the only two costs that matter are the
+model forward pass and OCR.** Every stage written around them — tracking,
+association, evidence, DB, encode — is together **under 2%**, so there is no
+orchestration bottleneck worth optimizing, and none was.
 
 **The one measured optimization (OCR lock).** OCR was re-running on *every*
-frame for a plated track, even after the temporal stabilizer had already elected
-a high-confidence plate. Once a track's plate is locked (≥ 5 readings, stabilizer
+plated frame, even after the temporal stabilizer had already elected a
+high-confidence plate. Once a track's plate is locked (≥ 5 readings, stabilizer
 confidence ≥ 0.90) another OCR call cannot change the fined plate, so it is
-skipped (`ocr_lock_*` in `DetectionConfig`). Measured on `demo_traffic.mp4`
-(120 frames):
+skipped (`ocr_lock_*` in `DetectionConfig`).
 
-| | OCR every frame | OCR locked (default) |
+Measured on `demo_traffic.mp4` (120 frames), both arms in one process:
+
+| | OCR every plated frame | OCR locked (default) |
 |--|---------------:|---------------------:|
-| OCR calls | 120 | 5 |
-| Throughput | 18.5 FPS | **50.2 FPS** (+172%) |
-| Recorded fine | `MH02DL4596` no_helmet 0.968 | **identical** |
+| OCR calls | 120 | **5** |
+| Throughput | 22.3 FPS | **43.0 FPS** (+92.6%) |
+| Recorded fine | `MH02DL4596` no_helmet 0.97 | **identical** |
 
-The fine is byte-identical; only redundant work was removed. Disable with
-`OCR_LOCK_CONFIDENCE=1.1` to restore per-frame OCR. Regenerate with:
+The fine is identical; only redundant work was removed.
 
-```
+```bash
 python3 benchmark.py --model runs/detect/traffic_model-2/weights/best.pt \
-    --image samples/test.jpg --video demo_traffic.mp4 --max-frames 300
+    --image samples/test.jpg --video demo_traffic.mp4 --max-frames 120 --ocr-lock-ab
 ```
+
+> **Correction (2026-09-13).** This table previously reported +172% (18.5 →
+> 50.2 FPS) and told you to disable the lock with `OCR_LOCK_CONFIDENCE=1.1`.
+> That reproduction did not work: `benchmark.py` never forwarded the lock
+> settings to `process_video`, so **both** arms of the old A/B silently ran
+> *with* the lock on and the baseline number did not measure what it claimed.
+> `benchmark.py` now takes `--ocr-lock-ab` (and `--no-ocr-lock`), runs both arms
+> in one process, and reports the OCR call counts so the arms are
+> distinguishable. The numbers above are from that fixed tool. The direction and
+> the correctness conclusion are unchanged; the magnitude was overstated.
 
 ## Principles
 
