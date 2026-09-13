@@ -31,6 +31,18 @@ runs/
 # ===== Big archives =====
 *.zip
 
+# ===== Evaluation artifacts =====
+# eval/results/ IS committed: small JSON/CSV/Markdown that the docs cite as the
+# generated source of truth (Phase 23). Everything else under eval/ is derived
+# and either large or re-derivable, and some of it is dataset imagery whose
+# licence is unverified (docs/DATASET.md) — never commit it.
+eval/*
+!eval/results/
+eval/results/*
+!eval/results/*.json
+!eval/results/*.md
+!eval/results/*.csv
+
 # ===== Runtime-generated data =====
 traffic.db
 evidence/

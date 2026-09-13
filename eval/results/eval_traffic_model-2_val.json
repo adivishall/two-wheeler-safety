@@ -1,0 +1,330 @@
+{
+  "benchmark": {
+    "fps": 36.2,
+    "images": 50,
+    "mean_ms": 27.61,
+    "p50_ms": 27.52,
+    "p90_ms": 28.33
+  },
+  "class_names": [
+    "Plate",
+    "WithHelmet",
+    "WithoutHelmet",
+    "TripleRiding"
+  ],
+  "conf": 0.25,
+  "data": "master_traffic_violation_dataset/data.yaml",
+  "device": "mps",
+  "error_analysis": {
+    "class_report": [
+      {
+        "f1": 0.8559,
+        "fn": 45,
+        "fp": 23,
+        "name": "Plate",
+        "precision": 0.8978,
+        "recall": 0.8178,
+        "tp": 202
+      },
+      {
+        "f1": 0.4557,
+        "fn": 9,
+        "fp": 34,
+        "name": "WithHelmet",
+        "precision": 0.3462,
+        "recall": 0.6667,
+        "tp": 18
+      },
+      {
+        "f1": 0.6757,
+        "fn": 59,
+        "fp": 85,
+        "name": "WithoutHelmet",
+        "precision": 0.6383,
+        "recall": 0.7177,
+        "tp": 150
+      },
+      {
+        "f1": 0.8671,
+        "fn": 14,
+        "fp": 9,
+        "name": "TripleRiding",
+        "precision": 0.8929,
+        "recall": 0.8427,
+        "tp": 75
+      }
+    ],
+    "confidence": {
+      "mean_conf_correct": 0.8094,
+      "mean_conf_wrong": 0.5612,
+      "n_correct": 445,
+      "n_wrong": 151,
+      "separation": 0.2482
+    },
+    "confusion_matrix": [
+      [
+        202,
+        0,
+        0,
+        0,
+        45
+      ],
+      [
+        0,
+        18,
+        4,
+        0,
+        5
+      ],
+      [
+        1,
+        16,
+        150,
+        0,
+        42
+      ],
+      [
+        0,
+        0,
+        3,
+        75,
+        11
+      ],
+      [
+        22,
+        18,
+        78,
+        9,
+        0
+      ]
+    ],
+    "false_negative_examples": [
+      {
+        "image": "master_traffic_violation_dataset/valid/images/dst_0cd780_101_jpg.rf.12f5147824e95c34d2b9fc54b29f98a7.jpg",
+        "missed": "TripleRiding"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_c6b612_ADB03TE193708176_jpg.rf.c899daa23bca0462ea17b2a5ef9eadd0.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_cd1325_CYB00EC198360788_jpg.rf.9e85ad2a23789e881998398dc6302c96.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_cd1325_CYB00EC198360788_jpg.rf.9e85ad2a23789e881998398dc6302c96.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_cd1325_CYB00EC198360788_jpg.rf.9e85ad2a23789e881998398dc6302c96.jpg",
+        "missed": "WithHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_831588_ADB03TE193752779_jpg.rf.ffe597180bc10eab6c67e2e44a13d8bd.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_82ceb1_ADB04EC198490718_jpg.rf.ebcc1c4036447bd26866264f2acfd197.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_82ceb1_ADB04EC198490718_jpg.rf.ebcc1c4036447bd26866264f2acfd197.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_ae1e63_ADB03EC198521343_jpg.rf.fe37ede8340a8cfbdcb6bf7fc58afef2.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_afcc20_ADB04EC198530154_jpg.rf.6fb159d01b493e36b925ff90bdb2f63f.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_afcc20_ADB04EC198530154_jpg.rf.6fb159d01b493e36b925ff90bdb2f63f.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_689ef1_ADB03TE193685548_jpg.rf.877ce61a6a31a7b5d2a6834ba9cd00c7.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_a3704c_RMD01EC198350291_jpg.rf.1d51ce1b22206ed46a051de24c99ee1f.jpg",
+        "missed": "WithHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_80901e_CYB03EC198353784_jpg.rf.5b27484994d5d81d4eb9c2d61ed35534.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_2f82eb_RMD01EC198351922_jpg.rf.ce88871f04919811f2e86206120da6db.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_128cb1_KBA01EC190575078_jpg.rf.116d8760330aa84c3c20942cb7212b3a.jpg",
+        "missed": "WithoutHelmet"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_61619d_CYB00EC198313622_jpg.rf.7032821bb8e2a5e89cc105761231252e.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_e8f6f8_BikesHelmets376_png.rf.82551908caf935405229f1a765c73b6f.jpg",
+        "missed": "Plate"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/dst_98f4c9_00000000188000000_mp4-0067_jpg.rf.59a9e669a9a39c58f8dd42de59f62776.jpg",
+        "missed": "TripleRiding"
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_e4eb89_ADB04EC198517166_jpg.rf.cf5b00f882c73fb9ec84731c7c9f805f.jpg",
+        "missed": "WithoutHelmet"
+      }
+    ],
+    "false_positive_examples": [
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_427ad3_CYB00EC198314520_jpg.rf.8d6684e67b97f08f0579e4ac3b820df2.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.693
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_4fa36f_KBA01EC190721559_jpg.rf.f6cd20a200528535b7b875cc7fd079d8.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.432
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_f5ea0e_BikesHelmets757_png.rf.6ff3a2ccd410cbf10816e7c293f83478.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.917
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_f5ea0e_BikesHelmets757_png.rf.6ff3a2ccd410cbf10816e7c293f83478.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.648
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_f5ea0e_BikesHelmets757_png.rf.6ff3a2ccd410cbf10816e7c293f83478.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.558
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_f5ea0e_BikesHelmets757_png.rf.6ff3a2ccd410cbf10816e7c293f83478.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.557
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_db0e8a_BikesHelmets468_png.rf.ad14d1a0dc6dcee330508d3c7c0f1c64.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.265
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_368e76_CYB00EC198311408_jpg.rf.1daf164fd13b7874491d9c2dfbddb7a4.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.897
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/dst_75a704_127_jpg.rf.14c56400771aaac3fd9c880b99576cfb.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.885
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/dst_75a704_127_jpg.rf.14c56400771aaac3fd9c880b99576cfb.jpg",
+        "predicted": "Plate",
+        "score": 0.676
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_a3704c_RMD01EC198350291_jpg.rf.1d51ce1b22206ed46a051de24c99ee1f.jpg",
+        "predicted": "Plate",
+        "score": 0.663
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_80901e_CYB03EC198353784_jpg.rf.5b27484994d5d81d4eb9c2d61ed35534.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.374
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_80901e_CYB03EC198353784_jpg.rf.5b27484994d5d81d4eb9c2d61ed35534.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.276
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_0d7c11_CYB00EC198319987_jpg.rf.46e5a012d3abae98c5b394c048f92114.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.463
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_83c351_ADB03TE193672777_jpg.rf.70ecdd8304c29eeb6e0d53e819a66c04.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.85
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_d2e587_BikesHelmets178_png.rf.88c000c836ea300f72c9c2c2896155dc.jpg",
+        "predicted": "TripleRiding",
+        "score": 0.88
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_825fd7_BikesHelmets690_png.rf.430d62c5fec0a058bd7d99ca0500b11b.jpg",
+        "predicted": "WithoutHelmet",
+        "score": 0.791
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_825fd7_BikesHelmets690_png.rf.430d62c5fec0a058bd7d99ca0500b11b.jpg",
+        "predicted": "Plate",
+        "score": 0.422
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/ds1_825fd7_BikesHelmets690_png.rf.430d62c5fec0a058bd7d99ca0500b11b.jpg",
+        "predicted": "WithHelmet",
+        "score": 0.258
+      },
+      {
+        "image": "master_traffic_violation_dataset/valid/images/dst_8f7e12_5_jpg.rf.4008abc8220ca1c37f8be899636a30f8.jpg",
+        "predicted": "TripleRiding",
+        "score": 0.93
+      }
+    ],
+    "helmet_confusion": {
+      "withhelmet_as_withouthelmet": 4,
+      "withouthelmet_as_withhelmet": 16
+    },
+    "images": 383
+  },
+  "generated_at": "2026-09-11T07:54:31.619591+00:00",
+  "imgsz": 640,
+  "iou": 0.5,
+  "model": "runs/detect/traffic_model-2/weights/best.pt",
+  "name": "eval_traffic_model-2_val",
+  "official": {
+    "map50": 0.6967,
+    "map50_95": 0.5021,
+    "mean_precision": 0.7828,
+    "mean_recall": 0.7398,
+    "per_class": {
+      "Plate": {
+        "map50": 0.8106,
+        "map50_95": 0.4284,
+        "precision": 0.9414,
+        "recall": 0.7801
+      },
+      "TripleRiding": {
+        "map50": 0.8458,
+        "map50_95": 0.6545,
+        "precision": 0.9218,
+        "recall": 0.8539
+      },
+      "WithHelmet": {
+        "map50": 0.4427,
+        "map50_95": 0.3606,
+        "precision": 0.4196,
+        "recall": 0.6296
+      },
+      "WithoutHelmet": {
+        "map50": 0.6878,
+        "map50_95": 0.5649,
+        "precision": 0.8483,
+        "recall": 0.6957
+      }
+    },
+    "save_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/runs/detect/val-6"
+  },
+  "split": "val"
+}
