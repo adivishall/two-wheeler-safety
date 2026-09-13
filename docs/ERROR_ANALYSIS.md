@@ -4,6 +4,15 @@ Where this system is wrong, why, and what the pipeline does about it. Every
 number here is measured (see [EVALUATION.md](EVALUATION.md) for how); this page
 is the honest failure-mode companion to it.
 
+> **Quantified since this page was written:**
+> [MODEL_EVALUATION.md](MODEL_EVALUATION.md) §4 has the class-wise breakdown on
+> the de-leaked held-out test split with inspectable failure crops, and
+> [END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §5 has the **error
+> budget** — which stage actually costs the system most. Short answer: **OCR, at
+> 75.7% of measured sensitivity**, well ahead of detector class-confusion
+> (16.7%) and detector recall (7.1%). A corrupted plate misattributes a fine; a
+> *missing* plate costs almost nothing because other frames recover it.
+
 ## 1. Detector: the weakest link, and its specific failures
 
 The detector bounds everything downstream. Measured on the val split
