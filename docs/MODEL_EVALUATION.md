@@ -143,7 +143,7 @@ confidence**. Not a hard image — a confidently wrong one.
 check — if the model asserts helmet *and* no-helmet on one rider, both are
 discarded — plus a multi-frame temporal streak. The measured value of that
 second requirement is in
-[END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §3.
+[END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §4.
 
 ### `WithoutHelmet` (mAP@50 0.705): the false-positive class
 
@@ -157,7 +157,7 @@ Strong at "is there a plate here" (0.863), much weaker at pixel-tight boxes
 (0.503). Acceptable by design: OCR needs a readable crop, not a tight box. Note
 what this metric does **not** say — a detected `Plate` says nothing about whether
 OCR can read it. That is measured separately, and OCR is the system's real
-bottleneck ([END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §4).
+bottleneck ([END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §6).
 
 ---
 

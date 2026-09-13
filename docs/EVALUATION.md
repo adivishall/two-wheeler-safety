@@ -102,7 +102,7 @@ python3 evaluate_ocr.py --sequences <csv>   # the same comparison on real images
 Headline: at 12% character noise the last-frame policy names the wrong plate 85%
 of the time, best-confidence 30%, and the shipped stabilizer 2% — at the cost of
 answering only 51% of the time. Full table and the honesty caveats:
-[END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §4.
+[END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §5.
 
 ## 3. Whole system — end-to-end evaluation (`evaluate_system.py`)
 
