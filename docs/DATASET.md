@@ -91,11 +91,27 @@ dataset quality without evidence:
   authors, and their licences are **not** recorded with the data. **Do not
   redistribute the images or assert a licence until this is traced.** This is the
   single biggest provenance gap.
-* **Leakage risk — UNVERIFIED.** Because the training images are re-hashed
-  (`aug_<hash>`) they cannot be matched by filename to the differently-named
-  val/test images, so we **cannot rule out** that an augmented copy of a
-  validation base image sits in training. This would inflate metrics. It should
-  be checked with perceptual hashing before any external accuracy claim.
+* **Leakage — MEASURED, and present.** Previously recorded here as UNVERIFIED.
+  It has now been checked with perceptual hashing (`audit_dataset.py`,
+  `modules/dataset_audit.py`), which compares pixel content instead of the
+  re-hashed `aug_<hash>` filenames:
+
+  | split | images | near-duplicates of a training image | rate |
+  |-------|-------:|------------------------------------:|-----:|
+  | valid |    383 |                                  31 | 8.1% |
+  | test  |    194 |                                  19 | 9.8% |
+
+  Most matched at Hamming distance 0; spot-checking by direct pixel comparison
+  gave a mean absolute difference of 1–10/255 — the same photographs,
+  JPEG-recompressed. **The leakage is real.** Measured impact: evaluating on a
+  de-leaked test split moved mAP@50 by **+0.006** (0.7202 → 0.7265), i.e. the
+  leakage was *not* inflating the headline metric. Quote the de-leaked number
+  anyway, because it is the one with a clean argument behind it
+  ([MODEL_EVALUATION.md](MODEL_EVALUATION.md) §2).
+
+  Caveat: dHash catches recompression/resize/photometric duplicates, not heavy
+  geometric augmentation, so the de-leaked split is *cleaner*, not provably
+  clean.
 * **Geographic/plate bias.** Plates and RTO decoding assume the Indian plate
   format (`modules/plate_info.py`); the imagery skews to Indian road scenes.
 * **Small, imbalanced eval sets.** 383 val / 194 test images is enough for a
@@ -111,6 +127,19 @@ split above comes from the same pool as `train/valid` and therefore shares its
 biases. A genuinely external clip set (different cameras/cities) is the right
 next step for a trustworthy generalisation estimate and is listed as a known
 gap, not claimed as done.
+
+## Machine-readable manifest
+
+[../data/DATASET_MANIFEST.md](../data/DATASET_MANIFEST.md) and
+`data/dataset_manifest.json` carry the same facts per split as a generated,
+diffable artifact (content-hash version, per-split class counts, background
+counts, split-hygiene block, and the provenance fields still marked
+`UNVERIFIED`). Regenerate with:
+
+```bash
+python3 dataset_manifest.py --data master_traffic_violation_dataset/data.yaml \
+    --leakage eval/results/dataset_leakage.json
+```
 
 ## Reproducing these counts
 
