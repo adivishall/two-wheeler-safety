@@ -39,6 +39,11 @@ class Match:
     pred_class: int | None  # None => a false negative (GT with no prediction)
     score: float | None  # prediction confidence, if any
     iou: float
+    # The boxes behind the match, so a failure can be cropped and looked at
+    # (`modules/eval_artifacts.py`). Optional and defaulted, so callers that
+    # only want the counts are unaffected.
+    pred_box: tuple | None = None
+    gt_box: tuple | None = None
 
 
 def match_image(
@@ -83,16 +88,17 @@ def match_image(
             used_gt.add(best_gi)
             matches.append(
                 Match(gt_class=gt[best_gi][0], pred_class=p_cls,
-                      score=p_score, iou=best_iou)
+                      score=p_score, iou=best_iou,
+                      pred_box=p_box, gt_box=gt[best_gi][1])
             )
         else:
             matches.append(Match(gt_class=None, pred_class=p_cls,
-                                 score=p_score, iou=0.0))
+                                 score=p_score, iou=0.0, pred_box=p_box))
 
-    for gi, (g_cls, _g_box) in enumerate(gt):
+    for gi, (g_cls, g_box) in enumerate(gt):
         if gi not in used_gt:
             matches.append(Match(gt_class=g_cls, pred_class=None,
-                                 score=None, iou=0.0))
+                                 score=None, iou=0.0, gt_box=g_box))
 
     return matches
 
