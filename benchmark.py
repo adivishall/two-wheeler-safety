@@ -107,7 +107,8 @@ def benchmark_image(model, reader, image_path, iterations) -> dict:
     return out
 
 
-def benchmark_video(model, reader, video_path, max_frames) -> dict:
+def benchmark_video(model, reader, video_path, max_frames, *,
+                    ocr_lock: bool = True) -> dict:
     import tempfile
 
     from modules.profiling import StageProfiler
@@ -120,12 +121,25 @@ def benchmark_video(model, reader, video_path, max_frames) -> dict:
     # path pays nothing. The evidence/DB stages only fire on a confirmed
     # violation, so their share depends on the clip.
     profiler = StageProfiler()
+    # The OCR lock is the one measured optimization in the pipeline, so the
+    # benchmark has to be able to turn it off to measure it. It used to read
+    # process_video's default no matter what, which made the documented
+    # OCR_LOCK_CONFIDENCE=1.1 reproduction silently a no-op: both arms of the
+    # A/B ran *with* the lock and the "+172%" could not be reproduced.
+    # A confidence above 1.0 can never be reached, so the lock never engages.
+    from modules.config import load_config
+
+    cfg = load_config()
+    lock_conf = cfg.detection.ocr_lock_confidence if ocr_lock else 1.1
+    lock_obs = cfg.detection.ocr_lock_min_observations
     try:
         t0 = time.perf_counter()
         summary = process_video(
             video_path, model, reader, out_path,
             record_fn=lambda *a, **k: 0, max_frames=max_frames,
             profiler=profiler,
+            ocr_lock_confidence=lock_conf,
+            ocr_lock_min_observations=lock_obs,
         )
         elapsed = time.perf_counter() - t0
     finally:
@@ -136,9 +150,13 @@ def benchmark_video(model, reader, video_path, max_frames) -> dict:
     frames = summary.get("frames", 0)
     return {
         "video": video_path,
+        "ocr_lock": ocr_lock,
+        "ocr_lock_confidence": lock_conf,
         "frames": frames,
         "wall_seconds": round(elapsed, 2),
         "throughput_fps": round(frames / elapsed, 2) if elapsed else 0.0,
+        "ocr_calls": (summary.get("profile", {}).get("stages", {})
+                      .get("ocr", {}).get("calls", 0)),
         "ms_per_frame": round(elapsed * 1000.0 / frames, 2) if frames else 0.0,
         "stage_profile": summary.get("profile", {}),
     }
@@ -151,6 +169,12 @@ def parse_args(argv=None):
     ap.add_argument("--video", default=None, help="sample video for throughput timing")
     ap.add_argument("--iterations", type=int, default=30, help="image inference repeats")
     ap.add_argument("--max-frames", type=int, default=200, help="cap for video timing")
+    ap.add_argument("--no-ocr-lock", action="store_true",
+                    help="disable the plate OCR lock so OCR runs on every "
+                         "plated frame — the baseline arm of the OCR-lock A/B")
+    ap.add_argument("--ocr-lock-ab", action="store_true",
+                    help="run the video benchmark twice (lock on and off) and "
+                         "report the measured speedup")
     ap.add_argument("--device", default="auto", help="cuda | mps | cpu | auto")
     ap.add_argument("--out", default="reports", help="output directory")
     return ap.parse_args(argv)
@@ -195,12 +219,36 @@ def main(argv=None) -> int:
 
     if args.video and os.path.exists(args.video):
         payload["video_benchmark"] = benchmark_video(
-            model, reader, args.video, args.max_frames
+            model, reader, args.video, args.max_frames,
+            ocr_lock=not args.no_ocr_lock,
         )
+        if args.ocr_lock_ab:
+            # The baseline arm: same clip, same model, lock disabled. Both arms
+            # in one process so the comparison is not across machine states.
+            payload["video_benchmark_no_ocr_lock"] = benchmark_video(
+                model, reader, args.video, args.max_frames, ocr_lock=False,
+            )
+            locked = payload["video_benchmark"]["throughput_fps"]
+            unlocked = payload["video_benchmark_no_ocr_lock"]["throughput_fps"]
+            payload["ocr_lock_speedup"] = {
+                "locked_fps": locked,
+                "unlocked_fps": unlocked,
+                "speedup_pct": round(100 * (locked - unlocked) / unlocked, 1)
+                if unlocked else 0.0,
+                "locked_ocr_calls": payload["video_benchmark"]["ocr_calls"],
+                "unlocked_ocr_calls":
+                    payload["video_benchmark_no_ocr_lock"]["ocr_calls"],
+            }
     elif args.video:
         log.warning("video not found: %s", args.video)
 
     payload["peak_rss_mb"] = _peak_rss_mb()
+
+    ab = payload.get("ocr_lock_speedup")
+    if ab:
+        print(f"\nOCR lock A/B: {ab['unlocked_fps']} FPS "
+              f"({ab['unlocked_ocr_calls']} OCR calls) -> {ab['locked_fps']} FPS "
+              f"({ab['locked_ocr_calls']} OCR calls) = {ab['speedup_pct']:+.1f}%")
 
     os.makedirs(args.out, exist_ok=True)
     name = f"benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
