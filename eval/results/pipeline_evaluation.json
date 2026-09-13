@@ -1,0 +1,947 @@
+{
+  "budget": {
+    "baseline_f1": 1.0,
+    "bottleneck": "ocr",
+    "interpretation": "Equal-rate fault injection: each stage is degraded by the same amount and the end-to-end F1 drop is measured. This ranks how much the system DEPENDS on each stage. It is NOT a claim about how often each stage fails in the field \u2014 that needs field data.",
+    "seed": 7,
+    "stages": [
+      {
+        "best_trial_f1": 0.7333,
+        "description": "characters corrupted in the plate text (OCR noise)",
+        "f1_drop": 0.4533,
+        "injected_rate": 0.3,
+        "mean_f1": 0.5467,
+        "share_of_measured_sensitivity": 0.7568,
+        "stage": "ocr",
+        "worst_trial_f1": 0.3333
+      },
+      {
+        "best_trial_f1": 0.9677,
+        "description": "helmet/no-helmet boxes flipped (class confusion)",
+        "f1_drop": 0.0999,
+        "injected_rate": 0.3,
+        "mean_f1": 0.9001,
+        "share_of_measured_sensitivity": 0.1668,
+        "stage": "detection_class",
+        "worst_trial_f1": 0.8148
+      },
+      {
+        "best_trial_f1": 1.0,
+        "description": "boxes vanish (detector recall failure)",
+        "f1_drop": 0.0424,
+        "injected_rate": 0.3,
+        "mean_f1": 0.9576,
+        "share_of_measured_sensitivity": 0.0708,
+        "stage": "detection",
+        "worst_trial_f1": 0.8148
+      },
+      {
+        "best_trial_f1": 1.0,
+        "description": "plate not read on a frame (plate recall failure)",
+        "f1_drop": 0.0034,
+        "injected_rate": 0.3,
+        "mean_f1": 0.9966,
+        "share_of_measured_sensitivity": 0.0057,
+        "stage": "association_ocr",
+        "worst_trial_f1": 0.9655
+      }
+    ],
+    "trials_per_injection": 20
+  },
+  "generated_at": "2026-09-13T12:56:47.419792+00:00",
+  "ocr": {
+    "default_noise": {
+      "frames_per_sequence": 10,
+      "n_sequences": 100,
+      "noise_model": {
+        "conf_correct": 0.82,
+        "conf_jitter": 0.08,
+        "conf_wrong": 0.62,
+        "drop_char_rate": 0.04,
+        "insert_char_rate": 0.03,
+        "miss_frame_rate": 0.1,
+        "substitute_rate": 0.12
+      },
+      "policies": {
+        "best_conf": {
+          "abstain_rate": 0.0,
+          "answered_accuracy": 0.7,
+          "char_accuracy": 0.9402,
+          "confidence_separation": 0.1184,
+          "coverage": 1.0,
+          "exact_match": 0.7,
+          "invalid_rate": 0.15,
+          "mean_conf_correct": 0.8616,
+          "mean_conf_wrong": 0.7432,
+          "mean_edit_distance": 0.59,
+          "n": 100,
+          "normalized_match": 0.7,
+          "policy": "best_conf"
+        },
+        "last": {
+          "abstain_rate": 0.0,
+          "answered_accuracy": 0.15,
+          "char_accuracy": 0.819,
+          "confidence_separation": 0.159,
+          "coverage": 1.0,
+          "exact_match": 0.15,
+          "invalid_rate": 0.54,
+          "mean_conf_correct": 0.78,
+          "mean_conf_wrong": 0.621,
+          "mean_edit_distance": 1.8,
+          "n": 100,
+          "normalized_match": 0.15,
+          "policy": "last"
+        },
+        "temporal": {
+          "abstain_rate": 0.49,
+          "answered_accuracy": 0.9804,
+          "char_accuracy": 0.5089,
+          "confidence_separation": 0.2531,
+          "coverage": 0.51,
+          "exact_match": 0.5,
+          "invalid_rate": 0.49,
+          "mean_conf_correct": 0.4913,
+          "mean_conf_wrong": 0.2382,
+          "mean_edit_distance": 4.89,
+          "n": 100,
+          "normalized_match": 0.5,
+          "policy": "temporal"
+        }
+      },
+      "temporal_gain_vs_best_single_frame": -0.2
+    },
+    "noise_sweep": {
+      "note": "Simulated OCR noise, not field data. These numbers describe the stated character-error model; they measure the decision rule, not EasyOCR's accuracy on real plates.",
+      "sweep": {
+        "0.04": {
+          "frames_per_sequence": 10,
+          "n_sequences": 100,
+          "noise_model": {
+            "conf_correct": 0.82,
+            "conf_jitter": 0.08,
+            "conf_wrong": 0.62,
+            "drop_char_rate": 0.04,
+            "insert_char_rate": 0.03,
+            "miss_frame_rate": 0.1,
+            "substitute_rate": 0.04
+          },
+          "policies": {
+            "best_conf": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.93,
+              "char_accuracy": 0.9899,
+              "confidence_separation": 0.1455,
+              "coverage": 1.0,
+              "exact_match": 0.93,
+              "invalid_rate": 0.03,
+              "mean_conf_correct": 0.89,
+              "mean_conf_wrong": 0.7445,
+              "mean_edit_distance": 0.1,
+              "n": 100,
+              "normalized_match": 0.93,
+              "policy": "best_conf"
+            },
+            "last": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.32,
+              "char_accuracy": 0.8946,
+              "confidence_separation": 0.2053,
+              "coverage": 1.0,
+              "exact_match": 0.32,
+              "invalid_rate": 0.42,
+              "mean_conf_correct": 0.8199,
+              "mean_conf_wrong": 0.6146,
+              "mean_edit_distance": 1.05,
+              "n": 100,
+              "normalized_match": 0.32,
+              "policy": "last"
+            },
+            "temporal": {
+              "abstain_rate": 0.22,
+              "answered_accuracy": 0.9872,
+              "char_accuracy": 0.779,
+              "confidence_separation": 0.2757,
+              "coverage": 0.78,
+              "exact_match": 0.77,
+              "invalid_rate": 0.22,
+              "mean_conf_correct": 0.5566,
+              "mean_conf_wrong": 0.2809,
+              "mean_edit_distance": 2.21,
+              "n": 100,
+              "normalized_match": 0.77,
+              "policy": "temporal"
+            }
+          },
+          "temporal_gain_vs_best_single_frame": -0.16
+        },
+        "0.08": {
+          "frames_per_sequence": 10,
+          "n_sequences": 100,
+          "noise_model": {
+            "conf_correct": 0.82,
+            "conf_jitter": 0.08,
+            "conf_wrong": 0.62,
+            "drop_char_rate": 0.04,
+            "insert_char_rate": 0.03,
+            "miss_frame_rate": 0.1,
+            "substitute_rate": 0.08
+          },
+          "policies": {
+            "best_conf": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.84,
+              "char_accuracy": 0.9718,
+              "confidence_separation": 0.0932,
+              "coverage": 1.0,
+              "exact_match": 0.84,
+              "invalid_rate": 0.09,
+              "mean_conf_correct": 0.8621,
+              "mean_conf_wrong": 0.7689,
+              "mean_edit_distance": 0.28,
+              "n": 100,
+              "normalized_match": 0.84,
+              "policy": "best_conf"
+            },
+            "last": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.19,
+              "char_accuracy": 0.8604,
+              "confidence_separation": 0.1732,
+              "coverage": 1.0,
+              "exact_match": 0.19,
+              "invalid_rate": 0.48,
+              "mean_conf_correct": 0.7911,
+              "mean_conf_wrong": 0.6178,
+              "mean_edit_distance": 1.39,
+              "n": 100,
+              "normalized_match": 0.19,
+              "policy": "last"
+            },
+            "temporal": {
+              "abstain_rate": 0.36,
+              "answered_accuracy": 1.0,
+              "char_accuracy": 0.64,
+              "confidence_separation": 0.3038,
+              "coverage": 0.64,
+              "exact_match": 0.64,
+              "invalid_rate": 0.36,
+              "mean_conf_correct": 0.5538,
+              "mean_conf_wrong": 0.25,
+              "mean_edit_distance": 3.58,
+              "n": 100,
+              "normalized_match": 0.64,
+              "policy": "temporal"
+            }
+          },
+          "temporal_gain_vs_best_single_frame": -0.2
+        },
+        "0.12": {
+          "frames_per_sequence": 10,
+          "n_sequences": 100,
+          "noise_model": {
+            "conf_correct": 0.82,
+            "conf_jitter": 0.08,
+            "conf_wrong": 0.62,
+            "drop_char_rate": 0.04,
+            "insert_char_rate": 0.03,
+            "miss_frame_rate": 0.1,
+            "substitute_rate": 0.12
+          },
+          "policies": {
+            "best_conf": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.7,
+              "char_accuracy": 0.9402,
+              "confidence_separation": 0.1184,
+              "coverage": 1.0,
+              "exact_match": 0.7,
+              "invalid_rate": 0.15,
+              "mean_conf_correct": 0.8616,
+              "mean_conf_wrong": 0.7432,
+              "mean_edit_distance": 0.59,
+              "n": 100,
+              "normalized_match": 0.7,
+              "policy": "best_conf"
+            },
+            "last": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.15,
+              "char_accuracy": 0.819,
+              "confidence_separation": 0.159,
+              "coverage": 1.0,
+              "exact_match": 0.15,
+              "invalid_rate": 0.54,
+              "mean_conf_correct": 0.78,
+              "mean_conf_wrong": 0.621,
+              "mean_edit_distance": 1.8,
+              "n": 100,
+              "normalized_match": 0.15,
+              "policy": "last"
+            },
+            "temporal": {
+              "abstain_rate": 0.49,
+              "answered_accuracy": 0.9804,
+              "char_accuracy": 0.5089,
+              "confidence_separation": 0.2531,
+              "coverage": 0.51,
+              "exact_match": 0.5,
+              "invalid_rate": 0.49,
+              "mean_conf_correct": 0.4913,
+              "mean_conf_wrong": 0.2382,
+              "mean_edit_distance": 4.89,
+              "n": 100,
+              "normalized_match": 0.5,
+              "policy": "temporal"
+            }
+          },
+          "temporal_gain_vs_best_single_frame": -0.2
+        },
+        "0.20": {
+          "frames_per_sequence": 10,
+          "n_sequences": 100,
+          "noise_model": {
+            "conf_correct": 0.82,
+            "conf_jitter": 0.08,
+            "conf_wrong": 0.62,
+            "drop_char_rate": 0.04,
+            "insert_char_rate": 0.03,
+            "miss_frame_rate": 0.1,
+            "substitute_rate": 0.2
+          },
+          "policies": {
+            "best_conf": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.45,
+              "char_accuracy": 0.8747,
+              "confidence_separation": 0.0921,
+              "coverage": 1.0,
+              "exact_match": 0.45,
+              "invalid_rate": 0.4,
+              "mean_conf_correct": 0.8411,
+              "mean_conf_wrong": 0.749,
+              "mean_edit_distance": 1.25,
+              "n": 100,
+              "normalized_match": 0.45,
+              "policy": "best_conf"
+            },
+            "last": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.06,
+              "char_accuracy": 0.7632,
+              "confidence_separation": 0.2256,
+              "coverage": 1.0,
+              "exact_match": 0.06,
+              "invalid_rate": 0.72,
+              "mean_conf_correct": 0.8569,
+              "mean_conf_wrong": 0.6313,
+              "mean_edit_distance": 2.36,
+              "n": 100,
+              "normalized_match": 0.06,
+              "policy": "last"
+            },
+            "temporal": {
+              "abstain_rate": 0.77,
+              "answered_accuracy": 0.913,
+              "char_accuracy": 0.228,
+              "confidence_separation": 0.2689,
+              "coverage": 0.23,
+              "exact_match": 0.21,
+              "invalid_rate": 0.77,
+              "mean_conf_correct": 0.4909,
+              "mean_conf_wrong": 0.222,
+              "mean_edit_distance": 7.68,
+              "n": 100,
+              "normalized_match": 0.21,
+              "policy": "temporal"
+            }
+          },
+          "temporal_gain_vs_best_single_frame": -0.24
+        },
+        "0.30": {
+          "frames_per_sequence": 10,
+          "n_sequences": 100,
+          "noise_model": {
+            "conf_correct": 0.82,
+            "conf_jitter": 0.08,
+            "conf_wrong": 0.62,
+            "drop_char_rate": 0.04,
+            "insert_char_rate": 0.03,
+            "miss_frame_rate": 0.1,
+            "substitute_rate": 0.3
+          },
+          "policies": {
+            "best_conf": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.23,
+              "char_accuracy": 0.777,
+              "confidence_separation": 0.0993,
+              "coverage": 1.0,
+              "exact_match": 0.23,
+              "invalid_rate": 0.56,
+              "mean_conf_correct": 0.8429,
+              "mean_conf_wrong": 0.7435,
+              "mean_edit_distance": 2.22,
+              "n": 100,
+              "normalized_match": 0.23,
+              "policy": "best_conf"
+            },
+            "last": {
+              "abstain_rate": 0.0,
+              "answered_accuracy": 0.05,
+              "char_accuracy": 0.6801,
+              "confidence_separation": 0.2256,
+              "coverage": 1.0,
+              "exact_match": 0.05,
+              "invalid_rate": 0.79,
+              "mean_conf_correct": 0.8403,
+              "mean_conf_wrong": 0.6146,
+              "mean_edit_distance": 3.19,
+              "n": 100,
+              "normalized_match": 0.05,
+              "policy": "last"
+            },
+            "temporal": {
+              "abstain_rate": 0.89,
+              "answered_accuracy": 0.9091,
+              "char_accuracy": 0.109,
+              "confidence_separation": 0.2166,
+              "coverage": 0.11,
+              "exact_match": 0.1,
+              "invalid_rate": 0.89,
+              "mean_conf_correct": 0.4255,
+              "mean_conf_wrong": 0.2089,
+              "mean_edit_distance": 8.88,
+              "n": 100,
+              "normalized_match": 0.1,
+              "policy": "temporal"
+            }
+          },
+          "temporal_gain_vs_best_single_frame": -0.13
+        }
+      }
+    }
+  },
+  "sections": [
+    "system",
+    "violations",
+    "budget",
+    "ocr",
+    "speed"
+  ],
+  "speed": {
+    "approach": {
+      "best": "homography",
+      "direction": "approach",
+      "results": {
+        "constant": {
+          "bias": -41.767,
+          "kind": "constant",
+          "mae": 41.767,
+          "n": 6,
+          "overspeed_precision": 1.0,
+          "overspeed_recall": 0.0,
+          "rmse": 44.783
+        },
+        "homography": {
+          "bias": 8.383,
+          "kind": "homography",
+          "mae": 11.283,
+          "n": 6,
+          "overspeed_precision": 0.6,
+          "overspeed_recall": 1.0,
+          "rmse": 13.764
+        },
+        "linear": {
+          "bias": -40.05,
+          "kind": "linear",
+          "mae": 40.05,
+          "n": 6,
+          "overspeed_precision": 1.0,
+          "overspeed_recall": 0.0,
+          "rmse": 43.063
+        }
+      }
+    },
+    "lateral": {
+      "best": "linear",
+      "direction": "lateral",
+      "results": {
+        "constant": {
+          "bias": -1.817,
+          "kind": "constant",
+          "mae": 1.85,
+          "n": 6,
+          "overspeed_precision": 1.0,
+          "overspeed_recall": 1.0,
+          "rmse": 2.282
+        },
+        "homography": {
+          "bias": 3.183,
+          "kind": "homography",
+          "mae": 3.183,
+          "n": 6,
+          "overspeed_precision": 0.6,
+          "overspeed_recall": 1.0,
+          "rmse": 4.671
+        },
+        "linear": {
+          "bias": -0.2,
+          "kind": "linear",
+          "mae": 0.867,
+          "n": 6,
+          "overspeed_precision": 1.0,
+          "overspeed_recall": 1.0,
+          "rmse": 0.983
+        }
+      }
+    }
+  },
+  "system": {
+    "scenarios": {
+      "clean_helmet": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 8,
+          "expected_pairs": 8,
+          "frames": 8,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 0,
+          "expected_fines": 0,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "clean_helmet",
+          "true_positives": 0,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 8,
+          "gt_frames": 8,
+          "id_switches": 0,
+          "matched_gt_frames": 8
+        }
+      },
+      "crossing": {
+        "association": {
+          "accuracy": 0.85,
+          "ambiguous_bodies": 2,
+          "correct": 17,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 3,
+          "wrong": 1
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 2,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "crossing",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 0.95,
+          "false_tracks": 0,
+          "fragmentations": 1,
+          "frames": 10,
+          "gt_frames": 20,
+          "id_switches": 4,
+          "matched_gt_frames": 19
+        }
+      },
+      "late_plate": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 4,
+          "expected_pairs": 4,
+          "frames": 8,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "late_plate",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 8,
+          "gt_frames": 8,
+          "id_switches": 0,
+          "matched_gt_frames": 8
+        }
+      },
+      "occlusion": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 8,
+          "expected_pairs": 8,
+          "frames": 10,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "occlusion",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 10,
+          "gt_frames": 8,
+          "id_switches": 0,
+          "matched_gt_frames": 8
+        }
+      },
+      "single_no_helmet": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 8,
+          "expected_pairs": 8,
+          "frames": 8,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "single_no_helmet",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 8,
+          "gt_frames": 8,
+          "id_switches": 0,
+          "matched_gt_frames": 8
+        }
+      },
+      "single_triple": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 8,
+          "expected_pairs": 8,
+          "frames": 8,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "single_triple",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 8,
+          "gt_frames": 8,
+          "id_switches": 0,
+          "matched_gt_frames": 8
+        }
+      },
+      "three_bikes": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 24,
+          "expected_pairs": 24,
+          "frames": 8,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "three_bikes",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 8,
+          "gt_frames": 24,
+          "id_switches": 0,
+          "matched_gt_frames": 24
+        }
+      },
+      "two_adjacent": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 16,
+          "expected_pairs": 16,
+          "frames": 8,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "two_adjacent",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 8,
+          "gt_frames": 16,
+          "id_switches": 0,
+          "matched_gt_frames": 16
+        }
+      }
+    },
+    "totals": {
+      "duplicates": 0,
+      "emitted_fines": 8,
+      "expected_fines": 8,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "scenario": "ALL",
+      "true_positives": 8,
+      "wrong_plate": 0,
+      "wrong_vehicle": 0
+    }
+  },
+  "violations": {
+    "helmet": {
+      "confirm_window_sweep": {
+        "note": "confirm_window=1 is single-frame fining (no temporal layer); higher windows require the violation to persist that many frames.",
+        "violation": "no_helmet",
+        "windows": {
+          "1": {
+            "confirm_window": 1,
+            "f1": 0.8,
+            "false_negatives": 0,
+            "false_positives": 1,
+            "precision": 0.6667,
+            "recall": 1.0,
+            "true_negatives": 2,
+            "true_positives": 2,
+            "violation": "no_helmet"
+          },
+          "2": {
+            "confirm_window": 2,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 3,
+            "true_positives": 2,
+            "violation": "no_helmet"
+          },
+          "3": {
+            "confirm_window": 3,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 3,
+            "true_positives": 2,
+            "violation": "no_helmet"
+          },
+          "5": {
+            "confirm_window": 5,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 3,
+            "true_positives": 2,
+            "violation": "no_helmet"
+          },
+          "8": {
+            "confirm_window": 8,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 3,
+            "true_positives": 2,
+            "violation": "no_helmet"
+          }
+        }
+      },
+      "decision": {
+        "confirm_window": 3,
+        "f1": 1.0,
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "true_negatives": 3,
+        "true_positives": 2,
+        "violation": "no_helmet"
+      },
+      "scenarios": [
+        "no_helmet_clean",
+        "helmet_clean",
+        "no_helmet_detection_loss",
+        "helmet_flicker_only",
+        "helmet_contradiction"
+      ]
+    },
+    "triple_riding": {
+      "confirm_window_sweep": {
+        "note": "confirm_window=1 is single-frame fining (no temporal layer); higher windows require the violation to persist that many frames.",
+        "violation": "triple_riding",
+        "windows": {
+          "1": {
+            "confirm_window": 1,
+            "f1": 0.8889,
+            "false_negatives": 0,
+            "false_positives": 1,
+            "precision": 0.8,
+            "recall": 1.0,
+            "true_negatives": 1,
+            "true_positives": 4,
+            "violation": "triple_riding"
+          },
+          "2": {
+            "confirm_window": 2,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 2,
+            "true_positives": 4,
+            "violation": "triple_riding"
+          },
+          "3": {
+            "confirm_window": 3,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 2,
+            "true_positives": 4,
+            "violation": "triple_riding"
+          },
+          "5": {
+            "confirm_window": 5,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 2,
+            "true_positives": 4,
+            "violation": "triple_riding"
+          },
+          "8": {
+            "confirm_window": 8,
+            "f1": 1.0,
+            "false_negatives": 0,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "true_negatives": 2,
+            "true_positives": 4,
+            "violation": "triple_riding"
+          }
+        }
+      },
+      "decision": {
+        "confirm_window": 3,
+        "f1": 1.0,
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "true_negatives": 2,
+        "true_positives": 4,
+        "violation": "triple_riding"
+      },
+      "rider_count_note": "The detector has one TripleRiding class, so three-up and four-up are indistinguishable to this system; it detects the violation, it does not count riders.",
+      "scenarios": [
+        "two_riders_legal",
+        "exactly_three",
+        "four_or_more",
+        "triple_plate_occluded",
+        "triple_detection_loss",
+        "triple_flicker_only"
+      ]
+    }
+  }
+}
