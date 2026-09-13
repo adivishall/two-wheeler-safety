@@ -50,3 +50,39 @@ jobs:
 
       - name: Run tests (with branch coverage gate)
         run: pytest tests/ -q --cov --cov-report=term-missing
+
+      # The full model evaluation needs weights, a dataset and a GPU-ish
+      # machine, so it is run by hand — which leaves the evaluation tooling free
+      # to rot silently between runs. These smoke tests exercise the entry
+      # points that need neither: they run the real tracking, association,
+      # violation, OCR-policy and speed evaluations on synthetic inputs and
+      # assert the reports are produced. Nothing here downloads weights, touches
+      # the network, or needs a GPU.
+      - name: Evaluation tooling smoke test (model-free)
+        run: |
+          python evaluate_pipeline.py --out "$RUNNER_TEMP/eval" --trials 3
+          python evaluate_system.py --json "$RUNNER_TEMP/eval/system.json"
+          python evaluate_ocr.py --simulate --out "$RUNNER_TEMP/eval" --name ocr_sim
+          # Every CLI must at least parse its arguments without the heavy stack.
+          for cli in evaluate_model evaluate_ocr evaluate_pipeline \
+                     evaluate_system compare_models audit_dataset \
+                     dataset_manifest train_traffic benchmark; do
+            python "$cli.py" --help > /dev/null || exit 1
+          done
+
+      - name: Check the generated reports exist and are well-formed
+        run: |
+          python - <<'PY'
+          import csv, json, os
+          root = os.path.join(os.environ["RUNNER_TEMP"], "eval")
+          summary = json.load(open(os.path.join(root, "latest.json")))
+          assert summary["end_to_end"]["precision"] >= 0.0
+          assert summary["error_budget"]["bottleneck"]
+          with open(os.path.join(root, "pipeline_evaluation.csv")) as fh:
+              rows = list(csv.DictReader(fh))
+          assert rows, "no metric rows written"
+          for r in rows:
+              float(r["value"])  # every value must be numeric
+          print(f"OK: {len(rows)} metric rows, "
+                f"bottleneck={summary['error_budget']['bottleneck']}")
+          PY
