@@ -7,7 +7,7 @@ is the honest failure-mode companion to it.
 > **Quantified since this page was written:**
 > [MODEL_EVALUATION.md](MODEL_EVALUATION.md) §4 has the class-wise breakdown on
 > the de-leaked held-out test split with inspectable failure crops, and
-> [END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §5 has the **error
+> [END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §6 has the **error
 > budget** — which stage actually costs the system most. Short answer: **OCR, at
 > 75.7% of measured sensitivity**, well ahead of detector class-confusion
 > (16.7%) and detector recall (7.1%). A corrupted plate misattributes a fine; a

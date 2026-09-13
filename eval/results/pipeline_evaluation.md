@@ -1,6 +1,6 @@
 # Pipeline evaluation (model-free)
 
-- Generated: 2026-09-13T12:56:47.419792+00:00
+- Generated: 2026-09-13T13:15:53.063323+00:00
 - Inputs: deterministic synthetic scenarios driven through the **real** tracker, association, state machines, OCR stabilizer and speed estimator.
 - No model weights, no dataset, no network. Every number is reproducible with `python3 evaluate_pipeline.py`.
 
@@ -48,6 +48,22 @@ How often the *complete* pipeline reaches the correct verdict for a vehicle — 
 | `triple_riding` | 5 | 1.0 | 1.0 |
 | `triple_riding` | 8 | 1.0 | 1.0 |
 
+## Is the pipeline better than a single-frame detector?
+
+Both policies see **identical** detections, degraded by the same helmet class-confusion noise. `naive` fines whenever any single frame shows a violation box — no tracking, no temporal confirmation, no contradiction check.
+
+Both policies see identical detections. The naive policy is handed perfect plate-to-vehicle association for free, which a real single-frame system would not have, so the pipeline's measured advantage is a lower bound.
+
+| detector noise | naive P | naive R | naive F1 | naive FPs | pipeline P | pipeline R | pipeline F1 | pipeline FPs | F1 gain |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.00 | 0.8377 | 1.0 | 0.9116 | 1.5 | 1.0 | 1.0 | 1.0 | 0.0 | **+0.088** |
+| 0.10 | 0.7345 | 1.0 | 0.8402 | 3.425 | 0.9975 | 0.9917 | 0.9943 | 0.025 | **+0.154** |
+| 0.20 | 0.708 | 1.0 | 0.8198 | 4.075 | 0.976 | 0.9528 | 0.9619 | 0.225 | **+0.142** |
+| 0.30 | 0.6966 | 1.0 | 0.8105 | 4.4 | 0.9624 | 0.8833 | 0.9128 | 0.3 | **+0.102** |
+| 0.40 | 0.6941 | 1.0 | 0.8084 | 4.475 | 0.903 | 0.8194 | 0.8486 | 0.725 | **+0.040** |
+
+The naive policy always scores recall 1.000 because it fines on anything — so the whole difference is precision. The pipeline is a precision machine, and that is the right objective for a system that fines people.
+
 ## Error budget (equal-rate fault injection)
 
 Equal-rate fault injection: each stage is degraded by the same amount and the end-to-end F1 drop is measured. This ranks how much the system DEPENDS on each stage. It is NOT a claim about how often each stage fails in the field — that needs field data.
@@ -59,7 +75,7 @@ Clean baseline end-to-end F1: **1.0** (20 trials per injection, seed 7).
 | `ocr` | 0.3 | 0.5467 | **0.4533** | 75.7% |
 | `detection_class` | 0.3 | 0.9001 | **0.0999** | 16.7% |
 | `detection` | 0.3 | 0.9576 | **0.0424** | 7.1% |
-| `association_ocr` | 0.3 | 0.9966 | **0.0034** | 0.6% |
+| `plate_recall` | 0.3 | 0.9966 | **0.0034** | 0.6% |
 
 **Most sensitive stage: `ocr`.**
 

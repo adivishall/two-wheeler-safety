@@ -329,7 +329,7 @@ DEFAULT_INJECTIONS = (
               detection_drop=0.30),
     Injection("detection_class", "helmet/no-helmet boxes flipped (class confusion)",
               class_flip=0.30),
-    Injection("association_ocr", "plate not read on a frame (plate recall failure)",
+    Injection("plate_recall", "plate not read on a frame (plate detection/OCR miss)",
               plate_drop=0.30),
     Injection("ocr", "characters corrupted in the plate text (OCR noise)",
               ocr_noise=0.30),
@@ -482,3 +482,113 @@ def evaluate_all(*, trials: int = 20) -> dict:
         },
         budget=error_budget(combined, trials=trials),
     ).as_dict()
+
+
+# ---------------------------------------------------------------------------
+# Does the pipeline actually beat a single-frame detector? (Phase 30)
+# ---------------------------------------------------------------------------
+
+def naive_single_frame_decisions(scenario: Scenario) -> dict[int, set]:
+    """The strawman this whole project exists to beat, implemented honestly.
+
+    A single-frame detector policy: if *any* frame shows a violation box for a
+    vehicle, fine it. No tracking, no temporal confirmation, no contradiction
+    check, no OCR voting — just believe the detector.
+
+    Attribution is by box overlap with the ground-truth vehicle, which is
+    *generous* to the naive policy: it is handed perfect association for free,
+    something a real single-frame system would not have. The comparison is
+    therefore a lower bound on the pipeline's advantage, not an inflated one.
+    """
+    decisions: dict[int, set] = {v.gt_id: set() for v in scenario.vehicles}
+    for frame in scenario.frames:
+        for vf in frame:
+            if vf.gt_id not in decisions:
+                continue
+            for d in vf.dets:
+                if d.label == "WithoutHelmet":
+                    decisions[vf.gt_id].add("no_helmet")
+                elif d.label == "TripleRiding":
+                    decisions[vf.gt_id].add("triple_riding")
+    return decisions
+
+
+def _score(scenarios, decide, violation) -> dict:
+    tp = fp = fn = tn = 0
+    for sc in scenarios:
+        decisions = decide(sc)
+        for v in sc.vehicles:
+            expected = violation in v.violations
+            got = violation in decisions.get(v.gt_id, set())
+            if expected and got:
+                tp += 1
+            elif expected:
+                fn += 1
+            elif got:
+                fp += 1
+            else:
+                tn += 1
+    p = tp / (tp + fp) if (tp + fp) else 1.0
+    r = tp / (tp + fn) if (tp + fn) else 1.0
+    return {
+        "true_positives": tp, "false_positives": fp,
+        "false_negatives": fn, "true_negatives": tn,
+        "precision": round(p, 4), "recall": round(r, 4),
+        "f1": round(2 * p * r / (p + r), 4) if (p + r) else 0.0,
+    }
+
+
+DETECTOR_NOISE_RATES = (0.0, 0.1, 0.2, 0.3, 0.4)
+
+
+def pipeline_vs_single_frame(
+    *, rates=DETECTOR_NOISE_RATES, trials: int = 20, seed: int = 11,
+) -> dict:
+    """Head-to-head: naive single-frame fining vs the full pipeline.
+
+    Both policies see the **same** detections, degraded by the same detector
+    class-confusion noise (the measured failure mode: WithHelmet <-> WithoutHelmet
+    flips, see docs/MODEL_EVALUATION.md). Averaged over seeded trials, because a
+    single draw at 30% noise is mostly luck.
+
+    This is the project's central claim reduced to one table: a violation
+    decision built from tracking + temporal confirmation should degrade more
+    gracefully under detector noise than believing any single frame.
+    """
+    from modules.system_eval import builtin_scenarios
+
+    scenarios = builtin_scenarios() + helmet_scenarios() + triple_riding_scenarios()
+    out: dict = {}
+    for rate in rates:
+        inj = Injection("detector_noise", "helmet class flips", class_flip=rate)
+        rng = random.Random(seed)
+        acc: dict = {"naive": [], "pipeline": []}
+        for _ in range(trials):
+            degraded = [apply_injection(sc, inj, rng) for sc in scenarios]
+            for violation in VIOLATIONS:
+                acc["naive"].append(
+                    _score(degraded, naive_single_frame_decisions, violation))
+                acc["pipeline"].append(
+                    _score(degraded, run_pipeline_decisions, violation))
+        summary = {}
+        for policy, rows in acc.items():
+            summary[policy] = {
+                key: round(sum(r[key] for r in rows) / len(rows), 4)
+                for key in ("precision", "recall", "f1")
+            }
+            summary[policy]["mean_false_positives"] = round(
+                sum(r["false_positives"] for r in rows) / len(rows), 3)
+        summary["pipeline_f1_advantage"] = round(
+            summary["pipeline"]["f1"] - summary["naive"]["f1"], 4)
+        out[f"{rate:.2f}"] = summary
+    return {
+        "note": (
+            "Both policies see identical detections. The naive policy is handed "
+            "perfect plate-to-vehicle association for free, which a real "
+            "single-frame system would not have, so the pipeline's measured "
+            "advantage is a lower bound."
+        ),
+        "trials_per_rate": trials,
+        "seed": seed,
+        "rates": out,
+    }
