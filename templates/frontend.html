@@ -531,6 +531,41 @@
             font-variant-numeric: tabular-nums;
         }
 
+        /* ---------------- Model & pipeline evaluation ---------------- */
+        /* Collapsed by default and visually quieter than the live-data panels:
+           evaluation is provenance, not day-to-day operations, so it must not
+           compete with the violation queue for attention. */
+        #evaluation { margin: 2px 2px 18px; }
+        .eval-grid {
+            display: grid; gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        }
+        .eval-card {
+            border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+            background: var(--surface-2);
+        }
+        .eval-card h4 {
+            margin: 0 0 8px; font-size: 11.5px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3);
+        }
+        .eval-metric { display: flex; justify-content: space-between; gap: 10px;
+            padding: 3px 0; font-size: 13px; }
+        .eval-metric .k { color: var(--text-2); }
+        .eval-metric .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+        .eval-empty { font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
+        .eval-empty code {
+            display: block; margin-top: 6px; padding: 6px 8px; font-size: 11.5px;
+            background: var(--surface-3, rgba(127,127,127,.12)); border-radius: 5px;
+            overflow-x: auto; white-space: pre;
+        }
+        .eval-prov { font-size: 11.5px; color: var(--text-3); margin-top: 10px; }
+        .eval-flag { font-size: 11.5px; padding: 1px 6px; border-radius: 4px;
+            font-weight: 600; }
+        .eval-flag.ok { background: rgba(34,160,90,.15); color: #1f9254; }
+        .eval-flag.warn { background: rgba(200,140,20,.15); color: #a5740a; }
+        .eval-note { font-size: 11.5px; color: var(--text-3); margin: 10px 2px 0;
+            line-height: 1.5; }
+
         /* ---------------- Analytics ---------------- */
 
         #analytics { margin: 2px 2px 18px; }
@@ -799,6 +834,12 @@
                     <button type="button" class="link-btn" id="toggleAnalytics" aria-expanded="false">Show ▾</button>
                 </div>
                 <div id="analytics" hidden></div>
+
+                <div class="dash-actions" style="margin-top:6px;">
+                    <h3>Model &amp; pipeline evaluation</h3>
+                    <button type="button" class="link-btn" id="toggleEvaluation" aria-expanded="false">Show ▾</button>
+                </div>
+                <div id="evaluation" hidden></div>
 
                 <div class="dash-actions" style="margin-top:6px;">
                     <h3>Processing sessions</h3>
@@ -1803,6 +1844,101 @@
         document.getElementById("refreshDash").addEventListener("click", loadDashboard);
         document.getElementById("refreshSessions").addEventListener("click", loadSessions);
 
+        // ---- Model & pipeline evaluation (lazy: fetched on first expand) ----
+        // Everything here is READ from generated report files; the dashboard
+        // never computes a metric. A section with no report shows the command
+        // that produces it rather than a placeholder number.
+        let evaluationShown = false;
+        let evaluationLoaded = false;
+
+        function evalMetric(k, v) {
+            if (v === null || v === undefined) return "";
+            return `<div class="eval-metric"><span class="k">${escapeHtml(k)}</span>` +
+                   `<span class="v">${escapeHtml(String(v))}</span></div>`;
+        }
+
+        function evalEmpty(block) {
+            return `<div class="eval-empty">Not run yet — ${escapeHtml(block.reason || "no results")}.` +
+                   (block.command ? `<code>${escapeHtml(block.command)}</code>` : "") + `</div>`;
+        }
+
+        function renderEvaluation(e) {
+            const d = e.detector, p = e.pipeline, ds = e.dataset;
+
+            let detHtml;
+            if (!d.available) {
+                detHtml = evalEmpty(d);
+            } else {
+                const classRows = Object.entries(d.per_class || {})
+                    .map(([name, m]) => evalMetric(name + " mAP@50", m.map50)).join("");
+                detHtml = evalMetric("mAP@50", d.map50) +
+                          evalMetric("mAP@50-95", d.map50_95) +
+                          evalMetric("precision", d.mean_precision) +
+                          evalMetric("recall", d.mean_recall) +
+                          classRows +
+                          `<div class="eval-prov">${escapeHtml(d.model_version || "unversioned model")}` +
+                          ` · split <strong>${escapeHtml(d.split || "?")}</strong>` +
+                          (d.images ? ` · ${d.images} images` : "") +
+                          (d.age_days !== null && d.age_days !== undefined
+                              ? ` · ${d.age_days}d ago` : "") + `</div>`;
+            }
+
+            let pipeHtml;
+            if (!p.available) {
+                pipeHtml = evalEmpty(p);
+            } else {
+                const ee = p.end_to_end || {};
+                const v = p.violations || {};
+                pipeHtml = evalMetric("end-to-end precision", ee.precision) +
+                           evalMetric("end-to-end recall", ee.recall) +
+                           Object.entries(v).map(([name, m]) =>
+                               evalMetric(name + " F1", m.f1)).join("") +
+                           (p.error_budget ? evalMetric("most sensitive stage",
+                               p.error_budget.bottleneck) : "") +
+                           `<div class="eval-prov">` +
+                           (ee.scenarios ? `${ee.scenarios} synthetic scenarios · ` : "") +
+                           (p.age_days !== null && p.age_days !== undefined
+                               ? `${p.age_days}d ago` : "generated") + `</div>`;
+            }
+
+            let dsHtml;
+            if (!ds.available) {
+                dsHtml = evalEmpty(ds);
+            } else {
+                const flag = ds.clean
+                    ? `<span class="eval-flag ok">held out</span>`
+                    : `<span class="eval-flag warn">leakage found</span>`;
+                dsHtml = `<div class="eval-metric"><span class="k">split hygiene</span>` +
+                         `<span class="v">${flag}</span></div>` +
+                         Object.entries(ds.splits || {}).map(([name, m]) =>
+                             evalMetric(name + " leaked",
+                                 `${m.leaked}/${m.images} (${(m.leak_rate * 100).toFixed(1)}%)`)
+                         ).join("");
+            }
+
+            document.getElementById("evaluation").innerHTML = `
+              <div class="eval-grid">
+                <div class="eval-card"><h4>Detector (model)</h4>${detHtml}</div>
+                <div class="eval-card"><h4>Pipeline (logic)</h4>${pipeHtml}</div>
+                <div class="eval-card"><h4>Dataset splits</h4>${dsHtml}</div>
+              </div>
+              <div class="eval-note">${escapeHtml(e.note || "")}</div>`;
+        }
+
+        async function loadEvaluation() {
+            const el = document.getElementById("evaluation");
+            if (!evaluationLoaded) el.innerHTML = `<div class="spinner"></div>`;
+            let e;
+            try {
+                e = await fetch("/api/evaluation").then(r => r.json());
+            } catch (err) {
+                el.innerHTML = `<div class="error-msg">Couldn't load evaluation results.</div>`;
+                return;
+            }
+            evaluationLoaded = true;
+            renderEvaluation(e);
+        }
+
         // Analytics is collapsed by default and fetched on first expand.
         document.getElementById("toggleAnalytics").addEventListener("click", (e) => {
             analyticsShown = !analyticsShown;
@@ -1811,6 +1947,15 @@
             e.target.textContent = analyticsShown ? "Hide ▴" : "Show ▾";
             e.target.setAttribute("aria-expanded", analyticsShown ? "true" : "false");
             if (analyticsShown) loadAnalytics();
+        });
+
+        document.getElementById("toggleEvaluation").addEventListener("click", (e) => {
+            evaluationShown = !evaluationShown;
+            const panel = document.getElementById("evaluation");
+            panel.hidden = !evaluationShown;
+            e.target.textContent = evaluationShown ? "Hide ▴" : "Show ▾";
+            e.target.setAttribute("aria-expanded", evaluationShown ? "true" : "false");
+            if (evaluationShown) loadEvaluation();
         });
 
         // Dashboard is the default tab, so load it on first paint.
