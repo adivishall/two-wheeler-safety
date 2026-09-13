@@ -14,6 +14,20 @@ resolved relative to the CSV's directory.
     python3 evaluate_ocr.py --labels ocr_eval.csv
     python3 evaluate_ocr.py --labels ocr_eval.csv --compare-preprocess
 
+Two further modes answer the question the runtime actually turns on — *is
+temporal stabilization better than reading one frame?*:
+
+    # no OCR engine, no data: simulated character noise, exactly reproducible
+    python3 evaluate_ocr.py --simulate
+
+    # the real-data version: CSV with a sequence_id column grouping frames of
+    # one tracked plate, run through actual EasyOCR
+    python3 evaluate_ocr.py --sequences ocr_sequences.csv
+
+The simulation is a measurement of the *decision rule* under a stated noise
+model, not of EasyOCR; the sequence mode is the one that would settle field
+accuracy and needs a labelled sequence set, which is not shipped.
+
 The scoring is model-free (`modules.ocr_eval`, unit-tested in CI); only the OCR
 pass itself needs EasyOCR, which is imported lazily so `--help` and the metrics
 import work without the heavy stack.
@@ -32,6 +46,12 @@ from modules.detector import clean_plate
 from modules.logging_setup import configure_logging, get_logger
 from modules.ocr_eval import OcrObservation, evaluate_with_conditions
 from modules.ocr_preprocess import PIPELINES, apply_pipeline
+from modules.ocr_temporal_eval import (
+    FrameRead,
+    compare_policies,
+    noise_sweep,
+    run_simulation,
+)
 
 log = get_logger("evaluate_ocr")
 
@@ -54,6 +74,9 @@ def read_labels(path: str) -> list[dict]:
                 "image_path": img,
                 "plate": plate.strip(),
                 "condition": (row.get("condition") or "all").strip() or "all",
+                # Frames of one tracked vehicle share a sequence_id; absent, each
+                # row is its own single-frame sequence.
+                "sequence_id": (row.get("sequence_id") or "").strip(),
             })
     return rows
 
@@ -87,6 +110,60 @@ def run(labels: list[dict], reader, pipeline: str) -> list[OcrObservation]:
     return observations
 
 
+def run_sequences(labels: list[dict], reader, pipeline: str) -> list:
+    """OCR every frame of every sequence into ``(truth, [FrameRead, ...])`` pairs.
+
+    Rows are grouped by ``sequence_id``; every row in a group must carry the same
+    ground-truth plate (they are frames of one vehicle), and the first non-empty
+    one is used. Ungrouped rows become single-frame sequences, which is a fair
+    representation of "the pipeline only ever saw this plate once".
+    """
+    import cv2
+
+    groups: dict[str, list] = {}
+    order: list[str] = []
+    for i, row in enumerate(labels):
+        key = row["sequence_id"] or f"__row{i}"
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(row)
+
+    pairs = []
+    for key in order:
+        rows = groups[key]
+        truth = next((r["plate"] for r in rows if r["plate"]), "")
+        reads = []
+        for row in rows:
+            img = cv2.imread(row["image_path"])
+            if img is None:
+                log.warning("could not read %s; counting as a missed frame",
+                            row["image_path"])
+                reads.append(FrameRead(None, 0.0))
+                continue
+            pred, conf = ocr_one(reader, img, pipeline)
+            reads.append(FrameRead(pred or None, conf))
+        pairs.append((truth, reads))
+    return pairs
+
+
+def _print_policies(title: str, report) -> None:
+    d = report.as_dict()
+    print(f"\n=== {title} (n={d['n_sequences']} sequences) ===")
+    print(f"  {'policy':10s} {'coverage':>9} {'acc|answered':>13} "
+          f"{'norm match':>11} {'char acc':>9} {'invalid':>8}")
+    for pol, m in d["policies"].items():
+        print(f"  {pol:10s} {m['coverage']:>9.3f} {m['answered_accuracy']:>13.3f} "
+              f"{m['normalized_match']:>11.3f} {m['char_accuracy']:>9.3f} "
+              f"{m['invalid_rate']:>8.3f}")
+    print(f"  temporal gain vs best single-frame (normalized match): "
+          f"{d['temporal_gain_vs_best_single_frame']:+.3f}")
+    print("  NOTE: coverage is how often the policy names a plate at all; "
+          "accuracy|answered\n        is how often it is right when it does. "
+          "A wrong plate fines an\n        innocent rider; an abstention only "
+          "misses a fine.")
+
+
 def _print_report(title: str, report) -> None:
     o = report.overall.as_dict()
     print(f"\n=== {title} (n={o['n']}) ===")
@@ -107,7 +184,17 @@ def _print_report(title: str, report) -> None:
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="Evaluate plate OCR on a labelled set.")
-    ap.add_argument("--labels", required=True, help="CSV: image_path,plate[,condition]")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--labels", help="CSV: image_path,plate[,condition]")
+    src.add_argument("--sequences",
+                     help="CSV: sequence_id,image_path,plate — frames of one "
+                          "tracked plate share a sequence_id; compares "
+                          "single-frame vs temporal OCR on real images")
+    src.add_argument("--simulate", action="store_true",
+                     help="compare single-frame vs temporal OCR under simulated "
+                          "character noise (no OCR engine or data needed)")
+    ap.add_argument("--sweep", action="store_true",
+                    help="with --simulate, sweep the character substitution rate")
     ap.add_argument("--pipeline", default="none", choices=sorted(PIPELINES),
                     help="preprocessing pipeline to use (default: none)")
     ap.add_argument("--compare-preprocess", action="store_true",
@@ -120,6 +207,47 @@ def parse_args(argv=None):
 def main(argv=None) -> int:
     configure_logging()
     args = parse_args(argv)
+
+    if args.simulate:
+        report = run_simulation()
+        _print_policies("simulated OCR noise (default model)", report)
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "mode": "simulate",
+            "default_noise": report.as_dict(),
+        }
+        if args.sweep:
+            payload["noise_sweep"] = noise_sweep()
+            print("\n=== substitution-rate sweep ===")
+            print(f"  {'rate':>6} {'policy':10s} {'coverage':>9} {'acc|answered':>13}")
+            for rate, rep in payload["noise_sweep"]["sweep"].items():
+                for pol, m in rep["policies"].items():
+                    print(f"  {rate:>6} {pol:10s} {m['coverage']:>9.3f} "
+                          f"{m['answered_accuracy']:>13.3f}")
+        return _write(args, payload, "ocr_policy_simulation")
+
+    if args.sequences:
+        if not os.path.exists(args.sequences):
+            log.error("sequences file not found: %s", args.sequences)
+            return 2
+        labels = read_labels(args.sequences)
+        if not labels:
+            log.error("no usable rows in %s", args.sequences)
+            return 2
+        import easyocr
+
+        reader = easyocr.Reader(["en"])
+        pairs = run_sequences(labels, reader, args.pipeline)
+        report = compare_policies(pairs, noise={"source": "real images"})
+        _print_policies(f"real sequences ({os.path.basename(args.sequences)})", report)
+        return _write(args, {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "mode": "sequences",
+            "labels": os.path.relpath(args.sequences),
+            "pipeline": args.pipeline,
+            "result": report.as_dict(),
+        }, "ocr_policy_sequences")
+
     if not os.path.exists(args.labels):
         log.error("labels file not found: %s", args.labels)
         return 2
@@ -157,8 +285,13 @@ def main(argv=None) -> int:
             print(f"  {name:16s} {r['overall']['normalized_match']:.3f}")
         payload["best_pipeline"] = ranked[0][0]
 
+    return _write(args, payload, "ocr_eval")
+
+
+def _write(args, payload: dict, default_stem: str) -> int:
+    """Write ``payload`` as JSON under ``--out`` and report where it landed."""
     os.makedirs(args.out, exist_ok=True)
-    name = args.name or f"ocr_eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    name = args.name or f"{default_stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     out_path = os.path.join(args.out, f"{name}.json")
     with open(out_path, "w") as fh:
         json.dump(payload, fh, indent=2, sort_keys=True)
