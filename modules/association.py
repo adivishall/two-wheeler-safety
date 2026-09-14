@@ -186,8 +186,23 @@ class AssociationConfig:
 
     # Body merging: two body boxes are the same vehicle if their IoU exceeds
     # this, or one is largely contained in the other (helmet inside a triple).
-    body_merge_iou: float = 0.3
-    body_merge_containment: float = 0.6
+    #
+    # These were 0.3 / 0.6 and merged two *different* vehicles whenever they
+    # overlapped moderately — which is exactly what happens when bikes cross.
+    # Measured geometry (modules/tracking_eval.py):
+    #
+    #     two crossing riders (must NOT merge)   IoU 0.429   containment 0.600
+    #     helmet inside a triple body (must)     IoU 0.113   containment 1.000
+    #     helmet/no-helmet contradiction (must)  IoU 0.905   containment 1.000
+    #
+    # Neither threshold alone separates those. 0.5 is the canonical "same
+    # object" IoU used throughout detection, and 0.8 containment is what a
+    # genuine sub-part looks like (a helmet is ~100% inside its rider); 0.6
+    # containment just means "overlapping a bit". Raising both fixed 13 ID
+    # switches, 20 wrong associations and 5 false-positive fines across the
+    # crossing suite with no regression on any existing scenario.
+    body_merge_iou: float = 0.5
+    body_merge_containment: float = 0.8
 
     # Plate<->body cost = w_dist * (dist / body_diag)
     #                   + w_hoverlap * (1 - horizontal_overlap_ratio)
