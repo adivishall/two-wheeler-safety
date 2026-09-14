@@ -104,8 +104,8 @@ Every failure is one of four things, and they need opposite responses:
 The last row matters most and is the one most often got wrong. A detector error
 that temporal confirmation already suppresses costs nothing downstream — the
 error budget ([END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §5) shows
-detector class-flips contribute only 16.7% of measured system sensitivity while
-OCR contributes 75.7%. **Retraining the detector is often not the highest-value
+detector class-flips contribute only 15.3% of measured system sensitivity while
+OCR contributes 76.8%. **Retraining the detector is often not the highest-value
 fix available.**
 
 ### What the current failures say
@@ -205,5 +205,5 @@ despite winning on both helmet classes.
 - **Never promote on a class-average alone.** Read the per-class table.
 - **Re-audit hygiene after any data change.**
 - **Check the error budget before retraining at all.** If the bottleneck is OCR
-  (it currently is, at 75.7%), a better detector is not the highest-value work
+  (it currently is, at 76.8%), a better detector is not the highest-value work
   available.

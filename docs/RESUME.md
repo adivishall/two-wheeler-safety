@@ -36,7 +36,7 @@ number.
 > A/B-compared four checkpoints on one split and caught a "helmet fix" model
 > that had silently forgotten an entire violation class (**TripleRiding mAP@50
 > 0.000**). Quantified an error budget by equal-rate fault injection that
-> identified **OCR as 75.7% of system sensitivity**, redirecting effort away
+> identified **OCR as 76.8% of system sensitivity**, redirecting effort away
 > from the detector.
 
 ---
@@ -125,9 +125,9 @@ association for free, so this is a lower bound on the pipeline's advantage.
 
 | stage | end-to-end F1 drop | share |
 |---|---:|---:|
-| OCR | −0.453 | **75.7%** |
-| detector class confusion | −0.100 | 16.7% |
-| detector recall | −0.042 | 7.1% |
+| OCR | −0.453 | **76.8%** |
+| detector class confusion | −0.090 | 15.3% |
+| detector recall | −0.043 | 7.3% |
 | plate dropout | −0.003 | 0.6% |
 
 A *corrupted* plate is catastrophic (it fines a real but wrong vehicle); a

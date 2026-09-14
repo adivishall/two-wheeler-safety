@@ -92,18 +92,21 @@ wrong-plate 0, duplicates 0.**
 | `late_plate` | 1 | 0 | 0 | 0 | 1.00 |
 | `clean_helmet` | 0 | 0 | 0 | 0 | 1.00 |
 | `two_adjacent` | 1 | 0 | 0 | 0 | 1.00 |
-| `crossing` | 2 | 0 | 0 | **4** | **0.85** |
+| `crossing` | 2 | 0 | 0 | **0** | **1.00** |
 | `three_bikes` | 1 | 0 | 0 | 0 | 1.00 |
 | `occlusion` | 1 | 0 | 0 | 0 | 1.00 |
 
 A perfect score on a suite you wrote yourself is weak evidence on its own, so the
 interesting rows are the ones that *nearly* failed:
 
-- **`crossing` is the tracker's weak point.** When two bikes overlap heavily
-  mid-cross, association merges their bodies (accuracy drops to 0.85) and the
-  tracker logs **4 ID switches** — yet both fines still land on the correct
-  plate. The pipeline absorbs a tracker failure because attribution runs on the
-  *voted plate*, not the track id. That is the design justifying itself.
+- **`crossing` used to be the weak point, and is now clean.** Heavy mid-cross
+  overlap used to make association merge two bodies (accuracy 0.85, **4 ID
+  switches**); even then both fines landed on the correct plate, because
+  attribution runs on the *voted plate*, not the track id — the pipeline
+  absorbing a failure. The merge fault has since been fixed at its root
+  ([ERROR_BUDGET.md](ERROR_BUDGET.md) §3), so `crossing` now records **0 ID
+  switches at association accuracy 1.00**, and the plate-voting defence remains
+  as the safety net it was designed to be.
 - **A 2-frame total occlusion is survived with no ID switch** (`max_age` holds
   the track LOST, then re-confirms the same id).
 - **A late plate** (readable only from frame 4) still produces the fine, because
@@ -210,12 +213,12 @@ over 20 seeded trials. Clean baseline F1: **1.000**.
 
 | stage | injected failure | mean F1 | F1 drop | share of measured sensitivity |
 |---|---|---:|---:|---:|
-| **`ocr`** | characters corrupted in the plate text | 0.547 | **−0.453** | **75.7%** |
-| `detection_class` | helmet/no-helmet boxes flipped | 0.900 | −0.100 | 16.7% |
-| `detection` | boxes vanish (recall failure) | 0.958 | −0.042 | 7.1% |
+| **`ocr`** | characters corrupted in the plate text | 0.547 | **−0.453** | **76.8%** |
+| `detection_class` | helmet/no-helmet boxes flipped | 0.910 | −0.090 | 15.3% |
+| `detection` | boxes vanish (recall failure) | 0.957 | −0.043 | 7.3% |
 | `plate_recall` | plate not read on a frame | 0.997 | −0.003 | 0.6% |
 
-**OCR is the bottleneck, by a factor of four and a half over the next stage.**
+**OCR is the bottleneck, by a factor of five over the next stage.**
 
 The asymmetry is the interesting part and it is not obvious in advance:
 
@@ -274,9 +277,13 @@ Distinct from the detector's weaknesses ([MODEL_EVALUATION.md](MODEL_EVALUATION.
   It is pinned by a test (`test_two_way_tie_elects_at_half_agreement`) so it
   cannot change silently, and is left as-is here because retuning it is a runtime
   behaviour change, not an evaluation one.
-- **ID switches under heavy overlap** (4 in the `crossing` scenario). Currently
-  harmless because attribution uses the voted plate, but it would matter for any
-  future per-track feature.
+- **~~ID switches under heavy overlap~~ (fixed).** The `crossing` scenario used
+  to log 4 ID switches; a frame-by-frame diagnosis attributed them to the
+  *association* layer merging two vehicles' bodies before the tracker ran, not
+  to the tracker. Raising the body-merge thresholds to 0.5 IoU / 0.8 containment
+  removes every switch (13 → 0 across 8 targeted scenarios) with no regression —
+  see [ERROR_BUDGET.md](ERROR_BUDGET.md) §2–3 and `eval/results/tracking_comparison.json`.
+  No Kalman filter was added, because the tracker was never the bottleneck.
 - **Synthetic scenarios are clean.** They contain no motion blur, no partial
   boxes, no detector confidence noise, no crowds of 10+ bikes. Real footage will
   be harder in ways this suite does not model.

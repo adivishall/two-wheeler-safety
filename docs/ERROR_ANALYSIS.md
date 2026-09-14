@@ -9,9 +9,10 @@ is the honest failure-mode companion to it.
 > the de-leaked held-out test split with inspectable failure crops, and
 > [END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §6 has the **error
 > budget** — which stage actually costs the system most. Short answer: **OCR, at
-> 75.7% of measured sensitivity**, well ahead of detector class-confusion
-> (16.7%) and detector recall (7.1%). A corrupted plate misattributes a fine; a
-> *missing* plate costs almost nothing because other frames recover it.
+> 76.8% of measured sensitivity**, well ahead of detector class-confusion
+> (15.3%) and detector recall (7.3%). A corrupted plate misattributes a fine; a
+> *missing* plate costs almost nothing because other frames recover it. See
+> [ERROR_BUDGET.md](ERROR_BUDGET.md) for the consolidated cross-stage view.
 
 ## 1. Detector: the weakest link, and its specific failures
 
@@ -49,17 +50,25 @@ outcome set ([EVALUATION.md](EVALUATION.md) §5).
 ## 2. Tracking/association: the crossing case
 
 The end-to-end synthetic suite (`evaluate_system.py`) is precision = recall = 1.0
-across 8 scenarios **except** one clear weak point:
+across 8 scenarios. The `crossing` case used to be the one weak point — heavy
+mid-cross overlap dropped association accuracy to 0.85 with 4 ID switches — and
+has since been **fixed at its root**:
 
-- **`crossing`** — when two bikes overlap heavily mid-cross, association merges
-  their bodies (accuracy drops to **0.85**) and the tracker logs **4 ID switches**.
+- The frame-by-frame diagnosis ([ERROR_BUDGET.md](ERROR_BUDGET.md) §3) showed the
+  fault was in the **association** layer, not the tracker: `merge_bodies` unioned
+  two different vehicles into one body (at IoU 0.43) *before the tracker ran*.
+- Raising the body-merge thresholds to the canonical 0.5 IoU / 0.8 containment
+  removes every switch — **13 → 0** across 8 targeted scenarios, association
+  accuracy **0.760 → 0.989**, and fines **10/5/2 → 12/0/0** (the old thresholds
+  issued 5 false-positive fines and missed 2 real ones). No motion model was
+  added; the tracker was never the bottleneck.
 
-**Why it still produces correct fines:** temporal confirmation + OCR plate-voting
-attribute each fine to the correct *plate* even when the *track id* churns — the
-pipeline absorbs a tracker failure. A 2-frame occlusion is survived with no ID
-switch (`max_age` keeps the track LOST then re-confirms the same id). This is the
-whole reason the design confirms over a streak and votes the plate rather than
-trusting any single frame or id.
+**The design defence still stands regardless:** temporal confirmation + OCR
+plate-voting attribute each fine to the correct *plate* even when a *track id*
+churns, so the pipeline absorbs a tracker failure. A 2-frame occlusion is
+survived with no ID switch (`max_age` keeps the track LOST then re-confirms the
+same id). This is why the design confirms over a streak and votes the plate
+rather than trusting any single frame or id.
 
 ## 3. OCR: the failure the stabilizer is built for
 
@@ -99,5 +108,5 @@ throughput) and the recorded fine is **byte-identical** — verified in
 | Wrong helmet call | detector class confusion, scarce `WithHelmet` data | contradiction check + temporal streak |
 | Single-frame false positive | model flicker | confirm over N consecutive frames |
 | Wrong plate on a fine | OCR character flicker | temporal voting + structure-valid correction |
-| ID switch when bikes cross | association merge under heavy overlap | plate-voting attributes to the right plate anyway |
+| ID switch when bikes cross | association merged two bodies under heavy overlap | **fixed** at root (merge thresholds 0.5 IoU / 0.8 containment: 13→0 switches); plate-voting remains the fallback |
 | Overconfident wrong flag | uncalibrated score | shown as a score; mandatory human review |
