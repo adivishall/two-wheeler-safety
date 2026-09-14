@@ -86,11 +86,23 @@ def test_tracking_clean_scenario_has_no_switches():
     assert t.coverage == 1.0
 
 
-def test_crossing_stresses_the_tracker():
-    # The crossing scenario is the deliberate stress case: heavy overlap mid
-    # cross causes measurable ID switches — this documents the tracker's limit.
-    t = evaluate_tracking(_by_name()["crossing"])
-    assert t.id_switches >= 1
+def test_crossing_no_longer_causes_id_switches():
+    """The crossing scenario used to be the documented tracker weakness: 4 ID
+    switches and association accuracy 0.85.
+
+    It was never a tracker fault. At the crossing frames the two bodies reached
+    IoU 0.43, above the old ``body_merge_iou`` of 0.3, so ``merge_bodies``
+    unioned two different vehicles into one *before the tracker ran* — the
+    tracker was handed one anchor where there were two. Raising the merge
+    thresholds to 0.5 IoU / 0.8 containment (modules/tracking_eval.py) removed
+    the spurious merge. This asserts the fix holds and that identity survives a
+    crossing.
+    """
+    sc = _by_name()["crossing"]
+    t = evaluate_tracking(sc)
+    assert t.id_switches == 0
+    assert t.coverage == 1.0
+    assert evaluate_association(sc).accuracy == 1.0
 
 
 def test_occlusion_is_survived_without_an_id_switch():

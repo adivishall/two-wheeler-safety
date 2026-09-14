@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from modules.association import DetBox, associate
+from modules.association import DEFAULT_CONFIG, AssociationConfig, DetBox, associate
 from modules.geometry import Box, intersection_area, union_box
 from modules.plate_recognizer import PlateStabilizer
 from modules.vehicle_tracker import VehicleTracker
@@ -145,7 +145,11 @@ class AssociationMetrics:
         return d
 
 
-def evaluate_association(scenario: Scenario) -> AssociationMetrics:
+def evaluate_association(
+    scenario: Scenario, config: AssociationConfig = DEFAULT_CONFIG
+) -> AssociationMetrics:
+    """Score rider<->plate pairing. ``config`` is threaded through so an
+    association-tuning experiment measures the config it is actually testing."""
     m = AssociationMetrics()
     for frame in scenario.frames:
         m.frames += 1
@@ -162,7 +166,7 @@ def evaluate_association(scenario: Scenario) -> AssociationMetrics:
         expected = set(body_gt_boxes) & set(plate_gt_boxes)
         m.expected_pairs += len(expected)
 
-        result = associate(dets)
+        result = associate(dets, config)
         matched_gt: set = set()
         for body_i, plate_i in result.pairs:
             if body_i is None or plate_i is None:
@@ -209,9 +213,11 @@ class TrackingMetrics:
         return d
 
 
-def evaluate_tracking(scenario: Scenario) -> TrackingMetrics:
+def evaluate_tracking(
+    scenario: Scenario, config: AssociationConfig = DEFAULT_CONFIG
+) -> TrackingMetrics:
     m = TrackingMetrics()
-    tracker = VehicleTracker()
+    tracker = VehicleTracker(config=config)
     # gt_id -> assigned track_id last frame it was matched (for ID switches)
     last_track_for_gt: dict = {}
     # gt_id -> was it covered by a track the previous frame (for fragmentation)
@@ -309,6 +315,7 @@ def evaluate_system(
     scenario: Scenario,
     *,
     confirm_window: int = 3,
+    config: AssociationConfig = DEFAULT_CONFIG,
 ) -> SystemMetrics:
     """Drive the full pipeline logic and score emitted fines against GT."""
     m = SystemMetrics(scenario=scenario.name)
@@ -316,7 +323,7 @@ def evaluate_system(
     for v in scenario.vehicles:
         m.expected_fines += len(v.violations)
 
-    tracker = VehicleTracker()
+    tracker = VehicleTracker(config=config)
     helmet_sms: dict = {}
     triple_sms: dict = {}
     stabilizers: dict = {}
