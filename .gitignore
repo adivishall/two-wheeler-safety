@@ -13,6 +13,7 @@ env/
 
 # ===== Large datasets (regenerate / download separately) =====
 master_traffic_violation_dataset/
+datasets/
 dataset_helmet_clean/
 data/test/
 data/train/
