@@ -12,27 +12,27 @@
     "stages": [
       {
         "f1_drop": 0.4533,
-        "share": 0.7568,
+        "share": 0.7682,
         "stage": "ocr"
       },
       {
-        "f1_drop": 0.0999,
-        "share": 0.1668,
+        "f1_drop": 0.0903,
+        "share": 0.153,
         "stage": "detection_class"
       },
       {
-        "f1_drop": 0.0424,
-        "share": 0.0708,
+        "f1_drop": 0.0431,
+        "share": 0.073,
         "stage": "detection"
       },
       {
         "f1_drop": 0.0034,
-        "share": 0.0057,
+        "share": 0.0058,
         "stage": "plate_recall"
       }
     ]
   },
-  "generated_at": "2026-09-13T13:15:53.063323+00:00",
+  "generated_at": "2026-09-14T09:22:14.416725+00:00",
   "ocr_policy": {
     "best_conf": {
       "answered_accuracy": 0.7,

@@ -123,19 +123,21 @@ model weights. Run it with `python3 evaluate_system.py`.
 | late_plate | 1 | 0 | 0 | 0 | 1.00 |
 | clean_helmet | 0 | 0 | 0 | 0 | 1.00 |
 | two_adjacent | 1 | 0 | 0 | 0 | 1.00 |
-| crossing | 2 | 0 | 0 | **4** | **0.85** |
+| crossing | 2 | 0 | 0 | **0** | **1.00** |
 | three_bikes | 1 | 0 | 0 | 0 | 1.00 |
 | occlusion | 1 | 0 | 0 | 0 | 1.00 |
 | **totals** | **8** | **0** | **0** | | |
 
 **System precision = recall = 1.0** across the suite. The honest findings:
 
-* **The `crossing` scenario is the tracker's weak point** — when two bikes
-  overlap heavily mid-cross, association merges their bodies (accuracy 0.85) and
-  the tracker records 4 ID switches. Yet temporal confirmation + OCR voting
-  still attribute both fines to the correct plate: the *pipeline* absorbs a
-  *tracker* failure. This is why the design confirms over a streak and votes the
-  plate rather than trusting any single frame.
+* **The `crossing` scenario used to be the weak point, now fixed** — heavy
+  mid-cross overlap used to make association merge two bodies (accuracy 0.85, 4
+  ID switches) before the tracker ran. Even then temporal confirmation + OCR
+  voting attributed both fines to the correct plate — the *pipeline* absorbing
+  an upstream failure. The merge fault is now fixed at its root
+  ([ERROR_BUDGET.md](ERROR_BUDGET.md) §3): `crossing` records 0 ID switches at
+  association accuracy 1.00. The plate-voting defence still stands regardless,
+  which is why the design confirms over a streak rather than trusting one frame.
 * A **2-frame occlusion is survived with no ID switch** (`max_age` keeps the
   track LOST then re-confirms the same id).
 * A **late plate** (readable only from frame 4) still produces the fine, because

@@ -11,29 +11,29 @@
         "f1_drop": 0.4533,
         "injected_rate": 0.3,
         "mean_f1": 0.5467,
-        "share_of_measured_sensitivity": 0.7568,
+        "share_of_measured_sensitivity": 0.7682,
         "stage": "ocr",
         "worst_trial_f1": 0.3333
       },
       {
         "best_trial_f1": 0.9677,
         "description": "helmet/no-helmet boxes flipped (class confusion)",
-        "f1_drop": 0.0999,
+        "f1_drop": 0.0903,
         "injected_rate": 0.3,
-        "mean_f1": 0.9001,
-        "share_of_measured_sensitivity": 0.1668,
+        "mean_f1": 0.9097,
+        "share_of_measured_sensitivity": 0.153,
         "stage": "detection_class",
         "worst_trial_f1": 0.8148
       },
       {
         "best_trial_f1": 1.0,
         "description": "boxes vanish (detector recall failure)",
-        "f1_drop": 0.0424,
+        "f1_drop": 0.0431,
         "injected_rate": 0.3,
-        "mean_f1": 0.9576,
-        "share_of_measured_sensitivity": 0.0708,
+        "mean_f1": 0.9569,
+        "share_of_measured_sensitivity": 0.073,
         "stage": "detection",
-        "worst_trial_f1": 0.8148
+        "worst_trial_f1": 0.7692
       },
       {
         "best_trial_f1": 1.0,
@@ -41,14 +41,14 @@
         "f1_drop": 0.0034,
         "injected_rate": 0.3,
         "mean_f1": 0.9966,
-        "share_of_measured_sensitivity": 0.0057,
+        "share_of_measured_sensitivity": 0.0058,
         "stage": "plate_recall",
         "worst_trial_f1": 0.9655
       }
     ],
     "trials_per_injection": 20
   },
-  "generated_at": "2026-09-13T13:15:53.063323+00:00",
+  "generated_at": "2026-09-14T09:22:14.416725+00:00",
   "headroom": {
     "note": "Both policies see identical detections. The naive policy is handed perfect plate-to-vehicle association for free, which a real single-frame system would not have, so the pipeline's measured advantage is a lower bound.",
     "rates": {
@@ -105,12 +105,12 @@
           "recall": 1.0
         },
         "pipeline": {
-          "f1": 0.9128,
+          "f1": 0.9174,
           "mean_false_positives": 0.3,
           "precision": 0.9624,
-          "recall": 0.8833
+          "recall": 0.8889
         },
-        "pipeline_f1_advantage": 0.1023
+        "pipeline_f1_advantage": 0.1069
       },
       "0.40": {
         "naive": {
@@ -120,12 +120,12 @@
           "recall": 1.0
         },
         "pipeline": {
-          "f1": 0.8486,
+          "f1": 0.8511,
           "mean_false_positives": 0.725,
           "precision": 0.903,
-          "recall": 0.8194
+          "recall": 0.8222
         },
-        "pipeline_f1_advantage": 0.0402
+        "pipeline_f1_advantage": 0.0427
       }
     },
     "seed": 11,
@@ -617,13 +617,13 @@
       },
       "crossing": {
         "association": {
-          "accuracy": 0.85,
-          "ambiguous_bodies": 2,
-          "correct": 17,
+          "accuracy": 1.0,
+          "ambiguous_bodies": 4,
+          "correct": 20,
           "expected_pairs": 20,
           "frames": 10,
-          "missed": 3,
-          "wrong": 1
+          "missed": 0,
+          "wrong": 0
         },
         "system": {
           "duplicates": 0,
@@ -639,13 +639,13 @@
           "wrong_vehicle": 0
         },
         "tracking": {
-          "coverage": 0.95,
+          "coverage": 1.0,
           "false_tracks": 0,
-          "fragmentations": 1,
+          "fragmentations": 0,
           "frames": 10,
           "gt_frames": 20,
-          "id_switches": 4,
-          "matched_gt_frames": 19
+          "id_switches": 0,
+          "matched_gt_frames": 20
         }
       },
       "late_plate": {

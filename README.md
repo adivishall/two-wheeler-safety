@@ -367,9 +367,9 @@ tracker, association, stabilizer and state machines — no weights needed:
 - **Temporal OCR voting converts errors into abstentions:** at 12% character
   noise, last-frame OCR names the wrong plate 85% of the time, best-confidence
   30%, the shipped stabilizer **2%** — answering 51% of the time instead of 100%.
-- **Error budget:** OCR is the bottleneck at **75.7%** of measured system
-  sensitivity, ahead of detector class-confusion (16.7%) and detector recall
-  (7.1%). A *corrupted* plate misattributes a fine; a *missing* one costs almost
+- **Error budget:** OCR is the bottleneck at **76.8%** of measured system
+  sensitivity, ahead of detector class-confusion (15.3%) and detector recall
+  (7.3%). A *corrupted* plate misattributes a fine; a *missing* one costs almost
   nothing, because other frames recover it.
 - **Speed:** best MAE 11.3 km/h toward camera (homography); a constant
   pixels-per-metre calibration misses *every* overspeeder in that geometry.
@@ -508,7 +508,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 Ordered by measured value, not by appeal:
 
 - **A labelled plate-sequence set**, so field OCR accuracy can be measured rather
-  than simulated. The error budget says OCR carries 75.7% of system sensitivity,
+  than simulated. The error budget says OCR carries 76.8% of system sensitivity,
   so this is the highest-value missing measurement by a wide margin.
 - **More `WithHelmet` data** — 27 test instances is too few to steer by, and it
   is the weakest class.

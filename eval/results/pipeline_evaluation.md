@@ -1,6 +1,6 @@
 # Pipeline evaluation (model-free)
 
-- Generated: 2026-09-13T13:15:53.063323+00:00
+- Generated: 2026-09-14T09:22:14.416725+00:00
 - Inputs: deterministic synthetic scenarios driven through the **real** tracker, association, state machines, OCR stabilizer and speed estimator.
 - No model weights, no dataset, no network. Every number is reproducible with `python3 evaluate_pipeline.py`.
 
@@ -18,7 +18,7 @@
 | `late_plate` | 1 | 0 | 0 | 0 | 1.0 |
 | `clean_helmet` | 0 | 0 | 0 | 0 | 1.0 |
 | `two_adjacent` | 1 | 0 | 0 | 0 | 1.0 |
-| `crossing` | 2 | 0 | 0 | 4 | 0.85 |
+| `crossing` | 2 | 0 | 0 | 0 | 1.0 |
 | `three_bikes` | 1 | 0 | 0 | 0 | 1.0 |
 | `occlusion` | 1 | 0 | 0 | 0 | 1.0 |
 
@@ -59,8 +59,8 @@ Both policies see identical detections. The naive policy is handed perfect plate
 | 0.00 | 0.8377 | 1.0 | 0.9116 | 1.5 | 1.0 | 1.0 | 1.0 | 0.0 | **+0.088** |
 | 0.10 | 0.7345 | 1.0 | 0.8402 | 3.425 | 0.9975 | 0.9917 | 0.9943 | 0.025 | **+0.154** |
 | 0.20 | 0.708 | 1.0 | 0.8198 | 4.075 | 0.976 | 0.9528 | 0.9619 | 0.225 | **+0.142** |
-| 0.30 | 0.6966 | 1.0 | 0.8105 | 4.4 | 0.9624 | 0.8833 | 0.9128 | 0.3 | **+0.102** |
-| 0.40 | 0.6941 | 1.0 | 0.8084 | 4.475 | 0.903 | 0.8194 | 0.8486 | 0.725 | **+0.040** |
+| 0.30 | 0.6966 | 1.0 | 0.8105 | 4.4 | 0.9624 | 0.8889 | 0.9174 | 0.3 | **+0.107** |
+| 0.40 | 0.6941 | 1.0 | 0.8084 | 4.475 | 0.903 | 0.8222 | 0.8511 | 0.725 | **+0.043** |
 
 The naive policy always scores recall 1.000 because it fines on anything — so the whole difference is precision. The pipeline is a precision machine, and that is the right objective for a system that fines people.
 
@@ -72,9 +72,9 @@ Clean baseline end-to-end F1: **1.0** (20 trials per injection, seed 7).
 
 | stage | injected rate | mean F1 | F1 drop | share of measured sensitivity |
 |---|---:|---:|---:|---:|
-| `ocr` | 0.3 | 0.5467 | **0.4533** | 75.7% |
-| `detection_class` | 0.3 | 0.9001 | **0.0999** | 16.7% |
-| `detection` | 0.3 | 0.9576 | **0.0424** | 7.1% |
+| `ocr` | 0.3 | 0.5467 | **0.4533** | 76.8% |
+| `detection_class` | 0.3 | 0.9097 | **0.0903** | 15.3% |
+| `detection` | 0.3 | 0.9569 | **0.0431** | 7.3% |
 | `plate_recall` | 0.3 | 0.9966 | **0.0034** | 0.6% |
 
 **Most sensitive stage: `ocr`.**
