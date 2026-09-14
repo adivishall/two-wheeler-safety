@@ -1,0 +1,29 @@
+{
+  "class_counts_after": {
+    "Plate": 3528,
+    "TripleRiding": 2212,
+    "WithHelmet": 1867,
+    "WithoutHelmet": 2826
+  },
+  "class_counts_before": {
+    "Plate": 6605,
+    "TripleRiding": 4862,
+    "WithHelmet": 4862,
+    "WithoutHelmet": 4862
+  },
+  "data_yaml": "datasets/train_clean/data.yaml",
+  "dropped_heldout_matches": 88,
+  "dropped_internal_duplicates": 5335,
+  "duplication_factor": {
+    "Plate": 1.87,
+    "TripleRiding": 2.2,
+    "WithHelmet": 2.6,
+    "WithoutHelmet": 1.72
+  },
+  "images_after_dedup": 5860,
+  "images_before": 11195,
+  "images_final": 5772,
+  "note": "Validation and test still point at the ORIGINAL held-out directories at full size; only training images were removed.",
+  "out": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/datasets/train_clean",
+  "source": "master_traffic_violation_dataset/data.yaml"
+}
