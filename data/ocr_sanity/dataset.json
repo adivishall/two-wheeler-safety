@@ -1,0 +1,25 @@
+{
+  "conditions": [
+    "clean",
+    "blur",
+    "angle",
+    "lowlight",
+    "small",
+    "occluded"
+  ],
+  "images": 48,
+  "not_a_benchmark": "Vector-rendered glyphs on a flat background. NOT field OCR accuracy, NOT a measurement of EasyOCR. Contains none of glare, motion blur, mud, bent plates or non-standard fonts.",
+  "plates": [
+    "MH12AB1234",
+    "KA05MN6789",
+    "DL8CAF5031",
+    "TN22BC4567",
+    "GJ01AA0001",
+    "UP32DK4321",
+    "RJ14CV0002",
+    "KL07CD8080"
+  ],
+  "purpose": "Sanity-check that the OCR evaluation path runs end to end and that its metrics degrade as images degrade.",
+  "schema": "image_path,plate,condition",
+  "synthetic": true
+}
