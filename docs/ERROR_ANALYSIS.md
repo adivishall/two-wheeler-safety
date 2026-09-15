@@ -85,7 +85,7 @@ fix if it makes the string match a valid structure within a small edit bound.
 the voting/correction logic is unit-tested in `test_plate_recognizer.py`.)
 
 A performance note that is *not* an accuracy trade-off: once the stabilizer has
-locked a high-confidence plate, per-frame OCR is skipped (measured +172%
+locked a high-confidence plate, per-frame OCR is skipped (measured +74.9%
 throughput) and the recorded fine is **byte-identical** — verified in
 `test_pipeline_integration.py`.
 

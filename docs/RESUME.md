@@ -146,14 +146,14 @@ python3 evaluate_pipeline.py      # all pipeline numbers above
 
 | metric | value |
 |---|---:|
-| video throughput (OCR lock on) | 43.0 FPS (5 OCR calls) |
-| video throughput (OCR every plated frame) | 22.3 FPS (120 OCR calls) |
-| OCR-lock speedup | **+92.6%**, identical recorded fine |
-| single-image inference | 20.7 ms (≈48 FPS) |
+| video throughput (OCR lock on) | 50.2 FPS (5 OCR calls) |
+| video throughput (OCR every plated frame) | 28.7 FPS (120 OCR calls) |
+| OCR-lock speedup | **+74.9%**, identical recorded fine |
+| single-image inference | 24.2 ms (≈41 FPS) |
 | EasyOCR on a plate crop | 10.9 ms |
 | model load (one-time) | ≈2.9 s |
-| peak RSS | 941 MB |
-| per-frame time split | 82% YOLO, 15% OCR, <2% everything else |
+| peak RSS | 987 MB |
+| per-frame time split | 88% YOLO, 9% OCR, <2% everything else |
 
 ```bash
 python3 benchmark.py --model runs/detect/traffic_model-2/weights/best.pt \

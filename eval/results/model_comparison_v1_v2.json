@@ -1,0 +1,89 @@
+{
+  "conf": 0.25,
+  "data": "eval/clean_splits/data.yaml",
+  "device": "mps",
+  "generated_at": "2026-09-15T16:04:24.227704+00:00",
+  "imgsz": 640,
+  "iou": 0.5,
+  "models": [
+    {
+      "label": "traffic_model-2",
+      "latency": {
+        "fps": 37.0,
+        "images": 25,
+        "mean_ms": 27.03,
+        "p90_ms": 28.47
+      },
+      "map50": 0.7265,
+      "map50_95": 0.532,
+      "mean_precision": 0.7559,
+      "mean_recall": 0.7846,
+      "model_version": "traffic-4class@1.0.0",
+      "per_class": {
+        "Plate": {
+          "map50": 0.863,
+          "precision": 0.8939,
+          "recall": 0.9008
+        },
+        "TripleRiding": {
+          "map50": 0.9502,
+          "precision": 0.8529,
+          "recall": 0.9667
+        },
+        "WithHelmet": {
+          "map50": 0.3873,
+          "precision": 0.5385,
+          "recall": 0.5185
+        },
+        "WithoutHelmet": {
+          "map50": 0.7054,
+          "precision": 0.7383,
+          "recall": 0.7524
+        }
+      },
+      "size_mb": 5.96,
+      "weights": "runs/detect/traffic_model-2/weights/best.pt"
+    },
+    {
+      "label": "traffic_model_v2_dedup",
+      "latency": {
+        "fps": 34.2,
+        "images": 25,
+        "mean_ms": 29.22,
+        "p90_ms": 35.99
+      },
+      "map50": 0.7035,
+      "map50_95": 0.5155,
+      "mean_precision": 0.788,
+      "mean_recall": 0.7317,
+      "model_version": "traffic_model_v2_dedup@2.0.0",
+      "per_class": {
+        "Plate": {
+          "map50": 0.8554,
+          "precision": 0.9497,
+          "recall": 0.864
+        },
+        "TripleRiding": {
+          "map50": 0.9253,
+          "precision": 0.8735,
+          "recall": 0.9211
+        },
+        "WithHelmet": {
+          "map50": 0.2988,
+          "precision": 0.5223,
+          "recall": 0.3704
+        },
+        "WithoutHelmet": {
+          "map50": 0.7344,
+          "precision": 0.8065,
+          "recall": 0.7714
+        }
+      },
+      "size_mb": 5.96,
+      "weights": "runs/detect/traffic_model_v2_dedup/weights/best.pt"
+    }
+  ],
+  "rank_by": "WithHelmet",
+  "split": "test",
+  "winner": "traffic_model-2"
+}
