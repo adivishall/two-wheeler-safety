@@ -286,7 +286,7 @@ No weights, datasets, or videos ship in the repo (all gitignored). Train first
 
 ```bash
 pip install -r requirements-ci.txt -c constraints-ci.txt   # model-free, pinned
-pytest                     # 299 tests, ~3s
+pytest                     # 466 tests, ~5s
 ```
 
 The suite is **model-free by design** — heavy inference (torch/ultralytics/
@@ -379,10 +379,10 @@ Full report: **[docs/END_TO_END_EVALUATION.md](docs/END_TO_END_EVALUATION.md)**.
 ### Application performance — throughput and latency
 
 *"How fast does it run?"* Apple M4 / MPS: model load ≈ 2.9 s (one-time), single
-image inference 20.7 ms (≈48 FPS), EasyOCR on a plate crop 10.9 ms, peak RSS
-941 MB. Video throughput **43.0 FPS** with the OCR lock enabled vs 22.3 FPS
-without — **+92.6%** for 5 OCR calls instead of 120, with an identical recorded
-fine. Per-frame time is 82% YOLO and 15% OCR; everything the project wrote
+image inference 24.2 ms (≈41 FPS), EasyOCR on a plate crop 14.2 ms, peak RSS
+987 MB. Video throughput **50.2 FPS** with the OCR lock enabled vs 28.7 FPS
+without — **+74.9%** for 5 OCR calls instead of 120, with an identical recorded
+fine. Per-frame time is 88% YOLO and 9% OCR; everything the project wrote
 around them (tracking, association, evidence, DB, encode) is **under 2%
 combined**. Per-stage breakdown: [docs/EVALUATION.md](docs/EVALUATION.md) §6.
 

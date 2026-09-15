@@ -198,8 +198,8 @@ run on this machine — nothing is hard-coded.
 **Machine:** Apple Silicon, device `mps`, torch 2.12, model
 `traffic-4class@1.0.0`. Model load ≈ 2.9 s (one-time).
 
-**Single-image (samples/test.jpg):** inference 20.7 ms mean (≈ 48 FPS, p90 21.5 ms);
-EasyOCR on the plate crop 10.9 ms mean. Peak RSS 941 MB.
+**Single-image (samples/test.jpg):** inference 24.2 ms mean (≈ 41 FPS, p90 25.4 ms);
+EasyOCR on the plate crop 14.2 ms mean. Peak RSS 987 MB.
 
 **Where the per-frame time goes** depends entirely on whether a plate is on
 screen, because OCR only runs on plated tracks:
@@ -209,14 +209,14 @@ the OCR lock on — i.e. the shipped configuration:
 
 | Stage | % of video wall time | calls |
 |-------|---------------------:|------:|
-| YOLO inference | **82.1%** | 120 |
-| OCR (EasyOCR) | **15.1%** | 5 |
-| frame read | 0.8% | 121 |
-| encode | 0.7% | 120 |
+| YOLO inference | **87.5%** | 120 |
+| OCR (EasyOCR) | **9.1%** | 5 |
+| frame read | 1.0% | 121 |
+| encode | 0.8% | 120 |
 | tracking + association | 0.2% | 120 |
 | evidence write | 0.1% | 1 |
 | database | 0.0% | 1 |
-| unaccounted (draw, state machines, glue) | 1.1% | — |
+| unaccounted (draw, state machines, glue) | 1.3% | — |
 
 With the lock disabled OCR rises to ~50% of wall time (120 calls instead of 5).
 
@@ -236,7 +236,7 @@ Measured on `demo_traffic.mp4` (120 frames), both arms in one process:
 | | OCR every plated frame | OCR locked (default) |
 |--|---------------:|---------------------:|
 | OCR calls | 120 | **5** |
-| Throughput | 22.3 FPS | **43.0 FPS** (+92.6%) |
+| Throughput | 28.7 FPS | **50.2 FPS** (+74.9%) |
 | Recorded fine | `MH02DL4596` no_helmet 0.97 | **identical** |
 
 The fine is identical; only redundant work was removed.

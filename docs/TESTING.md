@@ -10,7 +10,7 @@ a GPU, weights, or the ~2 GB DL stack.
 
 ```bash
 pip install -r requirements-ci.txt -c constraints-ci.txt   # pinned, model-free
-pytest                        # 299 tests, ~3 s
+pytest                        # 466 tests, ~5 s
 pytest --cov --cov-report=term-missing   # with branch coverage
 ```
 
@@ -27,7 +27,7 @@ confidence → evidence → record) with a **fake model and fake reader** and st
 OpenCV video I/O, so every line of orchestration is exercised with zero model
 dependency. (Decision record: [DECISIONS.md](DECISIONS.md) #11.)
 
-## What is covered (299 tests across 27 files)
+## What is covered (466 tests across 36 files)
 
 | Area | Files | Focus |
 |------|-------|-------|
@@ -45,9 +45,9 @@ dependency. (Decision record: [DECISIONS.md](DECISIONS.md) #11.)
 ## Branch coverage
 
 Coverage is measured with **branch** tracking (`pytest --cov`), gated at
-`fail_under = 90` in `pyproject.toml`. Measured: **93.6%** overall, with the
+`fail_under = 90` in `pyproject.toml`. Measured: **94.4%** overall, with the
 core-logic modules strong — confidence & jobs 100%, vehicle_tracker /
-violation_state / plate_recognizer 98%, db 97%, speed 96%, association 95%,
+plate_recognizer 98%, violation_state 99%, db 97%, association 97%, speed 96%,
 validation 100%.
 
 The two model-only modules (`detector.py` loads YOLO/EasyOCR; `plate_ocr.py`
