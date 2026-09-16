@@ -496,6 +496,20 @@ def api_analytics():
     ))
 
 
+@app.route("/api/evaluation")
+def api_evaluation():
+    """Generated model + pipeline evaluation results for the dashboard panel.
+
+    Read-only and file-backed: this route never computes a metric. If an
+    evaluation has not been run the payload says so and names the command,
+    rather than showing a placeholder that could be mistaken for a measurement.
+    """
+    from modules.eval_report import evaluation_panel
+
+    return jsonify(evaluation_panel(os.environ.get("EVAL_RESULTS_DIR",
+                                                   "eval/results")))
+
+
 @app.route("/api/violations")
 def api_violations():
     """Filtered, paginated violation list. All filters are optional query

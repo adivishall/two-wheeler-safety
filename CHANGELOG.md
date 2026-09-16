@@ -9,6 +9,77 @@ repo (all gitignored) — a release is the *code*, evaluated against locally-hel
 weights whose provenance is recorded in the model manifest
 ([docs/MODEL_VERSIONING.md](docs/MODEL_VERSIONING.md)).
 
+## [1.0.0] — 2026-09-16 — CV evaluation & model quality
+
+The application was already evaluated; the **vision system** was not. This
+release makes every layer measurable and separates model quality from pipeline
+quality so neither can stand in for the other.
+
+### Added
+
+- **Dataset split hygiene** (`audit_dataset.py`, `modules/dataset_audit.py`) —
+  perceptual-hash leakage detection between train and held-out splits, and
+  de-leaked split generation. Resolves a gap `docs/DATASET.md` had recorded as
+  UNVERIFIED: **9.8% of the test split and 8.1% of val are near-duplicates of
+  training images.** Measured impact on mAP@50: +0.006, i.e. the leakage was not
+  inflating the headline metric.
+- **Held-out test evaluation.** The `test` split existed but had never been
+  used; every previously quoted number came from `val`. De-leaked test:
+  **mAP@50 0.7265, mAP@50-95 0.5320.**
+- **Failure artifacts** (`modules/eval_artifacts.py`) — representative false
+  positives, false negatives, class confusions and low-confidence detections
+  saved as annotated context crops with a JSON index.
+- **Per-class confidence curves** (`modules/confidence_analysis.py`) — score vs
+  accuracy, binned. Confidence ranks correctness for `WithoutHelmet`
+  (Spearman 1.00) and **not at all** for `TripleRiding` (−0.20).
+- **Model A/B comparison** (`compare_models.py`) — every checkpoint on one
+  split with identical settings. Caught `traffic_model_helmetfix` scoring
+  **0.000 mAP@50 on TripleRiding**: catastrophic forgetting that would have
+  silently disabled a violation class.
+- **OCR decision-policy benchmark** (`modules/ocr_temporal_eval.py`) —
+  single-frame vs temporal voting under a stated character-noise model. At 12%
+  noise the last-frame policy names the wrong plate 85% of the time,
+  best-confidence 30%, the shipped stabilizer **2%** — temporal voting converts
+  OCR errors into abstentions rather than raising accuracy.
+- **Per-violation pipeline metrics and error budget**
+  (`modules/pipeline_eval.py`) — helmet and triple-riding decisions scored as
+  classifications over edge cases; a confirmation-window sweep showing
+  single-frame fining drops helmet precision to **0.67**; and equal-rate fault
+  injection identifying **OCR as 76.8% of system sensitivity**.
+- **Pipeline vs single-frame detector benchmark** — on identical inputs the
+  naive policy averages **1.50 false positives even with a perfect detector**
+  versus **0.00** for the pipeline; the entire advantage is precision.
+- **Unified evaluation CLI** (`evaluate_pipeline.py`) writing JSON + Markdown +
+  CSV to `eval/results/`, plus a dashboard panel that reads those files and
+  never computes or invents a metric.
+- **Machine-readable dataset manifest** (`dataset_manifest.py`,
+  `data/DATASET_MANIFEST.md`) with provenance gaps marked `UNVERIFIED`.
+- **Docs**: `MODEL_EVALUATION.md` (detector only), `END_TO_END_EVALUATION.md`
+  (pipeline only), `RETRAINING_LOOP.md`, `RESUME.md`.
+- **CI** now smoke-tests every evaluation entry point on each push, with no GPU,
+  weights, dataset or network.
+
+### Fixed
+
+- **`benchmark.py` never forwarded the OCR-lock setting to `process_video`**, so
+  the documented `OCR_LOCK_CONFIDENCE=1.1` baseline silently did nothing and
+  both arms of the published A/B ran with the lock on. Re-measured correctly:
+  **+74.9%** (28.7 → 50.2 FPS, 120 → 5 OCR calls, identical recorded fine) —
+  not the previously published +172%. `docs/EVALUATION.md` carries an explicit
+  correction rather than a silently edited number.
+- Generated clean-split `data.yaml` files lacked the `train:` key Ultralytics
+  requires.
+- `evaluate_model.py` reloaded the model after `val()` only when `val()`
+  *succeeded*, so a failed `val()` took the error-analysis pass down with it.
+- Error-budget stage `association_ocr` renamed to `plate_recall`; it injects
+  plate dropout, not an association failure.
+
+### Changed
+
+- README separates **model**, **pipeline** and **application** performance into
+  sections that are never combined.
+- Tests: 299 → 466, still model-free and ~5 s. Coverage 94.4%.
+
 ## [1.0.0-rc1] — 2026-09-11
 
 First release candidate. The system detects two-wheeler violations (no-helmet,
@@ -52,9 +123,11 @@ recall = **1.0** across 8 scenarios. Full detail in
   EVALUATION, DECISIONS expanded and audited against the code.
 
 ### Changed
-- OCR is skipped once the stabilizer has locked a high-confidence plate — a
-  **measured +172% video throughput** on the demo clip with a **byte-identical**
-  recorded fine (disable with `OCR_LOCK_CONFIDENCE=1.1`).
+- OCR is skipped once the stabilizer has locked a high-confidence plate, with a
+  **byte-identical** recorded fine (disable with `OCR_LOCK_CONFIDENCE=1.1`).
+  *(The throughput figure originally quoted for rc1 was a benchmark-harness
+  artifact; the corrected measurement is +74.9% — 28.7 → 50.2 FPS — see the
+  [1.0.0] Fixed section and `docs/EVALUATION.md`.)*
 - `/detect` errors and failed video jobs now return generic, non-leaking
   messages; the API returns JSON (not HTML) for 404/405/413/500.
 

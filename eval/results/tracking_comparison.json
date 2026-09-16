@@ -1,0 +1,724 @@
+{
+  "config": {
+    "new": {
+      "body_merge_containment": 0.8,
+      "body_merge_iou": 0.5
+    },
+    "old": {
+      "body_merge_containment": 0.6,
+      "body_merge_iou": 0.3
+    }
+  },
+  "merge_behaviour": {
+    "new": {
+      "_summary": {
+        "correct": 6,
+        "total": 6
+      },
+      "contradiction_same_rider": {
+        "correct": true,
+        "expected": true,
+        "merged": true
+      },
+      "far_apart": {
+        "correct": true,
+        "expected": false,
+        "merged": false
+      },
+      "helmet_inside_triple": {
+        "correct": true,
+        "expected": true,
+        "merged": true
+      },
+      "plate_sized_part_in_body": {
+        "correct": true,
+        "expected": true,
+        "merged": true
+      },
+      "two_riders_crossing": {
+        "correct": true,
+        "expected": false,
+        "merged": false
+      },
+      "two_riders_side_by_side": {
+        "correct": true,
+        "expected": false,
+        "merged": false
+      }
+    },
+    "old": {
+      "_summary": {
+        "correct": 5,
+        "total": 6
+      },
+      "contradiction_same_rider": {
+        "correct": true,
+        "expected": true,
+        "merged": true
+      },
+      "far_apart": {
+        "correct": true,
+        "expected": false,
+        "merged": false
+      },
+      "helmet_inside_triple": {
+        "correct": true,
+        "expected": true,
+        "merged": true
+      },
+      "plate_sized_part_in_body": {
+        "correct": true,
+        "expected": true,
+        "merged": true
+      },
+      "two_riders_crossing": {
+        "correct": false,
+        "expected": false,
+        "merged": true
+      },
+      "two_riders_side_by_side": {
+        "correct": true,
+        "expected": false,
+        "merged": false
+      }
+    }
+  },
+  "scenarios": {
+    "late_plate_while_crossing": {
+      "new": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 4,
+          "correct": 24,
+          "expected_pairs": 24,
+          "frames": 12,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "late_plate_while_crossing",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 24,
+          "fragmentations": 0,
+          "frames": 12,
+          "gaps": 0,
+          "gt_frames": 24,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "late_plate_while_crossing"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 0.875,
+          "ambiguous_bodies": 2,
+          "correct": 21,
+          "expected_pairs": 24,
+          "frames": 12,
+          "missed": 3,
+          "wrong": 1
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "late_plate_while_crossing",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 0.9583,
+          "covered_gt_frames": 23,
+          "fragmentations": 1,
+          "frames": 12,
+          "gaps": 1,
+          "gt_frames": 24,
+          "id_switches": 4,
+          "merged_frames": 2,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "late_plate_while_crossing"
+        }
+      }
+    },
+    "long_overlap": {
+      "new": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 14,
+          "correct": 28,
+          "expected_pairs": 28,
+          "frames": 14,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 2,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "long_overlap",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 28,
+          "fragmentations": 0,
+          "frames": 14,
+          "gaps": 0,
+          "gt_frames": 28,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "long_overlap"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 0.5,
+          "ambiguous_bodies": 7,
+          "correct": 14,
+          "expected_pairs": 28,
+          "frames": 14,
+          "missed": 14,
+          "wrong": 7
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 4,
+          "expected_fines": 2,
+          "false_negatives": 1,
+          "false_positives": 3,
+          "precision": 0.25,
+          "recall": 0.5,
+          "scenario": "long_overlap",
+          "true_positives": 1,
+          "wrong_plate": 1,
+          "wrong_vehicle": 2
+        },
+        "tracking": {
+          "coverage": 0.75,
+          "covered_gt_frames": 21,
+          "fragmentations": 1,
+          "frames": 14,
+          "gaps": 1,
+          "gt_frames": 28,
+          "id_switches": 2,
+          "merged_frames": 7,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "long_overlap"
+        }
+      }
+    },
+    "occlusion_recovery": {
+      "new": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 11,
+          "expected_pairs": 11,
+          "frames": 14,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "occlusion_recovery",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 11,
+          "fragmentations": 0,
+          "frames": 14,
+          "gaps": 1,
+          "gt_frames": 11,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 1,
+          "recovered_after_gap": 1,
+          "scenario": "occlusion_recovery"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 11,
+          "expected_pairs": 11,
+          "frames": 14,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "occlusion_recovery",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 11,
+          "fragmentations": 0,
+          "frames": 14,
+          "gaps": 1,
+          "gt_frames": 11,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 1,
+          "recovered_after_gap": 1,
+          "scenario": "occlusion_recovery"
+        }
+      }
+    },
+    "partial_overlap_gap20": {
+      "new": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 20,
+          "correct": 20,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "partial_overlap_gap20",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 20,
+          "fragmentations": 0,
+          "frames": 10,
+          "gaps": 0,
+          "gt_frames": 20,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "partial_overlap_gap20"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 0.0,
+          "ambiguous_bodies": 10,
+          "correct": 0,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 20,
+          "wrong": 10
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 0,
+          "expected_fines": 1,
+          "false_negatives": 1,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 0.0,
+          "scenario": "partial_overlap_gap20",
+          "true_positives": 0,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 0.5,
+          "covered_gt_frames": 10,
+          "fragmentations": 0,
+          "frames": 10,
+          "gaps": 0,
+          "gt_frames": 20,
+          "id_switches": 0,
+          "merged_frames": 10,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "partial_overlap_gap20"
+        }
+      }
+    },
+    "partial_overlap_gap30": {
+      "new": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 20,
+          "correct": 20,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "partial_overlap_gap30",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 20,
+          "fragmentations": 0,
+          "frames": 10,
+          "gaps": 0,
+          "gt_frames": 20,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "partial_overlap_gap30"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 20,
+          "correct": 20,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "partial_overlap_gap30",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 20,
+          "fragmentations": 0,
+          "frames": 10,
+          "gaps": 0,
+          "gt_frames": 20,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "partial_overlap_gap30"
+        }
+      }
+    },
+    "three_crossing": {
+      "new": {
+        "association": {
+          "accuracy": 0.9444,
+          "ambiguous_bodies": 14,
+          "correct": 34,
+          "expected_pairs": 36,
+          "frames": 12,
+          "missed": 2,
+          "wrong": 1
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 2,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "three_crossing",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 0.9722,
+          "covered_gt_frames": 35,
+          "fragmentations": 1,
+          "frames": 12,
+          "gaps": 1,
+          "gt_frames": 36,
+          "id_switches": 0,
+          "merged_frames": 1,
+          "new_ids": 3,
+          "recovered_after_gap": 1,
+          "scenario": "three_crossing"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 0.9167,
+          "ambiguous_bodies": 13,
+          "correct": 33,
+          "expected_pairs": 36,
+          "frames": 12,
+          "missed": 3,
+          "wrong": 1
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 4,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 2,
+          "precision": 0.5,
+          "recall": 1.0,
+          "scenario": "three_crossing",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 2
+        },
+        "tracking": {
+          "coverage": 0.9722,
+          "covered_gt_frames": 35,
+          "fragmentations": 1,
+          "frames": 12,
+          "gaps": 1,
+          "gt_frames": 36,
+          "id_switches": 3,
+          "merged_frames": 1,
+          "new_ids": 3,
+          "recovered_after_gap": 1,
+          "scenario": "three_crossing"
+        }
+      }
+    },
+    "two_crossing_speed10": {
+      "new": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 20,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 2,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "two_crossing_speed10",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 20,
+          "fragmentations": 0,
+          "frames": 10,
+          "gaps": 0,
+          "gt_frames": 20,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "two_crossing_speed10"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 20,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 2,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "two_crossing_speed10",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 20,
+          "fragmentations": 0,
+          "frames": 10,
+          "gaps": 0,
+          "gt_frames": 20,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "two_crossing_speed10"
+        }
+      }
+    },
+    "two_crossing_speed20": {
+      "new": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 4,
+          "correct": 20,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 2,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "two_crossing_speed20",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "covered_gt_frames": 20,
+          "fragmentations": 0,
+          "frames": 10,
+          "gaps": 0,
+          "gt_frames": 20,
+          "id_switches": 0,
+          "merged_frames": 0,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "two_crossing_speed20"
+        }
+      },
+      "old": {
+        "association": {
+          "accuracy": 0.85,
+          "ambiguous_bodies": 2,
+          "correct": 17,
+          "expected_pairs": 20,
+          "frames": 10,
+          "missed": 3,
+          "wrong": 1
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 2,
+          "expected_fines": 2,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "two_crossing_speed20",
+          "true_positives": 2,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 0.95,
+          "covered_gt_frames": 19,
+          "fragmentations": 1,
+          "frames": 10,
+          "gaps": 1,
+          "gt_frames": 20,
+          "id_switches": 4,
+          "merged_frames": 2,
+          "new_ids": 2,
+          "recovered_after_gap": 0,
+          "scenario": "two_crossing_speed20"
+        }
+      }
+    }
+  },
+  "totals": {
+    "new": {
+      "assoc_accuracy": 0.9888,
+      "assoc_correct": 177,
+      "assoc_expected": 179,
+      "assoc_wrong": 1,
+      "extra_ids": 0,
+      "fine_fn": 0,
+      "fine_fp": 0,
+      "fine_tp": 12,
+      "fragmentations": 1,
+      "id_switches": 0,
+      "merged_frames": 1
+    },
+    "old": {
+      "assoc_accuracy": 0.7598,
+      "assoc_correct": 136,
+      "assoc_expected": 179,
+      "assoc_wrong": 20,
+      "extra_ids": 0,
+      "fine_fn": 2,
+      "fine_fp": 5,
+      "fine_tp": 10,
+      "fragmentations": 4,
+      "id_switches": 13,
+      "merged_frames": 22
+    }
+  }
+}

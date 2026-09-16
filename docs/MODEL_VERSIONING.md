@@ -69,6 +69,52 @@ carries the exact model identity that raised it, and swapping weights changes th
 recorded version automatically. If no manifest is found the runtime simply
 records `model_version: null` rather than inventing one.
 
+## v2 candidate (rejected): dedup + de-leak retrain
+
+A second checkpoint, `traffic_model_v2_dedup`, was trained to test one
+evidence-based hypothesis: the shipped training set's "perfect" 4,862 / 4,862 /
+4,862 class balance is an artefact of duplication (47.7% of images are
+perceptual duplicates), and `WithHelmet` — the weakest class — has the least
+*unique* data (1,867 instances, 2.6× duplicated). The hypothesis was that
+training on the de-duplicated, leakage-free split
+([build_train_split.py](../build_train_split.py), 5,772 unique images) would
+help `WithHelmet`.
+
+It was trained to **match v1 exactly** — same `yolov8n.pt`, 15 epochs, imgsz
+640, batch 16, seed 0, Ultralytics defaults — so the **only** variable is the
+data. Both checkpoints were then evaluated on the **same** de-leaked test split
+(`eval/clean_splits`, 175 images / 293 instances) with
+[compare_models.py](../compare_models.py); full numbers in
+[eval/results/model_comparison_v1_v2.json](../eval/results/model_comparison_v1_v2.json).
+
+| metric | v1 `traffic_model-2` | v2 `dedup` | verdict |
+|---|---:|---:|---|
+| mAP@50 | **0.7265** | 0.7035 | v1 |
+| mAP@50-95 | **0.5320** | 0.5155 | v1 |
+| mean precision | 0.756 | **0.788** | v2 |
+| mean recall | **0.785** | 0.732 | v1 |
+| **`WithHelmet` mAP@50** | **0.387** | 0.299 | v1 |
+| `WithHelmet` recall | **0.519** | 0.370 | v1 |
+| `WithoutHelmet` mAP@50 | 0.705 | **0.734** | v2 |
+| `TripleRiding` mAP@50 | **0.950** | 0.925 | v1 |
+| `Plate` mAP@50 | **0.863** | 0.855 | v1 |
+| latency (ms/img) | **27.0** | 29.2 | v1 |
+
+**Decision: REJECTED — v1 remains the shipped model, no version bump.** The
+retrain not only failed to improve the target class, it made `WithHelmet`
+*worse* (mAP@50 −0.089, recall −0.149). The most likely cause is that removing
+48% of the training images took real signal with the duplicates, and the small
+`WithHelmet` class — which had the least unique data to begin with — could least
+afford it. Cleaner data did not compensate for less of it at a matched epoch
+budget.
+
+What the experiment *did* deliver is the diagnosis itself: the duplication and
+per-class unique-count imbalance are now measured, not assumed. The honest
+conclusion is that **more unique `WithHelmet` data** (not a re-split of the
+existing data) is the highest-value next step — see
+[RETRAINING_LOOP.md](RETRAINING_LOOP.md). No v2 manifest is committed, because
+no v2 model shipped.
+
 ## Versioning policy
 
 `name` identifies the model *line* (`traffic-4class`); `version` is semantic:
