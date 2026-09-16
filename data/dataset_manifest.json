@@ -1,0 +1,93 @@
+{
+  "annotation_format": "YOLO detection: one .txt per image under a parallel labels/ tree, each line 'class cx cy w h' normalised to [0,1]. A missing or empty .txt is a background image.",
+  "classes": [
+    "Plate",
+    "WithHelmet",
+    "WithoutHelmet",
+    "TripleRiding"
+  ],
+  "data_yaml": "master_traffic_violation_dataset/data.yaml",
+  "generated_at": "2026-09-13T13:07:38.608136+00:00",
+  "known_limitations": [
+    "Source datasets, their authors and their licences are not recorded with the data; do not redistribute the images or assert a licence until traced.",
+    "Validation and test splits are small and imbalanced (WithHelmet has only 27 instances in each), so per-class metrics for WithHelmet are high-variance and should be read as indicative.",
+    "Imagery skews to Indian road scenes and the plate decoder assumes the Indian plate format.",
+    "The test split comes from the same pool as train/val, so it shares their biases; it measures held-out performance, not generalisation to a different camera or city.",
+    "A Plate box being detected says nothing about whether OCR can read it; OCR quality is evaluated separately."
+  ],
+  "license": "UNVERIFIED",
+  "name": "master_traffic_violation_dataset",
+  "preprocessing": "Training images are pre-augmented offline: every train/images file is named aug_<hash>.jpg with a paired .npy cache, so augmentation is baked into the stored dataset rather than applied on the fly. The exact transforms are UNVERIFIED.",
+  "source": "UNVERIFIED",
+  "split_hygiene": {
+    "clean": false,
+    "method": "dHash(8x8, 64-bit) with Hamming distance <= 5; catches recompression/resize/photometric duplicates, not heavy geometric augmentation",
+    "source": "eval/results/dataset_leakage.json",
+    "splits": {
+      "test": {
+        "held_out_images": 194,
+        "leak_rate": 0.0979,
+        "leaked_images": 19
+      },
+      "val": {
+        "held_out_images": 383,
+        "leak_rate": 0.0809,
+        "leaked_images": 31
+      }
+    }
+  },
+  "splits": {
+    "test": {
+      "background_images": 31,
+      "class_counts": {
+        "Plate": 131,
+        "TripleRiding": 48,
+        "WithHelmet": 27,
+        "WithoutHelmet": 105
+      },
+      "images": 194,
+      "images_dir": "master_traffic_violation_dataset/test/images",
+      "instances": 311,
+      "label_files": 194
+    },
+    "train": {
+      "background_images": 453,
+      "class_counts": {
+        "Plate": 6605,
+        "TripleRiding": 4862,
+        "WithHelmet": 4862,
+        "WithoutHelmet": 4862
+      },
+      "images": 11195,
+      "images_dir": "master_traffic_violation_dataset/train/images",
+      "instances": 21191,
+      "label_files": 11195
+    },
+    "val": {
+      "background_images": 76,
+      "class_counts": {
+        "Plate": 247,
+        "TripleRiding": 89,
+        "WithHelmet": 27,
+        "WithoutHelmet": 209
+      },
+      "images": 383,
+      "images_dir": "master_traffic_violation_dataset/valid/images",
+      "instances": 572,
+      "label_files": 383
+    }
+  },
+  "totals": {
+    "background_images": 560,
+    "class_counts": {
+      "Plate": 6983,
+      "TripleRiding": 4999,
+      "WithHelmet": 4916,
+      "WithoutHelmet": 5176
+    },
+    "images": 11772,
+    "instances": 22074,
+    "label_files": 11772
+  },
+  "version": "sha256:bef022b6e9fd485e"
+}

@@ -1,0 +1,299 @@
+{
+  "clean": false,
+  "clean_split": {
+    "data_yaml": "eval/clean_splits/data.yaml",
+    "splits": {
+      "test": {
+        "dropped_leaked": 19,
+        "images_without_labels": 0,
+        "kept": 175,
+        "root": "eval/clean_splits",
+        "split": "test"
+      },
+      "val": {
+        "dropped_leaked": 31,
+        "images_without_labels": 0,
+        "kept": 352,
+        "root": "eval/clean_splits",
+        "split": "val"
+      }
+    }
+  },
+  "max_distance": 5,
+  "method": "dHash(8x8, 64-bit) with Hamming distance <= 5; catches recompression/resize/photometric duplicates, not heavy geometric augmentation",
+  "splits": {
+    "test": {
+      "examples": [
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/ds1_58e91e_BikesHelmets558_png.rf.e08a52599dfe6a1c20f1bfeff0d95bfb.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/ds1_0880cd_BikesHelmets8_png.rf.4eba4ae2a7edf5567b58050ac9f767a4.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_042093_overload-271-_jpg.rf.2f6d1da10633e593ab7f2e3e27ce84cd.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_8a4368db.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_04911e_overload-427-_jpg.rf.b4c4043992de1a1e14d8ffcd6ebb3c06.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_8d69d091.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_093da0_flip-overloading-24-_jpg.rf.fcf13b44c38f806cec3552226e68edfd.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_6950f01a.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_2c8835_1638029132181_jpg.rf.78a2101025b4bfa25834ecee6df00c35.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_15ce67d6.jpg"
+        },
+        {
+          "distance": 5,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_30d252_00000000188000000_mp4-0082_jpg.rf.80e35731bf1cba1dd760204f1861953d.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_0d4279fa.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_338c25_overload-240-_jpg.rf.b84924d073ec6534dab05e873449bf7a.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_0b5c3f05.jpg"
+        },
+        {
+          "distance": 5,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_64ca04_1638029132227_jpg.rf.8c2be48ba1a8342a1205c52a89979e66.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_9394ce89.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_6f5895_1638029132132_jpg.rf.3ebd87b57b61011e0e9c98d81184bf20.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_87c4ff13.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_76070c_1638029132190_jpg.rf.4383d272965f3c0ca4f122be0e7c547c.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_3a2917f1.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_78427d_1638029132152_jpg.rf.f6aed47f666a3ed3a44fc811487eb776.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_8eb997fc.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_87de28_20231114_090024_jpg.rf.e133554e754c7f71a180fb8b8b3aa0f9.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/dsv_666e9a_img203_jpg.rf.Ix4BRcXahJdDvInPCBXX.jpg"
+        },
+        {
+          "distance": 3,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_8e056b_00000000188000000_mp4-0042_jpg.rf.12be0eddb13043864b91b26ca2d9954e.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_7bc8bd5b.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_8fe933_1638029132122_jpg.rf.5caad0af46cec55b929bdd0e282a9d70.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_7b935a65.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_c0336c_overload-416-_jpg.rf.6c0c2ef9c4df097b699abf8ea74cc33c.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_4fbcffa5.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_c27e53_flip-overloading-80-_jpg.rf.b67464e3f0617cb2e955a06afd00c408.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_291ad3d7.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_c30f0a_1638029132329_jpg.rf.d37169a34da433c178d2a163398e0b72.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_5d184c9b.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_c80fbc_flip-overloading-21-_jpg.rf.18cfad89a79d4e174bb95863072e0f9c.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_61e45c6c.jpg"
+        },
+        {
+          "distance": 5,
+          "held_out_image": "master_traffic_violation_dataset/test/images/dst_fe17c1_00000000188000000_mp4-0069_jpg.rf.7590021483effa52036c137fe516b494.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_3d41b0f1.jpg"
+        }
+      ],
+      "held_out_images": 194,
+      "internal_duplicate_pairs": 0,
+      "leak_rate": 0.0979,
+      "leaked_images": 19,
+      "leaked_paths": [
+        "master_traffic_violation_dataset/test/images/ds1_58e91e_BikesHelmets558_png.rf.e08a52599dfe6a1c20f1bfeff0d95bfb.jpg",
+        "master_traffic_violation_dataset/test/images/dst_042093_overload-271-_jpg.rf.2f6d1da10633e593ab7f2e3e27ce84cd.jpg",
+        "master_traffic_violation_dataset/test/images/dst_04911e_overload-427-_jpg.rf.b4c4043992de1a1e14d8ffcd6ebb3c06.jpg",
+        "master_traffic_violation_dataset/test/images/dst_093da0_flip-overloading-24-_jpg.rf.fcf13b44c38f806cec3552226e68edfd.jpg",
+        "master_traffic_violation_dataset/test/images/dst_2c8835_1638029132181_jpg.rf.78a2101025b4bfa25834ecee6df00c35.jpg",
+        "master_traffic_violation_dataset/test/images/dst_30d252_00000000188000000_mp4-0082_jpg.rf.80e35731bf1cba1dd760204f1861953d.jpg",
+        "master_traffic_violation_dataset/test/images/dst_338c25_overload-240-_jpg.rf.b84924d073ec6534dab05e873449bf7a.jpg",
+        "master_traffic_violation_dataset/test/images/dst_64ca04_1638029132227_jpg.rf.8c2be48ba1a8342a1205c52a89979e66.jpg",
+        "master_traffic_violation_dataset/test/images/dst_6f5895_1638029132132_jpg.rf.3ebd87b57b61011e0e9c98d81184bf20.jpg",
+        "master_traffic_violation_dataset/test/images/dst_76070c_1638029132190_jpg.rf.4383d272965f3c0ca4f122be0e7c547c.jpg",
+        "master_traffic_violation_dataset/test/images/dst_78427d_1638029132152_jpg.rf.f6aed47f666a3ed3a44fc811487eb776.jpg",
+        "master_traffic_violation_dataset/test/images/dst_87de28_20231114_090024_jpg.rf.e133554e754c7f71a180fb8b8b3aa0f9.jpg",
+        "master_traffic_violation_dataset/test/images/dst_8e056b_00000000188000000_mp4-0042_jpg.rf.12be0eddb13043864b91b26ca2d9954e.jpg",
+        "master_traffic_violation_dataset/test/images/dst_8fe933_1638029132122_jpg.rf.5caad0af46cec55b929bdd0e282a9d70.jpg",
+        "master_traffic_violation_dataset/test/images/dst_c0336c_overload-416-_jpg.rf.6c0c2ef9c4df097b699abf8ea74cc33c.jpg",
+        "master_traffic_violation_dataset/test/images/dst_c27e53_flip-overloading-80-_jpg.rf.b67464e3f0617cb2e955a06afd00c408.jpg",
+        "master_traffic_violation_dataset/test/images/dst_c30f0a_1638029132329_jpg.rf.d37169a34da433c178d2a163398e0b72.jpg",
+        "master_traffic_violation_dataset/test/images/dst_c80fbc_flip-overloading-21-_jpg.rf.18cfad89a79d4e174bb95863072e0f9c.jpg",
+        "master_traffic_violation_dataset/test/images/dst_fe17c1_00000000188000000_mp4-0069_jpg.rf.7590021483effa52036c137fe516b494.jpg"
+      ],
+      "max_distance": 5,
+      "split": "test",
+      "train_images": 11195
+    },
+    "val": {
+      "examples": [
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/ds1_5628dd_BikesHelmets302_png.rf.a88f903661d7f2075170ac102d56d0b0.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/ds1_0b9e0c_BikesHelmets181_png.rf.902f36294c20f4db3c38a32d17d05c53.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_04fc97_overload-383-_jpg.rf.e518a9465b066848a9491799ecf7b80c.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/dsv_61651f_img871_jpg.rf.nHXkA3ROEzYEoKZ8vxke.jpg"
+        },
+        {
+          "distance": 1,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_096d69_flip-overloading-61-_jpg.rf.6a66216883eea03c4e9a26b3269792e7.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_77a03889.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_0c30d8_flip-overloading-54-_jpg.rf.6d8683d8db409bcd6fc7d9c9b7f42af7.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_55796519.jpg"
+        },
+        {
+          "distance": 2,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_0c339b_00000000188000000_mp4-0006_jpg.rf.6e275c5d00dd87af1e6d6c546eddebbd.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/dst_ee0838_00000000188000000_mp4-0032_jpg.rf.a8e7133b4537639b2ace94bb7d0dfa63.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_0d822d_flip-overloading-16-_jpg.rf.ab28a913d100343b78b72f6c2c0a667e.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_09a0a0b9.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_1dd826_flip-overloading-90-_jpg.rf.1a56c554e80242e35a37264278c0fb52.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_1147577e.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_296140_overload-274-_jpg.rf.09b78d752423b1f0e2be4a26ef11ffaf.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_0b100599.jpg"
+        },
+        {
+          "distance": 4,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_2ab2b0_flip-overloading-85-_jpg.rf.3cfa07c035c7691fda2aeb5e2ebe2886.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_3850786e.jpg"
+        },
+        {
+          "distance": 2,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_34f85b_00000000188000000_mp4-0084_jpg.rf.2cc9bef46625c6c5cfcfa62c80611e1c.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_3c68a694.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_3622cf_1638029132162_jpg.rf.274be168bba8625f6142336b6f512050.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_09a71a8f.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_3f3071_overload-286-_jpg.rf.070c1905c3d767a3645ddb73ac871564.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/dst_18b30c_overload-64-_jpg.rf.1b00971c5eb46effc5beb7c6932779be.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_41bef6_flip-overloading-57-_jpg.rf.d80754af63eea6abf943579b5faec74a.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_08984115.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_52d681_overload-307-_jpg.rf.4ac759db87d9cf45600cd75cc717d9f8.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_3786257d.jpg"
+        },
+        {
+          "distance": 2,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_58a2b4_overload-352-_jpg.rf.544fcbe309a35ba4b8b757fdd41c1e0c.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_36388161.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_5c6677_1638029132243_jpg.rf.bd182f305cbbb678def9e97959eb482e.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_6ec65cb6.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_705b4c_1638029132335_jpg.rf.53400fa7298a5f4e5d214c337ea5ed91.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_61062ca1.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_721357_1638029132179_jpg.rf.e6bedf0796a213c234355e6eb62f7403.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_01c813b3.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_7859ca_1638029132212_jpg.rf.6a747bd670dd9a778e5c17bb7f99826c.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_24aff9d0.jpg"
+        },
+        {
+          "distance": 0,
+          "held_out_image": "master_traffic_violation_dataset/valid/images/dst_7c51f6_1638029132302_jpg.rf.9b97da3e30a0f2ae838908904114d9a0.jpg",
+          "train_image": "master_traffic_violation_dataset/train/images/aug_1b529a19.jpg"
+        }
+      ],
+      "held_out_images": 383,
+      "internal_duplicate_pairs": 0,
+      "leak_rate": 0.0809,
+      "leaked_images": 31,
+      "leaked_paths": [
+        "master_traffic_violation_dataset/valid/images/ds1_5628dd_BikesHelmets302_png.rf.a88f903661d7f2075170ac102d56d0b0.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_04fc97_overload-383-_jpg.rf.e518a9465b066848a9491799ecf7b80c.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_096d69_flip-overloading-61-_jpg.rf.6a66216883eea03c4e9a26b3269792e7.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_0c30d8_flip-overloading-54-_jpg.rf.6d8683d8db409bcd6fc7d9c9b7f42af7.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_0c339b_00000000188000000_mp4-0006_jpg.rf.6e275c5d00dd87af1e6d6c546eddebbd.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_0d822d_flip-overloading-16-_jpg.rf.ab28a913d100343b78b72f6c2c0a667e.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_1dd826_flip-overloading-90-_jpg.rf.1a56c554e80242e35a37264278c0fb52.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_296140_overload-274-_jpg.rf.09b78d752423b1f0e2be4a26ef11ffaf.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_2ab2b0_flip-overloading-85-_jpg.rf.3cfa07c035c7691fda2aeb5e2ebe2886.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_34f85b_00000000188000000_mp4-0084_jpg.rf.2cc9bef46625c6c5cfcfa62c80611e1c.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_3622cf_1638029132162_jpg.rf.274be168bba8625f6142336b6f512050.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_3f3071_overload-286-_jpg.rf.070c1905c3d767a3645ddb73ac871564.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_41bef6_flip-overloading-57-_jpg.rf.d80754af63eea6abf943579b5faec74a.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_52d681_overload-307-_jpg.rf.4ac759db87d9cf45600cd75cc717d9f8.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_58a2b4_overload-352-_jpg.rf.544fcbe309a35ba4b8b757fdd41c1e0c.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_5c6677_1638029132243_jpg.rf.bd182f305cbbb678def9e97959eb482e.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_705b4c_1638029132335_jpg.rf.53400fa7298a5f4e5d214c337ea5ed91.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_721357_1638029132179_jpg.rf.e6bedf0796a213c234355e6eb62f7403.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_7859ca_1638029132212_jpg.rf.6a747bd670dd9a778e5c17bb7f99826c.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_7c51f6_1638029132302_jpg.rf.9b97da3e30a0f2ae838908904114d9a0.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_8199f4_1638029132194_jpg.rf.74dd6d082e2128d32f4a00c15f4b30e6.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_98f4c9_00000000188000000_mp4-0067_jpg.rf.59a9e669a9a39c58f8dd42de59f62776.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_a4937f_overload-225-_jpg.rf.3c6eea91a64915f63325a7d227d3ac60.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_e1e25c_1638029132247_jpg.rf.76a17652eff202e77826904384039f6a.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_e246ac_1638029132141_jpg.rf.0d62d62de3eaf8d0ecb8b8a24e07db8d.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_e4039d_video_20240825_112943_mp4-0278_jpg.rf.a5e49b7050991c46168b6e84855d5985.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_eb1ca6_1638029132138_jpg.rf.345c352b3956484a753300784942d999.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_eec837_flip-overloading-73-_jpg.rf.7f122d938e477c3365e36d76c239e42c.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_ef656b_overload-305-_jpg.rf.eceb2268e7df68c713eb4750a5dd720c.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_f111c2_overload-431-_jpg.rf.ee2b8ba8e33880dd7fd9a1e6ee467d71.jpg",
+        "master_traffic_violation_dataset/valid/images/dst_f15d28_1638029132219_jpg.rf.3a397e43661e6165aa618e81d28f31dd.jpg"
+      ],
+      "max_distance": 5,
+      "split": "val",
+      "train_images": 11195
+    }
+  },
+  "train_dir": "master_traffic_violation_dataset/train/images",
+  "train_images": 11195
+}
