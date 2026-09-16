@@ -127,7 +127,7 @@ recall = **1.0** across 8 scenarios. Full detail in
   **byte-identical** recorded fine (disable with `OCR_LOCK_CONFIDENCE=1.1`).
   *(The throughput figure originally quoted for rc1 was a benchmark-harness
   artifact; the corrected measurement is +74.9% — 28.7 → 50.2 FPS — see the
-  [Unreleased] Fixed section and `docs/EVALUATION.md`.)*
+  [1.0.0] Fixed section and `docs/EVALUATION.md`.)*
 - `/detect` errors and failed video jobs now return generic, non-leaking
   messages; the API returns JSON (not HTML) for 404/405/413/500.
 
