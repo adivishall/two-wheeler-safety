@@ -298,7 +298,7 @@ pytest                     # 466 tests, ~5s
 
 The suite is **model-free by design** — heavy inference (torch/ultralytics/
 easyocr) is isolated behind lazy imports and never exercised in tests, so the
-suite runs in ~1s and CI needs no GPU or weights. Coverage: the tracker,
+suite runs in ~5s and CI needs no GPU or weights. Coverage: the tracker,
 association, OCR stabilizer/validation, speed & calibration, confidence engine,
 both violation state machines, evidence packaging, the normalized DB (incl.
 migration, review workflow, filtering/pagination, sort-injection safety), the
