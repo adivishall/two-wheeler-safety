@@ -578,7 +578,7 @@
         "recall": 0.7524
       }
     },
-    "save_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/runs/detect/val-9"
+    "save_dir": "runs/detect/val-9"
   },
   "split": "test"
 }

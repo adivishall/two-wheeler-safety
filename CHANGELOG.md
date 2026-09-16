@@ -9,7 +9,7 @@ repo (all gitignored) — a release is the *code*, evaluated against locally-hel
 weights whose provenance is recorded in the model manifest
 ([docs/MODEL_VERSIONING.md](docs/MODEL_VERSIONING.md)).
 
-## [Unreleased] — CV evaluation & model quality
+## [1.0.0] — 2026-09-16 — CV evaluation & model quality
 
 The application was already evaluated; the **vision system** was not. This
 release makes every layer measurable and separates model quality from pipeline
@@ -45,7 +45,7 @@ quality so neither can stand in for the other.
   (`modules/pipeline_eval.py`) — helmet and triple-riding decisions scored as
   classifications over edge cases; a confirmation-window sweep showing
   single-frame fining drops helmet precision to **0.67**; and equal-rate fault
-  injection identifying **OCR as 75.7% of system sensitivity**.
+  injection identifying **OCR as 76.8% of system sensitivity**.
 - **Pipeline vs single-frame detector benchmark** — on identical inputs the
   naive policy averages **1.50 false positives even with a perfect detector**
   versus **0.00** for the pipeline; the entire advantage is precision.
@@ -64,7 +64,7 @@ quality so neither can stand in for the other.
 - **`benchmark.py` never forwarded the OCR-lock setting to `process_video`**, so
   the documented `OCR_LOCK_CONFIDENCE=1.1` baseline silently did nothing and
   both arms of the published A/B ran with the lock on. Re-measured correctly:
-  **+92.6%** (22.3 → 43.0 FPS, 120 → 5 OCR calls, identical recorded fine) —
+  **+74.9%** (28.7 → 50.2 FPS, 120 → 5 OCR calls, identical recorded fine) —
   not the previously published +172%. `docs/EVALUATION.md` carries an explicit
   correction rather than a silently edited number.
 - Generated clean-split `data.yaml` files lacked the `train:` key Ultralytics
@@ -78,7 +78,7 @@ quality so neither can stand in for the other.
 
 - README separates **model**, **pipeline** and **application** performance into
   sections that are never combined.
-- Tests: 299 → 431, still model-free and ~5 s. Coverage 94%.
+- Tests: 299 → 466, still model-free and ~5 s. Coverage 94.4%.
 
 ## [1.0.0-rc1] — 2026-09-11
 
@@ -123,9 +123,11 @@ recall = **1.0** across 8 scenarios. Full detail in
   EVALUATION, DECISIONS expanded and audited against the code.
 
 ### Changed
-- OCR is skipped once the stabilizer has locked a high-confidence plate — a
-  **measured +172% video throughput** on the demo clip with a **byte-identical**
-  recorded fine (disable with `OCR_LOCK_CONFIDENCE=1.1`).
+- OCR is skipped once the stabilizer has locked a high-confidence plate, with a
+  **byte-identical** recorded fine (disable with `OCR_LOCK_CONFIDENCE=1.1`).
+  *(The throughput figure originally quoted for rc1 was a benchmark-harness
+  artifact; the corrected measurement is +74.9% — 28.7 → 50.2 FPS — see the
+  [Unreleased] Fixed section and `docs/EVALUATION.md`.)*
 - `/detect` errors and failed video jobs now return generic, non-leaking
   messages; the API returns JSON (not HTML) for 404/405/413/500.
 

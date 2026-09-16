@@ -47,6 +47,12 @@ generated 2026-09-11.
 **Headline:** mAP@50 **0.697**, mAP@50-95 **0.502**, mean precision 0.783,
 mean recall 0.740.
 
+> These are the **val-split** component numbers (2026-09-11), kept here for the
+> per-class breakdown and confidence analysis. The **current shipped headline** is
+> the de-leaked held-out **test** split — mAP@50 **0.7265**, mAP@50-95 **0.5320** —
+> in [MODEL_EVALUATION.md](MODEL_EVALUATION.md) §4. De-leaking moved mAP@50 by only
+> +0.006, so the two are close; the test split is the one to quote.
+
 | class | precision | recall | mAP@50 | mAP@50-95 |
 |-------|----------:|-------:|-------:|----------:|
 | `Plate` | 0.941 | 0.780 | 0.811 | 0.428 |
