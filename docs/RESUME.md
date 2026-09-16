@@ -12,32 +12,34 @@ number.
 
 ## Three bullets (use these)
 
-> **Built an end-to-end two-wheeler traffic-violation vision system** —
+> **Built and evaluated an end-to-end two-wheeler violation vision system** —
 > YOLOv8 detection → multi-object tracking → Hungarian plate↔rider association →
 > temporal OCR stabilization → violation state machines → confidence scoring →
-> evidence generation → review dashboard — and evaluated it at every layer, not
-> just the detector: **mAP@50 0.727 / mAP@50-95 0.532** on a de-leaked held-out
-> test split, and **precision 1.00 / recall 1.00** on the end-to-end fine
-> decision across multi-vehicle scenarios.
+> evidence packaging → review dashboard — measured at every layer, not just the
+> detector: **mAP@50 0.727 / mAP@50-95 0.532** on a de-leaked held-out test
+> split, and **precision 1.00 / recall 1.00** on the end-to-end fine decision
+> across multi-vehicle scenarios.
 
-> **Proved the temporal layers earn their complexity instead of assuming it.**
-> Benchmarked the full pipeline head-to-head against a naive single-frame
-> detector on identical inputs: the naive policy averages **1.50 false positives
-> even with a perfect detector** and 4.08 under 20% class-confusion noise, versus
-> **0.00 and 0.23** for the pipeline. Also measured single-frame OCR against
-> cross-frame plate voting (wrong-plate rate **85% → 30% → 2%** across
-> last-frame, best-confidence and the shipped stabilizer at 12% character noise),
-> finding that temporal voting does not raise OCR accuracy but converts errors
-> into abstentions — the correct trade for a system that fines people.
+> **Fixed and proved the tracking/association layer.** Root-caused an ID-switch
+> bug in which two vehicles crossing under heavy overlap were merged into one
+> track, and fixed it at the association merge thresholds — **13 → 0 ID switches**
+> and association accuracy **0.760 → 0.989** across eight crossing/overlap
+> scenarios. Then benchmarked the full pipeline against a naive single-frame
+> detector on identical inputs (**1.50 → 0.00 mean false positives**, even with a
+> perfect detector) and single-frame vs temporal OCR (wrong-plate rate
+> **85% → 30% → 2%** across last-frame, best-confidence and the shipped stabilizer
+> at 12% character noise) — temporal voting converts OCR errors into abstentions,
+> the correct trade for a system that fines people.
 
-> **Built an ML evaluation discipline, not just a model.** Audited the held-out
-> split with perceptual hashing and found **9.8% of the test set were
-> near-duplicates of training images**; built de-leaked splits and re-measured.
-> A/B-compared four checkpoints on one split and caught a "helmet fix" model
-> that had silently forgotten an entire violation class (**TripleRiding mAP@50
-> 0.000**). Quantified an error budget by equal-rate fault injection that
-> identified **OCR as 76.8% of system sensitivity**, redirecting effort away
-> from the detector.
+> **Built an ML evaluation and performance discipline, not just a model.**
+> Perceptual-hash split audit (**9.8% of the test set** near-duplicates of
+> training images, re-measured de-leaked); A/B checkpoint comparison that caught a
+> "helmet fix" model silently forgetting a whole class (**TripleRiding mAP@50
+> 0.000**); a fault-injection error budget identifying **OCR as 76.8% of system
+> sensitivity**, redirecting effort away from the detector; and a measured
+> **+74.9% throughput gain** (28.7 → 50.2 FPS) from eliminating redundant OCR
+> calls with a byte-identical recorded fine — all backed by 466 model-free tests
+> at 94.4% branch coverage, ruff/mypy clean.
 
 ---
 
@@ -98,7 +100,8 @@ python3 compare_models.py --data eval/clean_splits/data.yaml --split test
 | `triple_riding` decision F1 | 1.00 |
 | helmet precision at `confirm_window=1` | **0.67** |
 | helmet precision at `confirm_window≥2` | **1.00** (no recall cost) |
-| ID switches in the `crossing` scenario | 4 *(absorbed — fines still correct)* |
+| ID switches across 8 crossing/overlap scenarios | **0** *(was 13 pre-fix)* |
+| association accuracy on those scenarios | 0.760 → **0.989** |
 
 ### Pipeline vs a naive single-frame detector (identical inputs)
 
@@ -150,7 +153,7 @@ python3 evaluate_pipeline.py      # all pipeline numbers above
 | video throughput (OCR every plated frame) | 28.7 FPS (120 OCR calls) |
 | OCR-lock speedup | **+74.9%**, identical recorded fine |
 | single-image inference | 24.2 ms (≈41 FPS) |
-| EasyOCR on a plate crop | 10.9 ms |
+| EasyOCR on a plate crop | 14.2 ms |
 | model load (one-time) | ≈2.9 s |
 | peak RSS | 987 MB |
 | per-frame time split | 88% YOLO, 9% OCR, <2% everything else |
@@ -170,7 +173,7 @@ better story.
 
 | metric | value |
 |---|---:|
-| tests | 429, model-free, ~5 s |
+| tests | 466, model-free, ~5 s |
 | lint / types | `ruff` clean, `mypy` clean |
 | CI | GitHub Actions, Python 3.11 + 3.12, no GPU/weights/dataset needed |
 

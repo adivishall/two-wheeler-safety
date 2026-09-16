@@ -24,6 +24,6 @@
   "images_before": 11195,
   "images_final": 5772,
   "note": "Validation and test still point at the ORIGINAL held-out directories at full size; only training images were removed.",
-  "out": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/datasets/train_clean",
+  "out": "datasets/train_clean",
   "source": "master_traffic_violation_dataset/data.yaml"
 }

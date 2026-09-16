@@ -46,7 +46,7 @@
         "WithoutHelmet": 105
       },
       "images": 194,
-      "images_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/master_traffic_violation_dataset/test/images",
+      "images_dir": "master_traffic_violation_dataset/test/images",
       "instances": 311,
       "label_files": 194
     },
@@ -59,7 +59,7 @@
         "WithoutHelmet": 4862
       },
       "images": 11195,
-      "images_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/master_traffic_violation_dataset/train/images",
+      "images_dir": "master_traffic_violation_dataset/train/images",
       "instances": 21191,
       "label_files": 11195
     },
@@ -72,7 +72,7 @@
         "WithoutHelmet": 209
       },
       "images": 383,
-      "images_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/master_traffic_violation_dataset/valid/images",
+      "images_dir": "master_traffic_violation_dataset/valid/images",
       "instances": 572,
       "label_files": 383
     }

@@ -68,6 +68,13 @@ violation:
   traversal-proof, the write API can require a key, and video runs as a bounded,
   cancellable background job.
 
+The honest thesis this project is built to demonstrate: **a strong pipeline
+around an imperfect detector is still bounded by the detector.** The engineering
+here makes the detector's output *defensible* — associated, confirmed over time,
+de-duplicated, confidence-scored and auditable — but it cannot exceed what the
+model can see. The evaluation below measures both layers separately so neither is
+mistaken for the other, and the error budget says where effort actually pays off.
+
 ## Architecture
 
 ```mermaid
@@ -420,17 +427,17 @@ of them is about real footage. Full detail in [docs/EVALUATION.md](docs/EVALUATI
 | | **Model performance** | **System engineering** |
 |---|---|---|
 | **Question** | How good is the detector on real images? | Does the pipeline around the model behave correctly? |
-| **Data** | Real annotated dataset, held-out val split | **Deterministic synthetic scenarios** |
-| **Headline** | mAP@50 **0.697**, mAP@50-95 **0.502**, mean P **0.783**, mean R **0.740** | precision = recall = **1.0** across the suite |
+| **Data** | Real annotated dataset, de-leaked held-out test split | **Deterministic synthetic scenarios** |
+| **Headline** | mAP@50 **0.727**, mAP@50-95 **0.532**, mean P **0.756**, mean R **0.785** | precision = recall = **1.0** across the suite |
 | **What it means** | Middling, and honestly so — see the caveats below | The plumbing is correct: tracking, association, temporal confirmation, de-duplication |
 | **What it does *not* mean** | — | **Nothing about field accuracy.** A 1.0 here is a statement about synthetic inputs, not about real roads |
 
 **Caveats that matter more than the headline:**
 
-- **`WithHelmet` is weak (P=0.42, mAP@50=0.44)** on only **27** validation
+- **`WithHelmet` is weak (mAP@50 0.387, F1 0.519)** on only **27** test
   instances. That class is under-trained and the number is unstable at that `n`.
 - The dataset has known **class imbalance and leakage caveats** (see
-  [docs/DATASET.md](docs/DATASET.md)); mAP@50 of 0.697 is a *baseline on this
+  [docs/DATASET.md](docs/DATASET.md)); mAP@50 of 0.727 is a *baseline on this
   dataset*, not a claim about field accuracy.
 - **Speed validation is synthetic** — constant-velocity trajectories on a
   perspective grid, not surveyed ground truth.

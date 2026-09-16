@@ -19,7 +19,7 @@
 | WithoutHelmet | 0.7315 | 0.7524 | 0.7054 | 0.5535 |
 | TripleRiding | 0.8824 | 0.9375 | 0.9264 | 0.7422 |
 
-Confusion matrix / PR curves: `/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/runs/detect/val-7`
+Confusion matrix / PR curves: `runs/detect/val-7`
 
 ## Error analysis
 
