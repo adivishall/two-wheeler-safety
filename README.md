@@ -556,6 +556,7 @@ cite as the generated source of truth.
 - [data/DATASET_MANIFEST.md](data/DATASET_MANIFEST.md) — generated dataset manifest (counts, splits, hygiene)
 - [docs/BASELINE.md](docs/BASELINE.md) — pre-upgrade baseline audit
 - [docs/RESUME.md](docs/RESUME.md) — measured evidence, with the command behind every number
+- [docs/INTERVIEW.md](docs/INTERVIEW.md) — 30s/60s/3-min pitches, key decisions, hard problems, likely Q&A
 - [CHANGELOG.md](CHANGELOG.md) — release notes (v1.0.0-rc1)
 
 ## Tech stack
