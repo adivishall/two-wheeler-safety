@@ -14,6 +14,13 @@ and surfaces everything in a review dashboard.
 
 <sub>The review dashboard (populated with the one-command demo). Try it in ~30 s with `make demo` — no model or weights required.</sub>
 
+| Violations table — every flag, confidence-scored & review-tracked | Evidence review — the human-in-the-loop step |
+|---|---|
+| ![Filterable, paginated violations table with per-row confidence bars, colour-coded violation types, and Pending/Confirmed/Dismissed review state](docs/images/violations.png) | ![Violation detail modal: annotated evidence frame, decoded registration region, the confidence score with its "not a calibrated probability" disclaimer, and Confirm / Dismiss / Reset actions](docs/images/review.png) |
+
+<sub>All three are the real running app on the one-command demo data. The evidence
+frame is a bundled sample photo; nothing here is a real fine.</sub>
+
 ---
 
 ## What it does
