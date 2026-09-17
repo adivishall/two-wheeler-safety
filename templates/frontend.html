@@ -1714,6 +1714,12 @@
             // metadata sidecar (JSON), loaded lazily so the modal opens instantly.
             if (d.evidence && d.evidence.metadata) {
                 loadConfidenceBreakdown(d.evidence.metadata);
+            } else {
+                // No metadata sidecar (e.g. demo data): replace the placeholder
+                // instead of leaving "loading…" on screen forever.
+                const el = document.getElementById("confBreakdown");
+                const sub = el && el.querySelector(".sub");
+                if (sub) sub.textContent = "No per-component breakdown for this violation.";
             }
         }
 
