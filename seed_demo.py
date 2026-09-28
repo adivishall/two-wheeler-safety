@@ -2,9 +2,14 @@
 
 Runs the real detector on a few bundled sample photos so each seeded plate
 comes with a genuine annotated evidence image (plate and photo stay
-consistent), then records a curated mix of violations — a plate with two
+consistent), then records a CURATED mix of violations — a plate with two
 unpaid fines, a triple-riding fine, and an already-paid one — spread over
 the last couple of weeks.
+
+The violation types and amounts are chosen for the demo, not detected (a
+photo cannot show overspeed at all). So every record is attached to a
+session whose source says "curated demo seed", and carries no confidence
+score: the dashboard can always tell these apart from pipeline output.
 
     python3 seed_demo.py           # wipe existing fines, then seed
     python3 seed_demo.py --keep    # keep existing fines, just add the demo set
@@ -34,7 +39,9 @@ DEMO_RECORDS = [
     ("samples/plate8.jpeg", [
         ("triple_riding", 1000, "unpaid", 6),
     ]),
-    ("samples/plate11.jpeg", [
+    # plate11's OCR read ("IZR40294") is not a valid registration format, so
+    # the photo path now abstains on it; plate9 shows MH12HS8818 again.
+    ("samples/plate9.jpeg", [
         ("no_helmet", 500, "paid", 12),
     ]),
 ]
@@ -57,6 +64,11 @@ def main():
         print(f"Cleared existing fines in {DB_PATH}.")
 
     seeded = {}  # plate -> [(violation, amount, status)]
+    session_id = "seed-demo-curated"
+    db.create_session(session_id, source="[curated demo seed] not pipeline output",
+                      model_version="curated (types chosen by hand)",
+                      pipeline_version="seed_demo")
+    db.update_session(session_id, status="completed")
 
     for source, records in DEMO_RECORDS:
         if not os.path.exists(source):
@@ -80,6 +92,7 @@ def main():
             db.record_fine(
                 plate, violation, evidence,
                 amount=amount, status=status, timestamp=timestamp,
+                session_id=session_id,
             )
             seeded.setdefault(plate, []).append((violation, amount, status))
 

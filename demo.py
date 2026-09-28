@@ -39,21 +39,23 @@ log = get_logger("demo")
 DB_PATH = os.environ.get("TRAFFIC_DB_PATH", "traffic.db")
 EVIDENCE_DIR = os.environ.get("EVIDENCE_DIR", "evidence")
 
-# Bundled real plate photos used as demo evidence, copied into the evidence dir
-# under stable names. (source file, evidence basename)
+# Bundled real photos used as demo evidence — ONLY where the photo actually
+# shows that plate (the detector reads MH02DL4596 in plate4 and MH12HS8818 in
+# plate8). Plates with no matching photo get a generated placeholder that says
+# it is not evidence, rather than someone else's bike. (source, evidence name)
 DEMO_IMAGES = {
-    "MH02DL4596": ("demo_shots/MH02DL4596_1786603781.jpg", "demo_MH02DL4596.jpg"),
-    "MH12HS8818": ("demo_shots/MH12HS8818_1786603782.jpg", "demo_MH12HS8818.jpg"),
-    "KA05CD9876": ("samples/plate4.jpeg", "demo_KA05CD9876.jpg"),
-    "DL8CAF5031": ("samples/plate8.jpeg", "demo_DL8CAF5031.jpg"),
-    "TN22BB4410": ("samples/plate11.jpeg", "demo_TN22BB4410.jpg"),
+    "MH02DL4596": ("samples/plate4.jpeg", "demo_MH02DL4596.jpg"),
+    "MH12HS8818": ("samples/plate8.jpeg", "demo_MH12HS8818.jpg"),
+    "KA05CD9876": (None, "demo_KA05CD9876_placeholder.jpg"),
+    "DL8CAF5031": (None, "demo_DL8CAF5031_placeholder.jpg"),
+    "TN22BB4410": (None, "demo_TN22BB4410_placeholder.jpg"),
 }
 
 # Two illustrative processing sessions (as if two clips were analysed).
 DEMO_SESSIONS = [
-    {"id": "demo-sess-junction", "source": "junction_cam_01.mp4",
+    {"id": "demo-sess-junction", "source": "[demo] junction_cam_01.mp4",
      "fps": 14.6, "frames": 1820, "vehicles": 37},
-    {"id": "demo-sess-highway", "source": "highway_evening.mp4",
+    {"id": "demo-sess-highway", "source": "[demo] highway_evening.mp4",
      "fps": 9.2, "frames": 940, "vehicles": 18},
 ]
 
@@ -78,8 +80,10 @@ DEMO_VIOLATIONS = [
     ("DL8CAF5031", "overspeed",     0.59, 10, "demo-sess-highway",  "pending",   False),
 ]
 
-MODEL_VERSION = "traffic-4class@1.0.0"
-PIPELINE_VERSION = "1.0.0"
+# Illustrative records must not claim to be the output of a real model: the
+# dashboard shows model/pipeline version per session, so these say "demo".
+MODEL_VERSION = "demo (synthetic records, no model run)"
+PIPELINE_VERSION = "demo"
 
 
 def _copy_demo_evidence() -> dict[str, str]:
@@ -88,13 +92,31 @@ def _copy_demo_evidence() -> dict[str, str]:
     os.makedirs(EVIDENCE_DIR, exist_ok=True)
     stored = {}
     for plate, (src, name) in DEMO_IMAGES.items():
-        if os.path.exists(src):
-            dst = os.path.join(EVIDENCE_DIR, name)
+        dst = os.path.join(EVIDENCE_DIR, name)
+        if src and os.path.exists(src):
             shutil.copyfile(src, dst)
+            stored[plate] = f"{EVIDENCE_DIR}/{name}"
+        elif _write_placeholder(dst, plate):
             stored[plate] = f"{EVIDENCE_DIR}/{name}"
         else:
             log.warning("demo image missing, evidence will be blank: %s", src)
     return stored
+
+
+def _write_placeholder(path: str, plate: str) -> bool:
+    """A grey card that says what it is: a demo record with no evidence photo.
+    Returns False if OpenCV isn't installed (the record then has no image)."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return False
+    img = np.full((360, 640, 3), 60, np.uint8)
+    for i, (text, scale) in enumerate((("DEMO RECORD", 1.4), (plate, 1.2),
+                                       ("illustrative - no evidence photo", 0.7))):
+        cv2.putText(img, text, (40, 110 + 80 * i), cv2.FONT_HERSHEY_SIMPLEX, scale,
+                    (230, 230, 230), 2, cv2.LINE_AA)
+    return bool(cv2.imwrite(path, img))
 
 
 def seed_synthetic(keep: bool) -> Database:
