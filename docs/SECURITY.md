@@ -21,10 +21,13 @@ fines they shouldn't.
 ### Authentication & authorization
 - `/detect` can require an `X-API-Key` (`DETECT_API_KEY`); unset only for local
   demo use.
-- Role-based access (viewer < reviewer < admin) gates the mutating review /
-  payment endpoints and the audit log **once role keys are configured**; with no
-  keys set the app is open for local/demo use (documented, opt-in hardening).
-  Tested in `tests/test_app_auth.py`.
+- Role-based access (viewer < reviewer < admin) gates **every endpoint that
+  creates or changes records** — `/analyze` and `/analyze_video` (they write
+  fines), `/video_cancel`, review, payment — plus the audit log, **once role
+  keys are configured**; with no keys set the app is open for local/demo use
+  (documented, opt-in hardening). The upload routes used to be left open even
+  with auth on, so anyone who could reach the port could still create fines;
+  fixed and pinned in `tests/test_hardening.py`. Also `tests/test_app_auth.py`.
 - **No cookies or server-side sessions are used for auth.** Credentials are a
   header API key, carried explicitly by the caller.
 
@@ -46,20 +49,36 @@ test asserts the app never returns a wildcard ACAO.
 ### Rate limiting
 An in-process per-IP sliding-window limiter (`RateLimiter`) guards the write /
 upload routes (`/detect`, `/analyze`, `/analyze_video`, review, payment);
-over-limit callers get `429`. Configurable via `RATE_LIMIT_PER_MIN`. Tested.
+over-limit callers get `429`. Configurable via `RATE_LIMIT_PER_MIN`. Idle keys
+are swept once a minute — it used to keep a deque for every IP that ever called,
+an unbounded-memory path under a scan. Tested.
 (Per-process only — a multi-worker deployment should add a shared limiter at the
 proxy; noted in DEPLOYMENT.md.)
 
 ### Input validation & path traversal
-- Uploads: extension allowlist **and** image magic-byte sniffing, a
-  server-controlled temp filename (never the client's), a global request-size
-  cap (`MAX_CONTENT_LENGTH` → `413`), and per-video size + wall-clock ceilings.
+- Uploads: extension allowlist **and** content sniffing — image magic bytes
+  (a RIFF container counts as an image only if it says `WEBP`; it used to accept
+  any RIFF, i.e. AVI/WAV) and, newly, video container signatures (ISO-BMFF
+  `ftyp`, AVI, EBML) so a renamed non-video is rejected before a worker thread
+  hands it to the decoder. Server-controlled temp filenames (never the client's),
+  a global request-size cap (`MAX_CONTENT_LENGTH` → `413`), per-video size +
+  wall-clock ceilings, and temp files removed on every exit path.
 - Evidence is served only as a bare basename with a media-type allowlist, so
   `/evidence/../app.py` and non-media names are `404` — traversal-proof
   (`send_from_directory` is itself safe; this is defense in depth). A
   caller-supplied `image_path` is reduced to a safe basename before storage, and
   names reducing to `.`/`..` or containing a NUL are rejected.
 - Plate/violation inputs are normalized/validated before they reach SQL.
+
+### Data integrity under concurrency
+Payment status moves along a lifecycle with terminal states. The update used to
+validate the current status and then write unconditionally, so two concurrent
+requests (paid vs cancelled) could both pass validation and the second silently
+overwrote the first's terminal state. It is now a compare-and-set
+(`UPDATE … WHERE id = ? AND status = ?`), and a lost race is reported rather than
+applied. Pinned by a deterministic race test and a threaded test in
+`tests/test_hardening.py`. `/api/stats?recent=` is clamped: SQLite treats a
+negative `LIMIT` as unlimited.
 
 ### SQL injection
 All queries are parameterized. The one place a column name is interpolated

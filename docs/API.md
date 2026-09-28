@@ -7,7 +7,8 @@ noted. Fields shown are representative; see `app.py` for the source of truth.
 - `/detect` can require a matching `X-API-Key` header if `DETECT_API_KEY` is set
   (401 otherwise).
 - Role-based access (viewer < reviewer < admin) via role keys: once configured,
-  the mutating review/payment endpoints require **reviewer** and `/api/audit`
+  every endpoint that creates or changes records — `/analyze`, `/analyze_video`,
+  `/video_cancel`, review, payment — requires **reviewer**, and `/api/audit`
   requires **admin** (403 otherwise). With no role keys set, every request is
   treated as an anonymous admin (unchanged local/demo behaviour). See
   [SECURITY.md](SECURITY.md).
@@ -31,8 +32,16 @@ Liveness/readiness. Never exposes secrets.
 
 ## POST /analyze
 
-Analyze an uploaded image (multipart form field `image`), record any violations,
-return what was found. Rejects non-images by extension **and** magic bytes.
+Analyze an uploaded image (multipart form field `image`), record violations **per
+vehicle**, and return what was found. Rejects non-images by extension **and**
+magic bytes. Reviewer role when auth is on.
+
+Each rider is paired with its own plate by the same Hungarian association the
+video path uses. A violation is recorded only when that vehicle's plate reads as
+a structurally valid plate; anything the model saw but the rules won't stand
+behind is returned under `abstained` with a reason, and nothing is recorded for
+it. A photo has no temporal evidence, so its confidence score's temporal
+component is 1/`confirm_window` by construction.
 
 ```bash
 curl -F "image=@photo.jpg" http://127.0.0.1:5000/analyze
@@ -41,27 +50,43 @@ curl -F "image=@photo.jpg" http://127.0.0.1:5000/analyze
 ```json
 {
   "plate": "MH12AB1234",
-  "evidence": "/evidence/MH12AB1234_1699999999.jpg",
-  "violations": [{ "type": "no_helmet", "amount": 500 }]
+  "evidence": "/evidence/scan_3f9c2a1b7d4e.jpg",
+  "violations": [{ "type": "no_helmet", "amount": 500, "confidence": 0.68 }],
+  "vehicles": [
+    { "plate": "MH12AB1234", "plate_raw": "MH12AB 1234",
+      "violations": [{ "type": "no_helmet", "amount": 500, "confidence": 0.68 }],
+      "abstained": [] },
+    { "plate": null, "plate_raw": "0285",
+      "violations": [],
+      "abstained": [{ "type": "no_helmet", "reason": "plate_not_valid_format" }] }
+  ]
 }
 ```
 
-No plate read → `{ "plate": null, "message": "..." }`. Errors → `400` with
-`{ "error": "..." }`.
+`plate` / `violations` describe the primary vehicle (first with a recordable
+violation) and keep the historical shape. Abstention reasons: `contradiction`,
+`overlaps_helmet_box`, `low_confidence`, `no_plate_associated`,
+`plate_unreadable`, `plate_not_valid_format`. No valid plate anywhere →
+`plate: null` plus a `message`. Errors → `400` with `{ "error": "..." }`.
 
 ## POST /analyze_video
 
 Start a background video job (multipart field `video`). Returns immediately.
+Reviewer role when auth is on. The container is checked by magic bytes (MP4/MOV
+`ftyp`, AVI, Matroska/WebM) before a worker ever opens it.
 
 ```bash
 curl -F "video=@clip.mp4" http://127.0.0.1:5000/analyze_video
 ```
 
 ```json
-{ "job_id": "9f2c…" }
+{ "job_id": "9f2c…", "session_id": "4be1…" }
 ```
 
-`503` if the concurrency cap is reached; `400` for an unsupported/oversized file.
+`503` if the concurrency cap is reached; `400` for an unsupported, oversized, or
+non-video file. Every detection threshold comes from the env config
+(`DETECT_CONF_THRESHOLD`, `STREAK_THRESHOLD`, `HELMET_*`, `TRIPLE_MIN_CONF`,
+`SPEED_LIMIT_KMH`, `MAX_VIDEO_WIDTH`) and is recorded in each evidence sidecar.
 
 ## GET /video_status/&lt;job_id&gt;
 
@@ -77,22 +102,43 @@ When finished (`status` ∈ `done` / `error` / `cancelled`); a `done` result:
 {
   "status": "done",
   "result": {
-    "frames": 400, "plates_tracked": 2, "fps": 25.0,
+    "frames": 400, "plates_tracked": 2,
+    "fps": 25.0, "source_fps": 25.0, "processing_fps": 31.4, "wall_seconds": 12.7,
+    "stopped_reason": "end_of_video",
     "output": "/evidence/annotated_ab12.mp4",
     "violations": [
       { "plate": "MH12AB1234", "violation": "no_helmet", "amount": 500,
+        "track_id": 3, "frame_index": 41,
         "confidence": 0.71, "evidence": "/evidence/…_annotated.jpg",
-        "metadata": "/evidence/….json", "confidence_breakdown": { "...": 0.x } }
-    ]
+        "metadata": "/evidence/….json", "confidence_breakdown": { "...": 0.x },
+        "plate_votes": { "stable": "MH12AB1234", "agreement": 0.92, "margin": 0.85,
+                         "runner_up": "MH12AB1284", "observations": 5, "disagreeing": 1 } }
+    ],
+    "unfined_confirmations": [
+      { "track_id": 7, "violation": "no_helmet", "reason": "contested" }
+    ],
+    "suppressed_duplicates": [],
+    "ocr_calls": 57
   }
 }
 ```
+
+`fps` is the SOURCE frame rate (historical key); `processing_fps` is frames
+processed per wall-clock second. `stopped_reason` ∈ `end_of_video` /
+`max_frames` / `cancelled` / `time_limit`; the session is persisted as
+`completed`, `cancelled` or `truncated` accordingly. `unfined_confirmations` are
+violations the state machines confirmed but that were never fined because no
+plate was trustworthy (reason from the OCR vote: `contested`, `low_agreement`,
+`too_few_observations`, `no_valid_reading`, …). `suppressed_duplicates` are
+repeat sightings of an already-fined (plate, violation) in the same run.
 
 Unknown id → `404`.
 
 ## POST /video_cancel/&lt;job_id&gt;
 
-Cooperatively cancel a running job. `404` if not found or not cancellable.
+Cooperatively cancel a running job (reviewer role when auth is on). `404` if not
+found or not cancellable. Violations already recorded before the stop are kept;
+the session is marked `cancelled`, never `completed`.
 
 ```json
 { "message": "cancellation requested" }
@@ -149,7 +195,7 @@ Dashboard overview (all real aggregates).
 }
 ```
 
-Optional query: `recent` (count of recent rows, default 5).
+Optional query: `recent` (count of recent rows, default 5, clamped to 0–100).
 
 ## GET /api/analytics
 

@@ -160,3 +160,130 @@ has real costs:
 **When to revisit.** If the tracking/OCR/confidence logic in `modules/` is ever
 genuinely reused by a *separate* project, extract just that into a package then —
 not the whole application.
+
+## 14. One decision core, shared by production and every evaluator
+
+**Context.** `process_video` owned the per-frame decision loop, and
+`system_eval` and `pipeline_eval` each carried a private copy. The copies had
+drifted — confirm window 3 vs the shipped 5, a frame with no rider box skipped
+instead of counted as a miss, OCR text handed over whether or not a plate box
+existed — so "pipeline metrics" described a sibling of the shipped code.
+
+**Decision.** `modules/pipeline.py :: ViolationPipeline` owns tracking,
+association, OCR voting, state machines, speed, confidence and de-duplication.
+`process_video` is the pixel/disk shell around it; the evaluators drive the same
+object with synthetic boxes and a plate-box → text lookup.
+
+**Why.** A number is only evidence about the code that produced it. Driving the
+real loop immediately exposed four shipped bugs the copies had hidden (stale
+plate box, speed under downscaling, duplicate fines on re-entry, a scorer that
+counted a duplicate as a second true positive).
+
+## 15. Helmet confirmation: a streak AND a track-level fraction, chosen by experiment
+
+**Decision.** Confirm no-helmet after 5 consecutive supporting frames **and** ≥ 70%
+supporting frames over ≥ 12 observed frames. Triple-riding and overspeed keep the
+plain 5-frame streak.
+
+**Why.** `evaluate_temporal.py` simulated riders at the detector's per-frame
+error rates measured on the *validation* split and swept rules, choosing on one
+seed and reporting on another. Finding: a plain streak's false-flag rate *grows
+with time in view* under temporally correlated errors (a helmeted rider seen for
+2 s gets many chances at one lucky run of flips: 35% flagged at moderate
+correlation), and k-of-n voting is worse still. A fraction converges instead of
+accumulating chances. No rule met the pre-stated ≤ 1% target, so the stated
+fallback (minimise the worst case) chose this one: worst design case 2.0% on the
+held-out seed. **Cost, accepted and stated:** a rider seen on fewer than 12 frames
+is never fined. Triple-riding was not part of the experiment, so it was not
+changed.
+
+## 16. OCR vote thresholds chosen by experiment; an exact tie always abstains
+
+**Decision.** The stabilizer elects a plate only with ≥ 3 observations, an
+outright majority of vote weight (≥ 0.5, was 0.35), and a ≥ 0.2 margin over the
+best competing valid plate. An exact tie abstains regardless.
+
+**Why.** `evaluate_ocr.py --simulate --policy-sweep` added *consistent*
+misreads (the same glyph misread the same way on many frames — what a real plate
+image does) to the noise model. The old rule named the wrong plate for up to 3.5%
+of vehicles; this one 1.5%, at about half the coverage. That is the trade a
+system that fines people must make: a withheld fine costs revenue, a wrong plate
+fines an innocent owner. A tie used to be broken by string order — a coin flip.
+
+## 17. The photo path uses the same association, and is stricter than video
+
+**Decision.** `/analyze` decides per vehicle through `associate()`; a violation
+is recorded only if *that* vehicle's plate is structurally valid; a no-helmet box
+overlapping any helmet box (IoU > `CONTRADICTION_IOU`) abstains. Abstentions are
+returned with reasons.
+
+**Why.** The old path fined every violation in the frame against whichever plate
+was OCR'd last — with two bikes, possibly the wrong rider — and fined against raw
+OCR text such as `0285`. A photo has no time axis to resolve contradictions, so it
+must be more conservative than video, not less.
+
+## 18. One fine per (plate, violation) per run
+
+**Decision.** In addition to per-track de-duplication, a run fines each
+(plate, violation) once; later sightings are reported as suppressed duplicates.
+
+**Why.** A rider who leaves view for longer than the tracker's `max_age` returns
+as a new track and used to be fined twice. If two different vehicles share an
+OCR'd plate this under-fines — the safe direction.
+
+## 19. Select models on validation; test is for reporting; differences need CIs
+
+**Decision.** `compare_models.py` defaults to the val split; model and threshold
+choices are made there. `evaluate_uncertainty.py` reports per-class AP@50 with
+image-bootstrap CIs and a *paired* bootstrap for differences. A candidate is
+promoted only if its mAP@50 gain has a CI excluding zero and no class has a
+significant regression.
+
+**Why.** Earlier decisions ("v2 rejected", "probe wins") compared test-split
+point estimates on a class with 27 instances. On val with CIs, v2 vs v1 is not
+distinguishable overall (and significantly worse on Plate); "probe" is
+significantly *worse*. Choosing on test is tuning on test.
+
+## 20. mAP uses the standard protocol; the operating threshold is separate
+
+**Decision.** Reported mAP comes from `val()` at conf 0.001 / NMS 0.7 (the
+standard protocol). The error analysis (confusions, FP/FN) runs at the operating
+threshold 0.25. Bootstrap AP uses `predict()` (single-label NMS), the path the
+pipeline actually runs, and is reported next to the official number.
+
+**Why.** mAP at conf 0.25 truncates the PR curve; it understated mAP@50 by ~0.06.
+`val()` uses multi-label NMS (a box can carry a second class hypothesis), which
+flatters confusable classes relative to deployment — most of all WithHelmet —
+so both numbers are shown and the gap is explained, not hidden.
+
+## 21. Error budget by oracle ablation at the measured operating point
+
+**Decision.** Inject every stage's fault at its measured per-frame rate (OCR,
+unmeasured, is swept), make one stage perfect at a time, and attribute error by
+the end-to-end F1 it recovers.
+
+**Why.** The old equal-rate budget compared 30% per-*character* OCR corruption
+with 30% per-*box* detector faults and concluded "OCR is 77% of sensitivity" — a
+statement about units. Ablation at the real operating point answers the question
+an engineer actually has: where would fixing things pay off?
+
+## 22. Dataset version = content fingerprint
+
+**Decision.** One scheme (`modules/provenance.py :: dataset_fingerprint`): hash
+of label-file contents plus image names/sizes, independent of location; deep
+pixel hashing opt-in. Every evaluation records it, with the weights' SHA-256, git
+commit + dirty flag, library versions and hardware.
+
+**Why.** Two schemes existed, both hashing per-class *counts* (a moved box kept
+the version), one also hashing the absolute path (moving the repo changed it), so
+one dataset had two ids.
+
+## 23. Evidence records what was applied, not what was configured
+
+**Decision.** `process_video` builds the evidence `config_snapshot` from the
+arguments it actually ran with; the web job passes every env threshold through.
+
+**Why.** The web job ignored `STREAK_THRESHOLD`, `DETECT_CONF_THRESHOLD`,
+`SPEED_LIMIT_KMH` and more while stamping those env values into evidence — so
+evidence could claim a threshold the run never used, which is the one thing an
+audit trail must not do.
