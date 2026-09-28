@@ -167,7 +167,11 @@ def _metrics_from_eval(eval_json: str) -> dict:
     official = payload.get("official") or {}
     return {
         "source": os.path.relpath(eval_json),
+        "data": payload.get("data"),
         "split": payload.get("split"),
+        # conf floor / NMS IoU the mAP was computed at — without it a mAP is
+        # ambiguous (0.25 vs the standard 0.001 moved test mAP@50 by 0.04).
+        "protocol": official.get("protocol"),
         "map50": official.get("map50"),
         "map50_95": official.get("map50_95"),
         "mean_precision": official.get("mean_precision"),
