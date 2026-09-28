@@ -384,9 +384,27 @@ def _misread(text: str, rng: random.Random) -> str:
     return text[:i] + rng.choice(CONFUSIONS[text[i]]) + text[i + 1:]
 
 
-def apply_faults(scenario: Scenario, faults: dict, rng: random.Random) -> Scenario:
+_STREAMS = ("rider_miss", "class_flip", "plate_miss", "ocr_corrupt")
+
+
+def fault_streams(seed: int) -> dict:
+    """One independent RNG per fault stage (common random numbers).
+
+    Every stage draws at every opportunity whether or not its rate is zero, so
+    switching one stage off (the oracle) changes that stage's outcomes only —
+    the other stages see exactly the same draws. Without this, removing a fault
+    shifted every later draw and an "oracle" run could score below the faulty
+    one purely by chance."""
+    return {k: random.Random(seed * 1_000_003 + i) for i, k in enumerate(_STREAMS)}
+
+
+def apply_faults(scenario: Scenario, faults: dict, rng) -> Scenario:
     """Degrade a scenario at per-vehicle, per-frame rates. Ground truth is
-    untouched: degrading an input must never change the right answer."""
+    untouched: degrading an input must never change the right answer.
+
+    ``rng`` is either a ``random.Random`` (one shared stream) or the per-stage
+    dict from :func:`fault_streams`."""
+    streams = rng if isinstance(rng, dict) else dict.fromkeys(_STREAMS, rng)
     miss = faults.get("rider_miss", {})
     flip = faults.get("class_flip", {})
     plate_miss = faults.get("plate_miss", 0.0)
@@ -399,19 +417,22 @@ def apply_faults(scenario: Scenario, faults: dict, rng: random.Random) -> Scenar
             text = vf.plate_text
             for d in vf.dets:
                 if d.label == "Plate":
-                    if rng.random() < plate_miss:
+                    if streams["plate_miss"].random() < plate_miss:
                         text = None
                         continue
                     dets.append(d)
                     continue
-                if rng.random() < miss.get(d.label, 0.0):
+                dropped = streams["rider_miss"].random() < miss.get(d.label, 0.0)
+                u_flip = streams["class_flip"].random()
+                if dropped:
                     continue
                 label = d.label
-                if label in flip and rng.random() < flip[label][1]:
+                if label in flip and u_flip < flip[label][1]:
                     label = flip[label][0]
                 dets.append(DetBox(label, d.box, d.conf))
-            if text and rng.random() < ocr:
-                text = _misread(text, rng)
+            u_ocr = streams["ocr_corrupt"].random()
+            if text and u_ocr < ocr:
+                text = _misread(text, streams["ocr_corrupt"])
             new_frame.append(VehicleFrame(vf.gt_id, dets, text))
         frames.append(new_frame)
     return Scenario(scenario.name, scenario.vehicles, frames)
@@ -426,9 +447,12 @@ def _without(faults: dict, stage: str) -> dict:
 
 
 def _mean_f1(scenarios, faults, trials, seed) -> float:
-    rng = random.Random(seed)
-    scores = [_suite_f1([apply_faults(sc, faults, rng) for sc in scenarios])
-              for _ in range(trials)]
+    """Mean suite F1 over ``trials`` paired draws (trial t always uses the same
+    per-stage streams, whatever ``faults`` is)."""
+    scores = []
+    for t in range(trials):
+        streams = fault_streams(seed * 7919 + t)
+        scores.append(_suite_f1([apply_faults(sc, faults, streams) for sc in scenarios]))
     return sum(scores) / len(scores)
 
 

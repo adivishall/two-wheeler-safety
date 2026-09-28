@@ -75,7 +75,9 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--noise-from", default=DEFAULT_NOISE_FROM,
                     help="evaluate_model.py JSON (val split) to take error rates from")
-    ap.add_argument("--riders", type=int, default=150, help="riders per class per condition")
+    ap.add_argument("--riders", type=int, default=600,
+                    help="riders per class per condition (600; the selection was "
+                         "re-checked against 150 and the same rule won at both sizes)")
     ap.add_argument("--dev-seed", type=int, default=101)
     ap.add_argument("--test-seed", type=int, default=202)
     ap.add_argument("--out", default="eval/results")

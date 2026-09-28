@@ -87,8 +87,9 @@ class PipelineConfig:
     # frames with a rider box, `helmet_min_fraction` of them no-helmet. Chosen
     # by evaluate_temporal.py (eval/results/temporal_confirmation.md): at the
     # detector's measured val error rates it cut the worst-case share of
-    # helmeted riders flagged from 35% to 2% (held-out seed), at the cost of
-    # never fining a rider seen on fewer than 12 frames.
+    # helmeted riders flagged from 31.5% to 1.2% (held-out seed, 1,200 riders
+    # per condition), at the cost of never fining a rider seen on fewer than
+    # 12 frames.
     helmet_min_observed: int = 12
     helmet_min_fraction: float = 0.7
     helmet_min_conf: float = 0.375  # HELMET_MIN_CONF (val-selected, see config.py)
