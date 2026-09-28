@@ -58,12 +58,20 @@ def run_headroom(trials: int) -> dict:
 
 
 def run_budget(trials: int) -> dict:
-    """Fault-injection error budget across pipeline stages."""
-    from modules.pipeline_eval import error_budget, helmet_scenarios, triple_riding_scenarios
+    """Error budget: oracle ablation at the measured operating point, plus
+    per-stage dose-response in one common unit."""
+    from modules.pipeline_eval import (
+        error_budget,
+        helmet_scenarios,
+        stage_tolerance,
+        triple_riding_scenarios,
+    )
     from modules.system_eval import builtin_scenarios
 
     scenarios = builtin_scenarios() + helmet_scenarios() + triple_riding_scenarios()
-    return error_budget(scenarios, trials=trials)
+    out = error_budget(scenarios, trials=trials)
+    out["tolerance"] = stage_tolerance(scenarios, trials=max(3, trials // 2))
+    return out
 
 
 def run_ocr() -> dict:
@@ -128,9 +136,12 @@ def flatten_rows(payload: dict) -> list[dict]:
 
     budget = payload.get("budget")
     if budget:
-        for s in budget["stages"]:
-            add("error_budget", s["stage"],
-                {k: v for k, v in s.items() if isinstance(v, (int, float))})
+        for rate, block in budget["by_ocr_rate"].items():
+            add("error_budget", f"ocr_read_error={rate}.all_faults",
+                {"f1": block["all_faults_f1"], "ceiling_gap": block["ceiling_gap"]})
+            for s in block["stages"]:
+                add("error_budget", f"ocr_read_error={rate}.{s['stage']}",
+                    {k: v for k, v in s.items() if isinstance(v, (int, float))})
 
     ocr = payload.get("ocr")
     if ocr:
@@ -152,8 +163,8 @@ def render_markdown(p: dict) -> str:
     lines = ["# Pipeline evaluation (model-free)", "",
              f"- Generated: {p['generated_at']}",
              "- Inputs: deterministic synthetic scenarios driven through the "
-             "**real** tracker, association, state machines, OCR stabilizer and "
-             "speed estimator.",
+             "**shipped** `ViolationPipeline` (the object the video job runs per "
+             "frame, with its defaults) and the real speed estimator.",
              "- No model weights, no dataset, no network. Every number is "
              "reproducible with `python3 evaluate_pipeline.py`.", "",
              "> These measure **pipeline logic**, not detector quality. Detector "
@@ -193,9 +204,11 @@ def render_markdown(p: dict) -> str:
                 f"{d['true_positives']} | {d['false_positives']} | "
                 f"{d['false_negatives']} | {d['true_negatives']} |"
             )
-        lines += ["", "### What the temporal confirmation window buys", "",
-                  "`confirm_window=1` is single-frame fining — the behaviour the "
-                  "temporal layer replaces.", "",
+        lines += ["", "### What the streak length alone buys (sanity check)", "",
+                  "`confirm_window=1` is single-frame fining. Helmet dwell gate off "
+                  "here; these scenarios' flickers are one frame long by "
+                  "construction, so this cannot choose a rule — "
+                  "`eval/results/temporal_confirmation.md` does.", "",
                   "| violation | window | precision | recall |",
                   "|---|---:|---:|---:|"]
         for key, block in vio.items():
@@ -224,25 +237,55 @@ def render_markdown(p: dict) -> str:
                 f"**{block['pipeline_f1_advantage']:+.3f}** |"
             )
         lines += ["", "The naive policy always scores recall 1.000 because it "
-                  "fines on anything — so the whole difference is precision. "
-                  "The pipeline is a precision machine, and that is the right "
-                  "objective for a system that fines people.", ""]
+                  "fines on anything — so the whole difference is precision. The "
+                  "pipeline keeps precision near 1 at every noise level; its F1 "
+                  "advantage holds in the range the detector actually operates in "
+                  "(val-measured helmet flips 8–15% per frame) and reverses at "
+                  "extreme symmetric noise, where it trades recall for precision. "
+                  "That is the right trade for a system that fines people, and it "
+                  "is a trade.", ""]
 
     budget = p.get("budget")
     if budget:
-        lines += ["## Error budget (equal-rate fault injection)", "",
+        op = budget["operating_point"]
+        lines += ["## Error budget — oracle ablation at the measured operating point", "",
                   budget["interpretation"], "",
-                  f"Clean baseline end-to-end F1: **{budget['baseline_f1']}** "
-                  f"({budget['trials_per_injection']} trials per injection, "
-                  f"seed {budget['seed']}).", "",
-                  "| stage | injected rate | mean F1 | F1 drop | share of "
-                  "measured sensitivity |", "|---|---:|---:|---:|---:|"]
-        for s in budget["stages"]:
-            lines.append(
-                f"| `{s['stage']}` | {s['injected_rate']} | {s['mean_f1']} | "
-                f"**{s['f1_drop']}** | {s['share_of_measured_sensitivity']:.1%} |"
-            )
-        lines += ["", f"**Most sensitive stage: `{budget['bottleneck']}`.**", ""]
+                  f"- Detector rates per vehicle per frame, from `{op['source']}`: "
+                  "rider box missed " + ", ".join(
+                      f"{k} {v:.1%}" for k, v in op["rider_miss"].items()) +
+                  "; wrong class " + ", ".join(
+                      f"{k}→{v[0]} {v[1]:.1%}" for k, v in op["class_flip"].items()) +
+                  f"; plate missed {op['plate_miss']:.1%}.",
+                  "- OCR read-error rate (≥1 wrong glyph per read) is **unmeasured** "
+                  "— no labelled plate sequences exist — so it is swept.",
+                  f"- No-fault F1 (the suite's by-design misses only): "
+                  f"**{budget['no_fault_f1']}**; {budget['trials']} trials, seed "
+                  f"{budget['seed']}.", ""]
+        for rate, block in budget["by_ocr_rate"].items():
+            lines += [f"**OCR read-error rate {float(rate):.0%}** — all faults on: F1 "
+                      f"{block['all_faults_f1']} (gap to no-fault {block['ceiling_gap']})",
+                      "", "| stage made perfect | F1 | recovered | share |",
+                      "|---|---:|---:|---:|"]
+            for s in block["stages"]:
+                lines.append(f"| `{s['stage']}` — {s['description']} | "
+                             f"{s['f1_if_perfect']} | **{s['recovered_f1']}** | "
+                             f"{s['share_of_recovered']:.0%} |")
+            lines.append("")
+        robust = ("holds across the whole OCR sweep"
+                  if budget["bottleneck_robust_to_ocr_assumption"]
+                  else "does NOT hold across the whole OCR sweep — see the tables")
+        lines += [f"Largest owner at the central OCR assumption: "
+                  f"**`{budget['bottleneck']}`** ({robust}).", ""]
+        tol = budget.get("tolerance")
+        if tol:
+            rates = list(next(iter(tol["f1_by_rate"].values())))
+            lines += ["### Tolerance — one stage failing alone, same unit for all", "",
+                      f"End-to-end fine F1 when only that stage fails ({tol['unit']}).",
+                      "", "| stage | " + " | ".join(rates) + " |",
+                      "|---|" + "---:|" * len(rates)]
+            for stage, row in tol["f1_by_rate"].items():
+                lines.append(f"| `{stage}` | " + " | ".join(str(row[r]) for r in rates) + " |")
+            lines.append("")
 
     ocr = p.get("ocr")
     if ocr:
@@ -315,10 +358,12 @@ def build_summary(p: dict) -> dict:
         }
     if p.get("budget"):
         out["error_budget"] = {
+            "method": p["budget"]["method"],
             "bottleneck": p["budget"]["bottleneck"],
+            "robust_to_ocr_assumption": p["budget"]["bottleneck_robust_to_ocr_assumption"],
             "stages": [
-                {"stage": s["stage"], "f1_drop": s["f1_drop"],
-                 "share": s["share_of_measured_sensitivity"]}
+                {"stage": s["stage"], "recovered_f1": s["recovered_f1"],
+                 "share": s["share_of_recovered"]}
                 for s in p["budget"]["stages"]
             ],
         }
@@ -345,8 +390,8 @@ def parse_args(argv=None):
                     help=f"run only these sections (default: all of {', '.join(SECTIONS)})")
     ap.add_argument("--out", default="eval/results", help="output directory")
     ap.add_argument("--name", default="pipeline_evaluation", help="report base name")
-    ap.add_argument("--trials", type=int, default=20,
-                    help="fault-injection trials per stage (default: 20)")
+    ap.add_argument("--trials", type=int, default=30,
+                    help="fault-injection trials per stage (default: 30)")
     ap.add_argument("--quiet", action="store_true", help="suppress the console summary")
     return ap.parse_args(argv)
 
@@ -413,11 +458,11 @@ def main(argv=None) -> int:
                       f"gain {block['pipeline_f1_advantage']:+.3f}")
         if payload.get("budget"):
             b = payload["budget"]
-            print(f"error budget (baseline F1 {b['baseline_f1']:.3f}), most "
-                  f"sensitive stage: {b['bottleneck']}")
+            print(f"error budget ({b['method']}): largest owner {b['bottleneck']} "
+                  f"(robust to OCR assumption: {b['bottleneck_robust_to_ocr_assumption']})")
             for s in b["stages"]:
-                print(f"   {s['stage']:18s} F1 drop {s['f1_drop']:.3f} "
-                      f"({s['share_of_measured_sensitivity']:.1%})")
+                print(f"   {s['stage']:14s} recovers F1 {s['recovered_f1']:.4f} "
+                      f"({s['share_of_recovered']:.0%})")
         if payload.get("ocr"):
             print("OCR policy (default noise):")
             for pol, m in payload["ocr"]["default_noise"]["policies"].items():

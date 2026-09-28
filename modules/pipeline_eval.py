@@ -349,61 +349,177 @@ def apply_injection(scenario: Scenario, inj: Injection, rng: random.Random) -> S
     return Scenario(scenario.name, scenario.vehicles, frames)
 
 
+# The shipped detector's per-frame error rates on the de-leaked VALIDATION
+# split at the operating threshold (confusion matrix rows in
+# eval/results/eval_traffic_model-2_val_clean.json). One unit for every stage:
+# the probability that, on one frame, one vehicle's evidence from that stage is
+# missing or wrong. OCR has no labelled field set, so its rate is SWEPT, never
+# assumed.
+MEASURED_OPERATING_POINT = {
+    "rider_miss": {"WithHelmet": 0.1538, "WithoutHelmet": 0.201, "TripleRiding": 0.1034},
+    "class_flip": {"WithHelmet": ("WithoutHelmet", 0.1538),
+                   "WithoutHelmet": ("WithHelmet", 0.0766),
+                   "TripleRiding": ("WithoutHelmet", 0.0517)},
+    "plate_miss": 0.1822,
+    "source": "eval/results/eval_traffic_model-2_val_clean.json (confusion matrix, conf 0.25)",
+}
+OCR_READ_ERROR_RATES = (0.1, 0.3, 0.5)  # P(a plate read has >= 1 wrong glyph); unmeasured
+
+BUDGET_STAGES = (
+    ("rider_recall", "detector misses the rider box"),
+    ("helmet_class", "detector labels the rider with the wrong helmet/triple class"),
+    ("plate_recall", "detector misses the plate box (nothing to OCR)"),
+    ("ocr", "OCR reads the plate with a wrong glyph"),
+)
+
+
+def _misread(text: str, rng: random.Random) -> str:
+    """One look-alike glyph error, the kind OCR actually makes on plates."""
+    from modules.ocr_temporal_eval import CONFUSIONS
+
+    idx = [i for i, ch in enumerate(text) if ch in CONFUSIONS]
+    if not idx:
+        return text
+    i = rng.choice(idx)
+    return text[:i] + rng.choice(CONFUSIONS[text[i]]) + text[i + 1:]
+
+
+def apply_faults(scenario: Scenario, faults: dict, rng: random.Random) -> Scenario:
+    """Degrade a scenario at per-vehicle, per-frame rates. Ground truth is
+    untouched: degrading an input must never change the right answer."""
+    miss = faults.get("rider_miss", {})
+    flip = faults.get("class_flip", {})
+    plate_miss = faults.get("plate_miss", 0.0)
+    ocr = faults.get("ocr_corrupt", 0.0)
+    frames = []
+    for frame in scenario.frames:
+        new_frame = []
+        for vf in frame:
+            dets = []
+            text = vf.plate_text
+            for d in vf.dets:
+                if d.label == "Plate":
+                    if rng.random() < plate_miss:
+                        text = None
+                        continue
+                    dets.append(d)
+                    continue
+                if rng.random() < miss.get(d.label, 0.0):
+                    continue
+                label = d.label
+                if label in flip and rng.random() < flip[label][1]:
+                    label = flip[label][0]
+                dets.append(DetBox(label, d.box, d.conf))
+            if text and rng.random() < ocr:
+                text = _misread(text, rng)
+            new_frame.append(VehicleFrame(vf.gt_id, dets, text))
+        frames.append(new_frame)
+    return Scenario(scenario.name, scenario.vehicles, frames)
+
+
+def _without(faults: dict, stage: str) -> dict:
+    out = dict(faults)
+    key = {"rider_recall": "rider_miss", "helmet_class": "class_flip",
+           "plate_recall": "plate_miss", "ocr": "ocr_corrupt"}[stage]
+    out[key] = {} if isinstance(faults.get(key), dict) else 0.0
+    return out
+
+
+def _mean_f1(scenarios, faults, trials, seed) -> float:
+    rng = random.Random(seed)
+    scores = [_suite_f1([apply_faults(sc, faults, rng) for sc in scenarios])
+              for _ in range(trials)]
+    return sum(scores) / len(scores)
+
+
 def error_budget(
-    scenarios: list, *, injections=DEFAULT_INJECTIONS, trials: int = 20, seed: int = 7,
+    scenarios: list, *, operating_point: dict | None = None,
+    ocr_rates=OCR_READ_ERROR_RATES, trials: int = 20, seed: int = 7,
 ) -> dict:
-    """Measure each stage's contribution to end-to-end failure by fault injection.
+    """Oracle ablation at the measured operating point.
 
-    For each injection the whole suite is re-run ``trials`` times with different
-    RNG draws and the mean F1 recorded; the drop from the clean baseline is that
-    stage's *sensitivity*. Averaging over trials matters — a single draw of a
-    30% dropout is mostly noise.
+    Every stage fails at its measured per-frame rate at once (OCR at each swept
+    rate). Then each stage in turn is made perfect, and the end-to-end fine F1
+    it recovers is that stage's share of the error. This answers "where would
+    fixing things pay off, given how the system actually fails?" — which the
+    old equal-rate injection could not: it compared 30% per-CHARACTER OCR
+    corruption (a 10-glyph plate then almost never reads cleanly) with 30%
+    per-BOX detector faults, so its "OCR is 77% of sensitivity" was a
+    statement about units, not about the system.
 
-    Reading the result honestly: this ranks **how much the system depends on each
-    stage**, holding the injected failure rate equal across stages. It does *not*
-    say how often each stage fails in the field — that would need field data, and
-    is not claimed anywhere. A stage with high sensitivity is where a real
-    failure would hurt most, which is what "bottleneck" should mean here.
+    Stage shares are not strictly additive (stages interact); the report gives
+    the ceiling gap alongside so the non-additivity is visible.
     """
-    baseline = _suite_f1(scenarios)
-    rows = []
-    for inj in injections:
-        rng = random.Random(seed)
-        scores = []
-        for _ in range(trials):
-            degraded = [apply_injection(sc, inj, rng) for sc in scenarios]
-            scores.append(_suite_f1(degraded))
-        mean_f1 = sum(scores) / len(scores)
-        rows.append({
-            "stage": inj.stage,
-            "description": inj.description,
-            "injected_rate": max(inj.detection_drop, inj.class_flip,
-                                 inj.plate_drop, inj.ocr_noise),
-            "mean_f1": round(mean_f1, 4),
-            "f1_drop": round(baseline - mean_f1, 4),
-            "worst_trial_f1": round(min(scores), 4),
-            "best_trial_f1": round(max(scores), 4),
-        })
-    total_drop = sum(r["f1_drop"] for r in rows)
-    for r in rows:
-        # Share of the *measured sensitivity*, not a field failure probability.
-        r["share_of_measured_sensitivity"] = (
-            round(r["f1_drop"] / total_drop, 4) if total_drop > 0 else 0.0
-        )
-    rows.sort(key=lambda r: r["f1_drop"], reverse=True)
+    op = operating_point or MEASURED_OPERATING_POINT
+    base = {k: v for k, v in op.items() if k in ("rider_miss", "class_flip", "plate_miss")}
+    ceiling = _suite_f1(scenarios)
+    by_rate: dict = {}
+    for rate in ocr_rates:
+        faults = {**base, "ocr_corrupt": rate}
+        all_f1 = _mean_f1(scenarios, faults, trials, seed)
+        rows = []
+        for stage, desc in BUDGET_STAGES:
+            fixed = _mean_f1(scenarios, _without(faults, stage), trials, seed)
+            rows.append({"stage": stage, "description": desc,
+                         "f1_if_perfect": round(fixed, 4),
+                         "recovered_f1": round(max(0.0, fixed - all_f1), 4)})
+        total = sum(r["recovered_f1"] for r in rows)
+        for r in rows:
+            r["share_of_recovered"] = round(r["recovered_f1"] / total, 4) if total else 0.0
+        rows.sort(key=lambda r: r["recovered_f1"], reverse=True)
+        by_rate[f"{rate:.2f}"] = {
+            "ocr_read_error_rate": rate,
+            "all_faults_f1": round(all_f1, 4),
+            "ceiling_gap": round(ceiling - all_f1, 4),
+            "stages": rows,
+            "largest_owner": rows[0]["stage"] if rows and rows[0]["recovered_f1"] > 0 else None,
+        }
+    owners = {v["largest_owner"] for v in by_rate.values()}
+    central = by_rate[f"{ocr_rates[len(ocr_rates) // 2]:.2f}"]
     return {
-        "baseline_f1": round(baseline, 4),
-        "trials_per_injection": trials,
+        "method": "oracle ablation at the measured operating point",
+        "operating_point": {**{k: v for k, v in op.items() if k != "class_flip"},
+                            "class_flip": {k: list(v) for k, v in op["class_flip"].items()}},
+        "no_fault_f1": round(ceiling, 4),
+        "trials": trials,
         "seed": seed,
-        "stages": rows,
-        "bottleneck": rows[0]["stage"] if rows else None,
+        "by_ocr_rate": by_rate,
+        # Kept for the dashboard: the owner at the central OCR assumption, and
+        # whether that conclusion survives the whole OCR sweep.
+        "bottleneck": central["largest_owner"],
+        "bottleneck_robust_to_ocr_assumption": len(owners) == 1,
+        "stages": central["stages"],
         "interpretation": (
-            "Equal-rate fault injection: each stage is degraded by the same "
-            "amount and the end-to-end F1 drop is measured. This ranks how much "
-            "the system DEPENDS on each stage. It is NOT a claim about how often "
-            "each stage fails in the field — that needs field data."
+            "Each stage fails at its per-frame rate measured on the validation "
+            "split (OCR, unmeasured, is swept); making one stage perfect and "
+            "measuring the fine-F1 it recovers attributes the error. Synthetic "
+            "scenarios, so this ranks where effort pays off in THIS pipeline; it "
+            "is NOT a claim about how often each stage fails in the field."
         ),
     }
+
+
+def stage_tolerance(scenarios: list, *, rates=(0.1, 0.2, 0.3, 0.5), trials: int = 10,
+                    seed: int = 11) -> dict:
+    """Dose-response per stage in ONE unit (per vehicle-frame event
+    probability): end-to-end F1 when only that stage fails at each rate."""
+    out: dict = {}
+    for stage, _desc in BUDGET_STAGES:
+        row = {}
+        for rate in rates:
+            if stage == "rider_recall":
+                f = {"rider_miss": dict.fromkeys(("WithHelmet", "WithoutHelmet",
+                                                  "TripleRiding"), rate)}
+            elif stage == "helmet_class":
+                f = {"class_flip": {"WithHelmet": ("WithoutHelmet", rate),
+                                    "WithoutHelmet": ("WithHelmet", rate)}}
+            elif stage == "plate_recall":
+                f = {"plate_miss": rate}
+            else:
+                f = {"ocr_corrupt": rate}
+            row[f"{rate:.2f}"] = round(_mean_f1(scenarios, f, trials, seed), 4)
+        out[stage] = row
+    return {"unit": "probability per vehicle per frame", "f1_by_rate": out}
 
 
 def _suite_f1(scenarios: list) -> float:

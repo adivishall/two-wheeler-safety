@@ -325,6 +325,10 @@
             font-size: 13.5px; font-weight: 600;
             background: var(--success-bg); color: var(--success);
         }
+        .abstain-list { margin-top: 10px; padding: 8px 10px; border-left: 3px solid var(--amber, #d98c00);
+                        background: rgba(217, 140, 0, 0.08); border-radius: 6px; text-align: left; }
+        .abstain-title { font-weight: 600; font-size: 0.85rem; margin: 0 0 4px; }
+        .abstain-row { font-size: 0.82rem; margin: 2px 0; }
 
         /* Vehicle registration header */
         .vehicle {
@@ -1048,31 +1052,51 @@
 
             analyzeBtn.disabled = false;
 
-            // No plate could be read from the photo.
+            // Everything the model saw but the rules would not stand behind,
+            // with the reason — shown, never silently dropped, never fined.
+            const vehicles = data.vehicles || [];
+            const abstained = vehicles.flatMap(v => (v.abstained || []).map(a => ({...a, plate: v.plate || v.plate_raw})));
+            const others = vehicles.filter(v => v.plate && v.plate !== data.plate && (v.violations || []).length);
+            const abstainHtml = abstained.length
+                ? `<div class="abstain-list"><p class="abstain-title">Seen but not fined</p>` +
+                  abstained.map(a => `<div class="abstain-row">${escapeHtml(violationLabel(a.type))}` +
+                      (a.plate ? ` · ${escapeHtml(a.plate)}` : "") +
+                      ` — ${escapeHtml(abstainReason(a.reason))}</div>`).join("") + `</div>`
+                : "";
+
+            // No valid plate could be read from the photo.
             if (!data.plate) {
                 uploadResult.innerHTML = `
                     <div class="detect-card">
                         <p class="recorded-note">${escapeHtml(data.message || "No number plate detected.")}</p>
+                        ${abstainHtml}
                     </div>
                 `;
                 return;
             }
 
             let violHtml;
-            if (data.violations.length === 0) {
+            if (data.violations.length === 0 && !abstained.length) {
                 violHtml = `<span class="clean-badge">✅ No violations detected</span>`;
             } else {
                 violHtml = `<div class="viol-row">` + data.violations.map(v =>
-                    `<span class="viol-badge">${escapeHtml(violationLabel(v.type))} · ₹${v.amount}</span>`
+                    `<span class="viol-badge">${escapeHtml(violationLabel(v.type))} · ₹${v.amount}` +
+                    (v.confidence != null ? ` · score ${Number(v.confidence).toFixed(2)}` : "") + `</span>`
                 ).join("") + `</div>`;
             }
+            const othersHtml = others.length
+                ? `<p class="recorded-note">Also recorded in this photo: ` + others.map(v =>
+                      `${escapeHtml(v.plate)} (${v.violations.map(x => escapeHtml(violationLabel(x.type))).join(", ")})`
+                  ).join("; ") + `</p>`
+                : "";
 
             const shot = data.evidence
                 ? `<img class="shot" src="${escapeHtml(data.evidence)}" alt="Detected violation evidence">`
                 : "";
 
             const note = data.violations.length
-                ? `Recorded to the system. Full record below ↓`
+                ? `Recorded for human review (single photo: no temporal confirmation, so the score is lower than a video's). Full record below ↓`
+                : abstained.length ? `Nothing recorded against this plate.`
                 : `Nothing to fine — this plate stays clean.`;
 
             uploadResult.innerHTML = `
@@ -1081,6 +1105,8 @@
                     <p class="plate-read">Plate detected</p>
                     <p class="plate-big">${escapeHtml(data.plate)}</p>
                     ${violHtml}
+                    ${othersHtml}
+                    ${abstainHtml}
                     <p class="recorded-note">${note}</p>
                 </div>
             `;
@@ -1209,18 +1235,49 @@
                 ? `<div class="viol-row">` + res.violations.map(v =>
                     `<span class="viol-badge">${escapeHtml(violationLabel(v.violation))} · ${escapeHtml(v.plate)} · ₹${v.amount}</span>`
                   ).join("") + `</div>`
-                : `<span class="clean-badge">✅ No violations detected in this video</span>`;
+                : `<span class="clean-badge">✅ No violations recorded in this video</span>`;
+            const held = res.unfined_confirmations || [];
+            const heldHtml = held.length
+                ? `<div class="abstain-list"><p class="abstain-title">Confirmed but not fined — no trustworthy plate</p>` +
+                  held.map(h => `<div class="abstain-row">${escapeHtml(violationLabel(h.violation))} on vehicle #${h.track_id} — ${escapeHtml(abstainReason(h.reason))}</div>`).join("") +
+                  `</div>`
+                : "";
+            const dups = (res.suppressed_duplicates || []).length;
+            const stopped = res.stopped_reason && res.stopped_reason !== "end_of_video" && res.stopped_reason !== "max_frames"
+                ? `<p class="recorded-note">Stopped early (${escapeHtml(res.stopped_reason.replace("_", " "))}) — only part of the video was analysed.</p>`
+                : "";
+            const speed = res.processing_fps ? ` · processed at ${Number(res.processing_fps).toFixed(1)} FPS` : "";
 
             videoResult.innerHTML = `
                 <div class="detect-card">
                     <video class="shot" src="${escapeHtml(res.output)}" controls autoplay muted loop playsinline></video>
                     <p class="plate-read">Video analysed</p>
-                    <p class="vid-summary">${res.frames} frames · ${res.plates_tracked} vehicle(s) tracked · ${res.violations.length} fine(s) recorded</p>
+                    <p class="vid-summary">${res.frames} frames · ${res.plates_tracked} vehicle(s) tracked · ${res.violations.length} fine(s) recorded${speed}</p>
                     ${violHtml}
+                    ${heldHtml}
+                    ${dups ? `<p class="recorded-note">${dups} repeat sighting(s) of an already-fined plate were not fined again.</p>` : ""}
+                    ${stopped}
                     <p class="recorded-note">Annotated with live detections. <a class="dl-link" href="${escapeHtml(res.output)}" download>Download video</a></p>
                 </div>
             `;
         }
+
+        // Plain-language reasons for an abstention (photo and video paths).
+        const ABSTAIN_REASONS = {
+            contradiction: "the model called this rider both helmeted and bare-headed",
+            overlaps_helmet_box: "the box overlaps a helmet detection, so it may be the model contradicting itself",
+            low_confidence: "detector confidence is below the threshold",
+            no_plate_associated: "no plate was found under this rider",
+            plate_unreadable: "the plate could not be read",
+            plate_not_valid_format: "the plate text is not a valid registration format",
+            contested: "two different plate readings compete",
+            low_agreement: "plate readings disagree too much",
+            too_few_observations: "the plate was read too few times",
+            no_valid_reading: "no reading was a valid plate",
+            no_reading: "the plate was never read",
+            no_plate_read: "the plate was never read",
+        };
+        function abstainReason(r) { return ABSTAIN_REASONS[r] || String(r || "not enough evidence"); }
 
         function handleSubmit(event) {
             event.preventDefault();
@@ -1893,7 +1950,7 @@
                            evalMetric("end-to-end recall", ee.recall) +
                            Object.entries(v).map(([name, m]) =>
                                evalMetric(name + " F1", m.f1)).join("") +
-                           (p.error_budget ? evalMetric("most sensitive stage",
+                           (p.error_budget ? evalMetric("largest error owner (ablation)",
                                p.error_budget.bottleneck) : "") +
                            `<div class="eval-prov">` +
                            (ee.scenarios ? `${ee.scenarios} synthetic scenarios · ` : "") +

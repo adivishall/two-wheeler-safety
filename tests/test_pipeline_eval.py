@@ -11,12 +11,14 @@ from modules.pipeline_eval import (
     DEFAULT_INJECTIONS,
     DecisionMetrics,
     Injection,
+    apply_faults,
     apply_injection,
     error_budget,
     evaluate_all,
     evaluate_violation,
     helmet_scenarios,
     run_pipeline_decisions,
+    stage_tolerance,
     sweep_confirm_window,
     triple_riding_scenarios,
 )
@@ -192,34 +194,47 @@ def test_ocr_noise_corrupts_text_but_keeps_its_length():
     assert len(text) == len("MH12AB1234")
 
 
-def test_error_budget_ranks_stages_and_is_deterministic():
+def test_error_budget_is_an_oracle_ablation_and_is_deterministic():
     scenarios = [_clean_scenario()]
-    a = error_budget(scenarios, trials=5, seed=3)
-    b = error_budget(scenarios, trials=5, seed=3)
+    a = error_budget(scenarios, trials=4, seed=3)
+    b = error_budget(scenarios, trials=4, seed=3)
     assert a == b
-    drops = [s["f1_drop"] for s in a["stages"]]
-    assert drops == sorted(drops, reverse=True)  # worst first
-    assert a["bottleneck"] == a["stages"][0]["stage"]
+    assert a["method"].startswith("oracle ablation")
+    for block in a["by_ocr_rate"].values():
+        rec = [s["recovered_f1"] for s in block["stages"]]
+        assert rec == sorted(rec, reverse=True)  # largest owner first
+        assert all(s["f1_if_perfect"] >= block["all_faults_f1"] - 1e-9
+                   for s in block["stages"])
 
 
-def test_error_budget_shares_sum_to_one_when_anything_dropped():
-    a = error_budget([_clean_scenario()], trials=5, seed=3)
-    total = sum(s["share_of_measured_sensitivity"] for s in a["stages"])
-    if any(s["f1_drop"] > 0 for s in a["stages"]):
-        assert total == pytest.approx(1.0, abs=0.01)
-
-
-def test_error_budget_states_what_it_is_not():
-    """The interpretation note is load-bearing: without it the numbers read as
-    field failure rates, which they are not."""
-    a = error_budget([_clean_scenario()], trials=3, seed=1)
+def test_error_budget_ocr_rate_is_swept_not_assumed():
+    a = error_budget([_clean_scenario()], trials=2, seed=1, ocr_rates=(0.1, 0.5))
+    assert set(a["by_ocr_rate"]) == {"0.10", "0.50"}
     assert "NOT a claim about how often" in a["interpretation"]
+    assert isinstance(a["bottleneck_robust_to_ocr_assumption"], bool)
 
 
-def test_error_budget_baseline_is_the_undegraded_suite():
-    a = error_budget([_clean_scenario()], trials=3, seed=1)
-    assert a["baseline_f1"] == 1.0
-    assert all(s["mean_f1"] <= a["baseline_f1"] + 1e-9 for s in a["stages"])
+def test_faults_use_one_unit_and_never_touch_ground_truth():
+    sc = _clean_scenario()
+    all_off = apply_faults(sc, {"ocr_corrupt": 0.0}, random.Random(0))
+    assert [len(f[0].dets) for f in all_off.frames] == [len(f[0].dets) for f in sc.frames]
+    plate_gone = apply_faults(sc, {"plate_miss": 1.0}, random.Random(0))
+    assert all(f[0].plate_text is None for f in plate_gone.frames)
+    assert all(d.label != "Plate" for f in plate_gone.frames for d in f[0].dets)
+    misread = apply_faults(sc, {"ocr_corrupt": 1.0}, random.Random(0))
+    t = misread.frames[0][0].plate_text
+    assert t != "MH12AB1234" and len(t) == len("MH12AB1234")
+    assert sum(a != b for a, b in zip(t, "MH12AB1234")) == 1  # ONE glyph per read
+    flipped = apply_faults(sc, {"class_flip": {"WithoutHelmet": ("WithHelmet", 1.0)}},
+                           random.Random(0))
+    assert flipped.frames[0][0].dets[0].label == "WithHelmet"
+    assert flipped.vehicles == sc.vehicles
+
+
+def test_stage_tolerance_reports_every_stage_at_every_rate():
+    out = stage_tolerance([_clean_scenario()], rates=(0.1, 0.5), trials=2)
+    assert set(out["f1_by_rate"]) == {"rider_recall", "helmet_class", "plate_recall", "ocr"}
+    assert all(set(r) == {"0.10", "0.50"} for r in out["f1_by_rate"].values())
 
 
 # ---------------------------------------------------------------------------
