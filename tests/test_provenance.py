@@ -147,3 +147,27 @@ def test_load_data_yaml_names(tmp_path, names):
     y = tmp_path / "d.yaml"
     y.write_text(f"names: {names}\n")
     assert yolo_io.load_data_yaml(str(y))["names"] == ["A", "B"]
+
+
+def test_dirty_flag_ignores_generated_results(tmp_path, monkeypatch):
+    """Regenerating tracked result files must not mark the code dirty; editing
+    code must."""
+    import subprocess
+
+    def git(*a):
+        subprocess.run(["git", *a], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / "eval" / "results").mkdir(parents=True)
+    (tmp_path / "eval" / "results" / "r.json").write_text("{}")
+    (tmp_path / "code.py").write_text("x = 1\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "init")
+    monkeypatch.chdir(tmp_path)
+    assert git_state()["dirty"] is False
+    (tmp_path / "eval" / "results" / "r.json").write_text('{"a": 1}')
+    assert git_state()["dirty"] is False
+    (tmp_path / "code.py").write_text("x = 2\n")
+    assert git_state()["dirty"] is True

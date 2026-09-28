@@ -114,7 +114,15 @@ def split_fingerprint(data_yaml: str, split: str) -> str | None:
     return dataset_fingerprint(data_yaml)["splits"].get(split, {}).get("sha256")
 
 
+# Generated outputs: regenerating results must not mark the CODE as dirty.
+GENERATED_PATHS = ("eval/results", "data/dataset_manifest.json",
+                   "data/DATASET_MANIFEST.md", "models/manifests")
+
+
 def git_state() -> dict:
+    """HEAD commit, and whether any tracked file OTHER than generated outputs
+    has uncommitted changes (``dirty`` means the code that produced a result
+    is not exactly the commit named)."""
     def run(*args):
         try:
             out = subprocess.run(["git", *args], capture_output=True, text=True,
@@ -124,7 +132,10 @@ def git_state() -> dict:
             return ""
 
     commit = run("rev-parse", "--short", "HEAD") or None
-    dirty = bool(run("status", "--porcelain", "--untracked-files=no")) if commit else None
+    if not commit:
+        return {"commit": None, "dirty": None}
+    excludes = [f":(exclude){p}" for p in GENERATED_PATHS]
+    dirty = bool(run("status", "--porcelain", "--untracked-files=no", "--", ".", *excludes))
     return {"commit": commit, "dirty": dirty}
 
 
