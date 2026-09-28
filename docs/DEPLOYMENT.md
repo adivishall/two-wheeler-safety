@@ -67,6 +67,8 @@ All knobs are environment variables — see the table in the
 | `MODEL_PATH` | the mounted weights path |
 | `TRAFFIC_DB_PATH`, `EVIDENCE_DIR` | paths on a persistent volume |
 | `MAX_VIDEO_MB`, `MAX_VIDEO_SECONDS`, `MAX_CONCURRENT_VIDEO_JOBS` | size to the host |
+| `REVIEWER_API_KEYS`, `ADMIN_API_KEYS` | set them — until one role key is configured every write route (uploads, review, payment, cancel) is open |
+| `DETECT_DEVICE` | `cuda` on an NVIDIA host; `auto` resolves cuda → mps → cpu. The resolved device is logged at startup and recorded in every evidence sidecar |
 
 ## Persistence & retention
 

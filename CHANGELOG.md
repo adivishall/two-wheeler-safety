@@ -9,6 +9,81 @@ repo (all gitignored) — a release is the *code*, evaluated against locally-hel
 weights whose provenance is recorded in the model manifest
 ([docs/MODEL_VERSIONING.md](docs/MODEL_VERSIONING.md)).
 
+## [1.1.0] — 2026-09-28 — audit, shared decision core, decisions by experiment
+
+A hostile review of 1.0.0 ([docs/AUDIT.md](docs/AUDIT.md)) found 30 defects in
+shipped behaviour and in published claims. This release fixes them, makes the
+evaluation measure the shipped code, and replaces hand-set decision thresholds
+with ones chosen by stated experiments. Several 1.0.0 headline numbers are
+withdrawn; the replacements are below.
+
+### Changed — behaviour (evidence records `pipeline_version: 1.1.0`)
+
+- **One decision core** (`modules/pipeline.py :: ViolationPipeline`) shared by
+  the web job, the CLI, the benchmark and every evaluator.
+- **Helmet confirmation**: 5-frame streak **and** ≥ 70% no-helmet over ≥ 12
+  observed frames (was: streak only). Chosen by `evaluate_temporal.py`; riders
+  seen < 12 frames are no longer fined.
+- **OCR vote**: ≥ 3 readings and a ≥ 0.3 margin over any competing valid plate;
+  exact ties abstain (was: 2 readings, ties broken by string order).
+- **No-helmet frame floor** `HELMET_MIN_CONF` 0.3 → 0.375 (val-selected).
+- **Photo path** decides per vehicle through the association layer and abstains,
+  with a reason, when a plate is not a valid plate.
+- One fine per (plate, violation) per run; withheld confirmations are persisted
+  (audit log + `sessions.violations_withheld`).
+- `DETECT_DEVICE` (default auto): inference previously always ran on the CPU on
+  Apple silicon.
+
+### Fixed
+
+- OCR and speed sampled a stale plate box after the plate vanished.
+- Speed read at 2/3 of truth when frames were downscaled.
+- Riders leaving view > 15 frames were fined twice.
+- Documented thresholds were not applied by the web job but were stamped into
+  evidence as if they were.
+- Cancelled / time-limited jobs were recorded as completed; "processing FPS" was
+  the source video's frame rate; video fines didn't link their evidence sidecar,
+  and the sidecar couldn't be served, so the review modal's breakdown never
+  loaded.
+- Upload and cancel routes were not role-gated with auth on; payment status
+  update raced; `recent=-1` returned the whole table; rate-limiter memory grew
+  without bound; RIFF/video uploads were not content-checked.
+- Demo data claimed a real model version and showed photos of other plates.
+
+### Evaluation — corrected
+
+- Pipeline metrics now drive the shipped code: end-to-end **precision 1.0 /
+  recall 0.9** (the miss is the documented short-dwell cost) — was 1.0 / 1.0 from
+  a private evaluator loop with different settings.
+- mAP at the standard protocol: test mAP@50 **0.769** / mAP@50-95 **0.558** (was
+  0.727 / 0.532 computed at conf 0.25).
+- Model selection on val with paired bootstrap CIs (`evaluate_uncertainty.py`):
+  v2 "rejected for a WithHelmet regression" was noise (not distinguishable; not
+  promoted for a significant Plate regression); "promote probe" withdrawn
+  (significantly worse).
+- Error budget by oracle ablation at the measured operating point, paired random
+  streams: the detector owns ~90% of lost end-to-end F1 (was "OCR is 76.8%", a
+  units artefact).
+- "Pipeline beats the detector at every noise level" restated precisely: more
+  precise at every level; F1 advantage in the measured range, reversed at 40%.
+
+### Added
+
+- `evaluate_temporal.py`, `evaluate_uncertainty.py`, `evaluate_robustness.py`,
+  `audit_labels.py`, `evaluate_ocr.py --policy-sweep`; provenance on every
+  result (`modules/provenance.py`); one content-based dataset fingerprint.
+- Label-coverage audit: the dataset's two sources have disjoint label sets.
+- Manual review of the top-confidence val errors (`manual_error_review.md`).
+- `benchmark.py`: explicit device, cold/warm, input hashes, micro-benchmarks
+  (DB, decision core, API overhead), committed output.
+- Review modal shows how each violation was decided; `GET
+  /api/violations/<id>/verify` re-hashes its evidence.
+- `tests/test_end_to_end.py` (real video/photo/API paths through multi-error
+  scenarios) and `tests/test_hardening.py`; 466 → 567 tests.
+- Docs: AUDIT, ERROR_ANALYSIS (taxonomy + budget; replaces ERROR_BUDGET),
+  INTERVIEW; rewritten README, MODEL_EVALUATION, END_TO_END_EVALUATION,
+  EVALUATION, RESUME.
+
 ## [1.0.0] — 2026-09-16 — CV evaluation & model quality
 
 The application was already evaluated; the **vision system** was not. This
