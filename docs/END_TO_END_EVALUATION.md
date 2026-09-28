@@ -1,311 +1,195 @@
 # End-to-end evaluation — the pipeline, not the model
 
-[MODEL_EVALUATION.md](MODEL_EVALUATION.md) answers *"how good is the detector?"*.
-This page answers the question that actually matters for a system that fines
-people:
+*"How reliably does the software turn noisy detections into a correct final
+violation record?"* — measured separately from *"what can the detector see?"*
+([MODEL_EVALUATION.md](MODEL_EVALUATION.md)).
 
-> **How often does the complete pipeline — detect → track → associate → OCR →
-> temporal confirmation → confidence → violation → attribution — produce a
-> correct, correctly-attributed fine?**
+> **Everything on this page runs on synthetic inputs.** The numbers are
+> statements about the decision logic under stated input conditions, **not**
+> field accuracy on real roads. Real-footage end-to-end accuracy is unmeasured:
+> no labelled video exists for this project.
 
-These are different questions with different answers and they are never
-combined. A strong pipeline cannot exceed its detector on the things the
-detector decides; it can be much better or much worse on the things the
-*pipeline* decides. Measuring only one of them tells you almost nothing about
-the other.
+## How it is measured
 
-## How this is measured without a labelled video corpus
+- **The shipped code, not a copy.** Every evaluator drives
+  `modules/pipeline.py :: ViolationPipeline` — the object the web job runs per
+  frame, with its defaults. The only substitutions are the inputs: synthetic
+  boxes instead of YOLO, and a plate-box → text lookup instead of EasyOCR, called
+  only for a plate box detected that frame. (Before v1.1.0 two evaluators
+  carried their own copies of the loop, with a different confirm window and
+  different handling of missing boxes — `docs/AUDIT.md` E1.)
+- **Detector noise at measured rates.** Where noise is injected, its rates come
+  from the detector's confusion matrix on the de-leaked *validation* split, not
+  from guesses and never from test.
+- **Selection vs report.** Every rule on this page was chosen on one random seed
+  and is reported on another, under an objective stated before looking.
+- **Real-code integration tests** (`tests/test_end_to_end.py`) run the actual
+  `process_video`, `analyze_image` and Flask routes on scripted video with fake
+  YOLO/OCR, through the multi-error cases below.
 
-There is no labelled multi-vehicle video set for this project, and inventing one
-would produce fiction. Instead, `modules/system_eval.py` and
-`modules/pipeline_eval.py` feed **deterministic synthetic scenarios** —
-hand-built multi-bike frame sequences with known ground truth — through the
-**real runtime code**: `VehicleTracker`, `associate()`, `PlateStabilizer`, the
-helmet and triple-riding state machines, `compute_confidence`. No
-re-implementation, no mocks of the logic under test.
+Generated sources: `eval/results/pipeline_evaluation.md`,
+`temporal_confirmation.md`, `ocr_stabilizer_selection.md`. Regenerate in §8.
 
-**What this can honestly claim:** the pipeline *logic* is correct, and the
-temporal/voting layers buy a measurable amount over the naive alternatives.
-**What it cannot claim:** field accuracy. Real footage brings motion blur,
-crowding, and detector noise in combinations these scenarios do not contain.
-Every number below is a logic-level result on constructed inputs.
+## 1. End-to-end fines — deterministic scenarios
 
-Regenerate everything here with:
+`pipeline_evaluation.md` § End-to-end fines. Ten scenarios, ~1.2 s of video each
+unless stated.
 
-```bash
-python3 evaluate_pipeline.py
-```
+| scenario | what it tests | result |
+|---|---|---|
+| `single_no_helmet`, `single_triple` | the basic cases | fined, right plate |
+| `late_plate` | plate readable only after the violation confirms | held, then fined once the plate stabilises |
+| `clean_helmet` | compliant rider | not fined |
+| `two_adjacent` | violator next to a compliant rider | only the violator, with *its* plate |
+| `crossing` | two violators cross and fully overlap for 2 frames | both fined correctly; identity survives (0 ID switches); association 0.95 (the merged frames) |
+| `three_bikes` | middle bike of three | only the middle one |
+| `occlusion` | rider vanishes for 2 frames | same identity, fined once |
+| `reappears_after_exit` | rider gone 20 frames (> tracker `max_age`), returns as a new track | **fined once** (was twice before v1.1.0) |
+| `brief_pass` | violator in view for 8 frames | **not fined — by design** (needs ≥ 12 observed frames) |
 
----
+**Totals: precision 1.0, recall 0.9** (TP 9, FP 0, FN 1; 0 wrong-vehicle, 0
+wrong-plate, 0 duplicates). The one miss is the documented short-dwell cost.
 
-## 1. The headline question: is the pipeline better than the detector alone?
+`tests/test_end_to_end.py` adds, on the real `process_video` / app: plate
+occlusion (no OCR ever runs on a stale box), competing OCR readings (withheld,
+reason `contested`), one bad OCR frame in ten (plate unchanged), simultaneous
+violations on two bikes, a noisy detector at the measured 15% flip rate (helmeted
+rider not fined), intermittent frames (violator still fined), no speed
+calibration (no speed, no overspeed), downscaled speed (45 km/h measured
+correctly), cancellation (stops, persisted as `cancelled`), and the persisted
+record behind the API (sidecar hashes verify).
 
-If a multi-frame pipeline cannot beat "believe the detector", none of the rest of
-this project is justified. So it is measured head-to-head.
+## 2. Is the pipeline better than a single-frame detector?
 
-Both policies see **identical** detections, degraded by the same helmet
-class-confusion noise (the detector's measured failure mode). `naive` fines
-whenever any single frame shows a violation box — no tracking, no temporal
-confirmation, no contradiction check. Averaged over 20 seeded trials:
+`pipeline_evaluation.md` § Is the pipeline better… Both policies see identical
+detections, degraded by symmetric helmet class flips. `naive` fines if any single
+frame shows a violation box — and is handed perfect plate association for free,
+so the pipeline's advantage is a lower bound.
 
-| detector noise | naive P | naive R | naive F1 | naive FPs | pipeline P | pipeline R | pipeline F1 | pipeline FPs | F1 gain |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 0.00 | 0.838 | 1.000 | 0.912 | **1.50** | **1.000** | 1.000 | **1.000** | **0.00** | +0.088 |
-| 0.10 | 0.735 | 1.000 | 0.840 | 3.42 | 0.998 | 0.992 | 0.994 | 0.03 | **+0.154** |
-| 0.20 | 0.708 | 1.000 | 0.820 | 4.08 | 0.976 | 0.953 | 0.962 | 0.23 | +0.142 |
-| 0.30 | 0.697 | 1.000 | 0.810 | 4.40 | 0.962 | 0.883 | 0.913 | 0.30 | +0.102 |
-| 0.40 | 0.694 | 1.000 | 0.808 | 4.47 | 0.903 | 0.819 | 0.849 | 0.72 | +0.040 |
+| flip rate | naive P | naive F1 | pipeline P | pipeline R | pipeline F1 | F1 gain |
+|---|---:|---:|---:|---:|---:|---:|
+| 0.00 | 0.852 | 0.920 | 1.000 | 0.955 | 0.976 | **+0.056** |
+| 0.10 | 0.722 | 0.831 | 1.000 | 0.953 | 0.975 | **+0.144** |
+| 0.20 | 0.718 | 0.828 | 1.000 | 0.921 | 0.957 | **+0.129** |
+| 0.30 | 0.718 | 0.828 | 1.000 | 0.788 | 0.861 | +0.033 |
+| 0.40 | 0.718 | 0.828 | 0.993 | 0.606 | 0.665 | **−0.163** |
 
-**Yes, and the shape of the answer matters more than the size.**
+- The pipeline is **more precise at every noise level** — near 1.0 throughout.
+- Its **F1** advantage holds where the detector actually operates (val-measured
+  helmet flips: 7.7–15.4% per frame) and **reverses at 40% symmetric flips**,
+  where it trades recall for precision. For a system that fines people that is
+  the right trade — but it is a trade, and the earlier claim that the pipeline
+  "beats the detector at every noise level" only held under an evaluator setting
+  that never shipped (`AUDIT.md` E2).
+- At 0.00 injected noise the naive policy still makes 1.5 false positives: the
+  suite contains designed one-frame flickers and a contradiction case. Those are
+  detector errors by construction — "zero injected noise" is not "a perfect
+  detector".
 
-- **Even at zero detector noise** the naive policy averages **1.50 false
-  positives** and precision 0.838, because the scenario suite contains cases the
-  detector genuinely gets wrong on single frames — flicker and the
-  helmet-contradiction bug. The pipeline: **0.00 FPs**.
-- **The naive policy has recall 1.000 at every noise level** — it fines on
-  anything, so it never misses. **The entire difference is precision.** The
-  pipeline is a precision machine, which is the right objective for a system that
-  fines people: a missed violation costs a missed fine, a false one accuses an
-  innocent rider.
-- **The advantage peaks at moderate noise (+0.154 at 10%) and narrows at 40%
-  (+0.040).** That is honest and expected: when the detector is broken enough,
-  there is no consistent signal left for temporal confirmation to confirm. The
-  pipeline degrades gracefully; it does not work miracles.
-- The naive policy is handed **perfect plate-to-vehicle association for free**,
-  which a real single-frame system would not have. So the measured advantage is
-  a **lower bound**.
+## 3. Choosing the temporal confirmation rule
 
----
+`temporal_confirmation.md`. Simulated riders whose rider boxes are missed or
+mislabelled per frame at the detector's val-measured rates; `stickiness` makes
+errors come in runs (real frames are correlated — how much is unmeasured, so it
+is swept). 1,200 riders per condition; dwell 10 / 25 / 50 frames (0.4 / 1 / 2 s).
+Objective: maximise recall s.t. ≤ 1% of helmeted riders flagged in every design
+condition (stickiness 0 and 0.5).
 
-## 2. End-to-end fines
+Held-out seed, false-flag rate (share of **helmeted** riders flagged):
 
-Across 8 multi-bike scenarios (adjacent bikes, crossing bikes, three bikes,
-occlusion, late plate, clean rider, single violations):
-
-**Precision 1.000 · Recall 1.000 — TP 8, FP 0, FN 0, wrong-vehicle 0,
-wrong-plate 0, duplicates 0.**
-
-| scenario | TP | FP | FN | ID switches | assoc. accuracy |
-|---|---:|---:|---:|---:|---:|
-| `single_no_helmet` | 1 | 0 | 0 | 0 | 1.00 |
-| `single_triple` | 1 | 0 | 0 | 0 | 1.00 |
-| `late_plate` | 1 | 0 | 0 | 0 | 1.00 |
-| `clean_helmet` | 0 | 0 | 0 | 0 | 1.00 |
-| `two_adjacent` | 1 | 0 | 0 | 0 | 1.00 |
-| `crossing` | 2 | 0 | 0 | **0** | **1.00** |
-| `three_bikes` | 1 | 0 | 0 | 0 | 1.00 |
-| `occlusion` | 1 | 0 | 0 | 0 | 1.00 |
-
-A perfect score on a suite you wrote yourself is weak evidence on its own, so the
-interesting rows are the ones that *nearly* failed:
-
-- **`crossing` used to be the weak point, and is now clean.** Heavy mid-cross
-  overlap used to make association merge two bodies (accuracy 0.85, **4 ID
-  switches**); even then both fines landed on the correct plate, because
-  attribution runs on the *voted plate*, not the track id — the pipeline
-  absorbing a failure. The merge fault has since been fixed at its root
-  ([ERROR_BUDGET.md](ERROR_BUDGET.md) §3), so `crossing` now records **0 ID
-  switches at association accuracy 1.00**, and the plate-voting defence remains
-  as the safety net it was designed to be.
-- **A 2-frame total occlusion is survived with no ID switch** (`max_age` holds
-  the track LOST, then re-confirms the same id).
-- **A late plate** (readable only from frame 4) still produces the fine, because
-  recording happens on the *confirmed* state rather than the transition frame.
-- A dedicated test injects a consistently-misread plate and asserts it is scored
-  as `wrong_plate` + false positive, never a true positive — so the suite cannot
-  score itself perfect by being lenient.
-
----
-
-## 3. Per-violation decisions
-
-Scoring the final per-vehicle verdict as a binary classification, over edge cases
-including single-frame flicker, the helmet contradiction bug, plate occlusion,
-total detection loss, two-up, exactly three-up and four-up:
-
-| violation | precision | recall | F1 | TP | FP | FN | TN |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `no_helmet` | 1.000 | 1.000 | 1.000 | 2 | 0 | 0 | 3 |
-| `triple_riding` | 1.000 | 1.000 | 1.000 | 4 | 0 | 0 | 2 |
-
-Edge cases that specifically must **not** fine, and don't:
-
-- a helmeted rider the detector briefly calls bare-headed (single-frame flicker),
-- a two-up bike the detector briefly calls `TripleRiding`,
-- a rider the detector labels helmet **and** no-helmet every frame — the
-  reproduced contradiction bug, resolved as ambiguous rather than guessed.
-
-Edge cases that must still fine, and do: three-up, four-up, a bike whose plate is
-occluded for 3 frames, and a bike that vanishes entirely for 2 frames.
-
-**Rider counting, stated plainly:** the detector has a single `TripleRiding`
-class, so three-up and four-up are the same detection. Four-up is at least as
-illegal so fining is correct, but **this system detects a violation; it does not
-count riders**, and does not claim to.
-
----
-
-## 4. What temporal confirmation actually buys
-
-`confirm_window=1` is fining on a single frame — the behaviour the temporal layer
-replaces. Sweeping it:
-
-| violation | window | precision | recall |
+| stickiness, dwell | consecutive 5 (old) | **shipped: consecutive 5 + ≥70% of ≥12 observed** | recall, shipped |
 |---|---:|---:|---:|
-| `no_helmet` | **1** | **0.67** | 1.00 |
-| `no_helmet` | 2 | 1.00 | 1.00 |
-| `no_helmet` | 3 (ships) | 1.00 | 1.00 |
-| `no_helmet` | 5 | 1.00 | 1.00 |
-| `triple_riding` | **1** | **0.80** | 1.00 |
-| `triple_riding` | 2 | 1.00 | 1.00 |
-| `triple_riding` | 3 (ships) | 1.00 | 1.00 |
+| 0, 1 s | 0.2% | 0.0% | 0.90 |
+| 0, 2 s | 0.8% | 0.0% | 1.00 |
+| 0.5, 1 s | 14.5% | 0.5% | 0.85 |
+| 0.5, 2 s | **31.5%** | **1.2%** | 0.99 |
+| 0.8, 2 s (stress) | 53.8% | 7.3% | 0.95 |
+| any, 0.4 s | 0.2–13.7% | 0.0% | **0.00** |
 
-So the temporal layer is not decoration: single-frame fining demonstrably
-produces false positives on these scenarios — one wrongly-fined rider in three
-for helmets — and two frames removes them **at no recall cost**. The shipped
-window of 3+ keeps margin for noisier real footage.
+- **A streak's false-flag rate grows with time in view** under correlated errors:
+  a helmeted rider seen longer gets more chances at one lucky run of flips.
+  k-of-n voting (e.g. 3 of 6) is worse still — it scans more windows.
+- A **track-level fraction** converges instead of accumulating chances; adding
+  it is what cut the worst case from 31.5% to 1.2%.
+- No rule met the 1% target in every condition, so the pre-stated fallback
+  (minimise the worst case) selected it. Re-run at 4× the riders, the same rule
+  won; the runner-up differs only in streak length (3 vs 5), so the gate is the
+  finding and 3 vs 5 frames is within noise.
+- **Price:** a rider in view for fewer than 12 frames is never fined.
 
----
+## 4. Choosing the OCR vote
 
-## 5. OCR: single-frame vs temporal voting
+`ocr_stabilizer_selection.md`. Simulated plate sequences (10 reads each) with
+look-alike substitutions, dropped/extra characters, missed frames — and, in half
+the design conditions, a *consistent* misread (one glyph read the same wrong way
+on half the frames, as a real plate image does). 1,000 sequences per condition.
+Objective: maximise coverage s.t. ≤ 1% of vehicles get a wrong plate.
 
-The other central claim — that cross-frame plate voting beats reading one frame.
-Measured by corrupting ground-truth plates with a character-level noise model
-built from the confusions OCR genuinely makes on plate glyphs (`0/O`, `1/I`,
-`8/B`, `5/S`), then scoring three decision rules on **identical** observations.
+Held-out seed:
 
-`PlateStabilizer` can *abstain* — refuse to name a plate. An abstention is not a
-wrong answer; it costs a missed fine, whereas a wrong plate fines an innocent
-rider. So the honest framing is coverage plus precision-when-it-answers:
-
-| char substitution rate | `last` cov/acc | `best_conf` cov/acc | `temporal` cov/acc |
-|---|---:|---:|---:|
-| 0.04 | 1.00 / 0.320 | 1.00 / 0.930 | 0.78 / **0.987** |
-| 0.08 | 1.00 / 0.190 | 1.00 / 0.840 | 0.64 / **1.000** |
-| 0.12 | 1.00 / 0.150 | 1.00 / 0.700 | 0.51 / **0.980** |
-| 0.20 | 1.00 / 0.060 | 1.00 / 0.450 | 0.23 / 0.913 |
-| 0.30 | 1.00 / 0.050 | 1.00 / 0.230 | 0.11 / 0.909 |
-
-`last` = the last frame's reading (the pre-stabilizer behaviour). `best_conf` =
-the single highest-confidence reading — a strong single-frame baseline, chosen
-because beating `last` is easy and would not be an honest comparison.
-
-**Reading:** at 12% character noise the last-frame rule names the wrong plate
-**85%** of the time and the best-confidence rule **30%**; the shipped stabilizer
-**2%**. Temporal voting does not make OCR *more accurate* — it converts OCR
-errors into **abstentions**. For a system that issues fines, that is the correct
-trade, and the coverage cost (51% at that noise level) is stated rather than
-averaged away.
-
-> **This is simulated noise, not field data.** It measures the *decision rule*
-> under a stated error model; it is not a claim about EasyOCR's accuracy on real
-> plates. The real-data version exists —
-> `python3 evaluate_ocr.py --sequences <csv>` runs the identical comparison
-> through actual EasyOCR — and needs a labelled plate-sequence set, which does
-> not ship. See [DATASET.md](DATASET.md).
-
----
-
-## 6. Error budget — where failures come from
-
-Each stage is degraded by an **equal 30%** and the end-to-end F1 drop measured
-over 20 seeded trials. Clean baseline F1: **1.000**.
-
-| stage | injected failure | mean F1 | F1 drop | share of measured sensitivity |
-|---|---|---:|---:|---:|
-| **`ocr`** | characters corrupted in the plate text | 0.547 | **−0.453** | **76.8%** |
-| `detection_class` | helmet/no-helmet boxes flipped | 0.910 | −0.090 | 15.3% |
-| `detection` | boxes vanish (recall failure) | 0.957 | −0.043 | 7.3% |
-| `plate_recall` | plate not read on a frame | 0.997 | −0.003 | 0.6% |
-
-**OCR is the bottleneck, by a factor of five over the next stage.**
-
-The asymmetry is the interesting part and it is not obvious in advance:
-
-- A **corrupted** plate is catastrophic (−0.453). The fine is attributed to a
-  real but *wrong* vehicle — an innocent rider gets the ticket, and the system
-  has no way to notice.
-- A **missing** plate is nearly free (−0.003). Other frames recover it; the
-  stabilizer simply waits.
-
-That result is consistent with §4 and explains the design: the stabilizer's
-willingness to abstain is defending against the expensive failure mode, and
-paying for it in the cheap one.
-
-**What this is not.** It ranks how much the system *depends on* each stage at
-equal fault rates. It is **not** a claim about how often each stage fails in the
-field — that needs field data nobody has here. A stage with high sensitivity is
-where a real failure would hurt most; it is not necessarily where failures
-actually occur.
-
----
-
-## 7. Speed estimation
-
-Synthetic constant-speed trajectories on a perspective ground plane (known ground
-truth), with detection noise, through the real estimator:
-
-| motion | calibration | MAE (km/h) | overspeed recall |
+| condition | rule | coverage | **wrong plate** |
 |---|---|---:|---:|
-| toward camera | constant ppm | ~42 | **0.00** |
-| toward camera | linear plane | ~40 | 0.00 |
-| toward camera | **homography** | **11.3** | **1.00** |
-| lateral | constant ppm | ~1.8 | 1.00 |
-| lateral | **linear plane** | **0.87** | 1.00 |
-| lateral | homography | ~3.2 | 1.00 |
+| 4% char noise | old (2 reads, no margin) | 0.80 | 0.4% |
+| 4% char noise | **shipped (3 reads, ≥35%, margin ≥0.3)** | 0.63 | 0.0% |
+| 4% + consistent misreads | old | 0.74 | **3.0%** |
+| 4% + consistent misreads | shipped | 0.57 | **1.2%** |
+| 12% + consistent misreads | old | 0.47 | 2.3% |
+| 12% + consistent misreads | shipped | 0.27 | 0.2% |
 
-For motion toward or away from the camera — the common enforcement geometry — a
-single pixels-per-metre value is perspective-blind and **misses every
-overspeeder**. The homography is the only usable option there. For purely lateral
-motion at the calibrated depth the simpler calibrations are already accurate.
+The shipped vote trades roughly a third of its coverage for a 2–10× lower
+wrong-plate rate. The first run of this experiment (200 sequences) picked a
+different, far costlier config whose advantage was 2–4 sequences; at 5× the
+sample it did not survive (DECISIONS #16).
 
-Even at its best the homography's MAE is **11.3 km/h**. That is why speed is
-labelled an **estimate** everywhere and never presented as radar-grade
-measurement, and why an uncalibrated camera reports no speed at all rather than a
-meaningless number.
+Versus single-frame policies at the default noise model (12% substitution, no
+systematic misreads; `pipeline_evaluation.md` § OCR): the last frame's read is
+right 15% of the time, the most confident read 70%, the temporal vote answers
+28% of vehicles and is right on 100% of those. Every non-answer is an
+abstention, never an invalid plate.
 
----
+## 5. Error budget
 
-## 8. Known weaknesses of the pipeline itself
+Oracle ablation at the measured operating point — see
+[ERROR_ANALYSIS.md](ERROR_ANALYSIS.md) §2. Summary: at the val-measured detector
+rates the pipeline loses ~2 F1 points on these scenarios, ~90% of it owned by the
+detector (rider-box recall, then helmet class confusion), across the whole OCR
+sweep.
 
-Distinct from the detector's weaknesses ([MODEL_EVALUATION.md](MODEL_EVALUATION.md) §8):
+## 6. Speed
 
-- **Two-way OCR ties elect rather than abstain.** With exactly two conflicting
-  but structurally valid readings, the agreement score is 0.5, which clears
-  `PlateConfig.min_confidence` (0.35), so the stabilizer picks one. Three-way
-  disagreement correctly abstains. This is the weakest point of the voting rule.
-  It is pinned by a test (`test_two_way_tie_elects_at_half_agreement`) so it
-  cannot change silently, and is left as-is here because retuning it is a runtime
-  behaviour change, not an evaluation one.
-- **~~ID switches under heavy overlap~~ (fixed).** The `crossing` scenario used
-  to log 4 ID switches; a frame-by-frame diagnosis attributed them to the
-  *association* layer merging two vehicles' bodies before the tracker ran, not
-  to the tracker. Raising the body-merge thresholds to 0.5 IoU / 0.8 containment
-  removes every switch (13 → 0 across 8 targeted scenarios) with no regression —
-  see [ERROR_BUDGET.md](ERROR_BUDGET.md) §2–3 and `eval/results/tracking_comparison.json`.
-  No Kalman filter was added, because the tracker was never the bottleneck.
-- **Synthetic scenarios are clean.** They contain no motion blur, no partial
-  boxes, no detector confidence noise, no crowds of 10+ bikes. Real footage will
-  be harder in ways this suite does not model.
-- **Perfect scores are a ceiling, not a measurement.** P = R = 1.0 says the logic
-  handles every case *the suite contains*. The suite was written by the same
-  person as the pipeline; the negative cases (§2) are the partial defence against
-  that, not a complete one.
-- **Speed assumes constant velocity** through the estimation window and a
-  correctly surveyed calibration.
+`pipeline_evaluation.md` § Speed. Synthetic constant-velocity trajectories on a
+perspective ground plane; MAE in km/h.
 
----
+| motion | constant px/m | linear-plane | homography |
+|---|---:|---:|---:|
+| lateral (across the frame) | 1.9 | **0.9** | 3.2 |
+| approach (toward the camera) | 41.8 | 40.1 | **11.3** |
 
-## 9. Reproducing this page
+A constant pixels-per-metre calibration misses **every** approaching
+overspeeder. Even the best calibration is ±11 km/h in simulation, with no
+surveyed ground truth — an estimate, not a radar reading. v1.1.0 also fixed
+calibration under frame downscaling (speeds read at 2/3 of truth on a 1920-px
+video processed at 1280).
+
+## 7. What this page does not show
+
+- Field accuracy of anything. No labelled video; synthetic inputs throughout.
+- Real temporal error correlation (swept), real OCR error statistics (modelled),
+  real plate coverage.
+- Behaviour when two vehicles fully occlude each other for long, or in dense
+  traffic beyond three bikes.
+- Triple riding end-to-end on real footage: the detector rarely finds plates on
+  those vehicles (dataset gap, [DATASET.md](DATASET.md)), which synthetic
+  scenarios with a plate always present cannot reveal.
+
+## 8. Reproducing this page
 
 ```bash
-python3 evaluate_pipeline.py                    # everything, writes eval/results/
-python3 evaluate_pipeline.py --only ocr speed   # one section
-python3 evaluate_system.py                      # just the scenario table
-python3 evaluate_ocr.py --simulate --sweep      # just the OCR policy comparison
+python3 evaluate_pipeline.py                         # scenarios, naive vs pipeline, budget, OCR, speed
+python3 evaluate_temporal.py                         # temporal rule (rates from the val report)
+python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results \
+    --name ocr_policy_simulation                     # OCR vote thresholds
+pytest tests/test_end_to_end.py                      # real-code multi-error scenarios
 ```
 
-Outputs: `eval/results/pipeline_evaluation.{json,md,csv}` and `latest.json` (the
-summary the dashboard reads). No weights, no dataset, no network — which is why
-CI runs this on every push, and why the evaluation tooling cannot silently rot
-between the rare full model evaluations.
+All model-free: no weights, no dataset, no network.

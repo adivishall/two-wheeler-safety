@@ -19,7 +19,7 @@ comparison on a common split would have caught that
   ┌─ 0. verify split hygiene ──────────────────────────────┐
   │                                                        │
   ▼                                                        │
-  1. evaluate on the held-out test split                   │
+  1. evaluate on the validation split (+ CIs)              │
   ▼                                                        │
   2. inspect saved failure artifacts                       │
   ▼                                                        │
@@ -29,9 +29,10 @@ comparison on a common split would have caught that
   ▼                                                        │
   5. retrain (seeded, config recorded)                     │
   ▼                                                        │
-  6. compare A/B on the SAME split ────────────────────────┘
+  6. paired A/B on the SAME val split, with CIs ───────────┘
   ▼
-  7. promote (or don't) — and record why
+  7. promote (or don't) by a rule stated in advance;
+     then report the chosen model on test, once
 ```
 
 ---
@@ -55,21 +56,30 @@ work from `eval/clean_splits/data.yaml`, not the raw split.
 
 ---
 
-## 1. Evaluate on the held-out test split
+## 1. Evaluate on the validation split
 
 ```bash
 python3 evaluate_model.py \
     --model runs/detect/<run>/weights/best.pt \
-    --data eval/clean_splits/data.yaml --split test \
-    --name eval_<run>_test_clean \
-    --save-artifacts eval --benchmark
+    --data eval/clean_splits/data.yaml --split val \
+    --name eval_<run>_val_clean --save-artifacts eval/artifacts_val
+python3 evaluate_uncertainty.py --split val --name uncertainty_val \
+    --models runs/detect/traffic_model-2/weights/best.pt runs/detect/<run>/weights/best.pt
 ```
 
-Use `--split test`, not `val`. Val guided training, so improving on it is
-partly self-congratulation. Keep test for decisions only, and resist looking at
-it often — every decision made on it erodes its independence a little.
+Work on **val**. Test is reserved for reporting a model that has already been
+chosen — every decision made by looking at test erodes its independence, and
+this project's earlier "reject v2" / "promote probe" calls were exactly that
+(`AUDIT.md` E4).
 
----
+A subtlety to keep in mind: Ultralytics picks each run's `best.pt` by validation
+fitness, so val numbers are mildly optimistic for *every* candidate alike. That
+is a reason to report on test once at the end — not a reason to choose on test.
+The clean fix is a third split used only for model selection, which this dataset
+is too small to afford (WithHelmet has 26 val instances).
+
+Failure crops come from val too (`--save-artifacts eval/artifacts_val`), so the
+inspection in step 2 never leaks test into decisions.
 
 ## 2. Inspect the failure artifacts
 
@@ -101,23 +111,29 @@ Every failure is one of four things, and they need opposite responses:
 | **Model limit** — genuinely ambiguous even to you | accept it; tighten the runtime containment instead |
 | **Pipeline containment** — detector wrong but the pipeline absorbs it | leave the model alone |
 
-The last row matters most and is the one most often got wrong. A detector error
-that temporal confirmation already suppresses costs nothing downstream — the
-error budget ([END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §5) shows
-detector class-flips contribute only 15.3% of measured system sensitivity while
-OCR contributes 76.8%. **Retraining the detector is often not the highest-value
-fix available.**
+The last row matters, but it cuts both ways. The temporal gate absorbs
+*independent* per-frame helmet flips well; it does not absorb a rider the model
+misreads consistently, and the error budget
+([ERROR_ANALYSIS.md](ERROR_ANALYSIS.md) §2) says that after the pipeline has done
+its work, what remains is mostly the detector: missed rider boxes and helmet
+class confusion own ~90% of the lost end-to-end F1.
 
 ### What the current failures say
 
-- `WithHelmet` is worst (mAP@50 0.387) and has only **27** test instances. The
-  first move is *more `WithHelmet` data*, not more epochs — the metric is
-  currently too noisy to steer by.
-- The saved confusion crops include a plainly bare-headed rider called
-  `WithHelmet` at 0.855 confidence on an easy frame. That is a model limit, not a
-  label bug.
-- `TripleRiding` confidence carries **no** ranking signal (Spearman −0.20), so
-  don't tune its threshold; there is nothing there to tune.
+From `eval/results/manual_error_review.md` (val):
+
+- **Label bugs are common.** 11 of the 16 top-confidence false positives are
+  real riders or plates the labels omit; at least 3 of the 16 top confusions are
+  mislabelled. Fix these first — until then every comparison is partly measuring
+  label noise.
+- **Data gaps:** head coverings called helmets; cyclists and pedestrians near
+  parked bikes called no-helmet; and, largest of all, plates and heads never
+  labelled on the triple-riding source (`label_audit.md`).
+- `WithHelmet` has 26–27 held-out instances; its AP CI is [0.20, 0.73]. More
+  `WithHelmet` data comes before more epochs — the metric is too noisy to steer by.
+- Whether confidence ranks correctness for `WithHelmet` / `TripleRiding` flips
+  sign between val and test at these sample sizes — don't tune thresholds for
+  them yet.
 
 ---
 
@@ -155,43 +171,52 @@ that shifts metrics; **major** = class-set or architecture change.
 
 ---
 
-## 6. Compare on the same split
+## 6. Paired A/B on the same val split
 
 ```bash
-python3 compare_models.py --data eval/clean_splits/data.yaml --split test
-python3 compare_models.py --data eval/clean_splits/data.yaml --split test \
-    --rank-by WithoutHelmet     # rank by the class you actually care about
+python3 evaluate_uncertainty.py --split val --name uncertainty_val \
+    --models runs/detect/traffic_model-2/weights/best.pt runs/detect/<candidate>/weights/best.pt
+python3 compare_models.py --data eval/clean_splits/data.yaml --split val   # point estimates + latency
 ```
 
-Identical split, identical `conf`/`iou`/`imgsz` for every checkpoint — enforced
-by the tool, not by discipline. A checkpoint whose evaluation fails is reported
-as failed rather than dropped, so the table can never quietly become "the ones
-that happened to work".
+The first model listed is the baseline; each other model gets a **paired
+bootstrap** of its AP difference on the same resampled images, per class and for
+mAP@50. A difference is real only if its 95% CI excludes zero. With 26
+WithHelmet instances, a point-estimate "win" of 0.05 on that class is noise
+until the paired test says otherwise.
 
-Read **every class column**, and the latency and size columns. A model that wins
-on mean mAP while dropping a class to zero is a regression, not an improvement.
+Read every class, and the latency and size columns. A model that wins on mean
+mAP while dropping a class to zero is a regression, not an improvement
+(`traffic_model_helmetfix`: TripleRiding 0.000).
+
+Also compare against **seed noise**: retraining the same recipe with another
+seed moves per-class AP by itself ([MODEL_EVALUATION.md](MODEL_EVALUATION.md),
+Seed variance). A candidate that differs from the baseline by less than two
+seeds of the baseline differ from each other has not shown anything.
 
 ---
 
-## 7. Promote, or don't — and record why
+## 7. Promote, or don't — by a rule stated in advance
 
-Promote when the candidate wins on the metric that matters for the decision the
-system makes, **and** loses nothing important elsewhere:
+The current rule: **promote only if the mAP@50 gain's paired CI excludes zero
+and no class regresses significantly.** Then:
 
-1. Bump the version and regenerate the manifest.
-2. Point `MODEL_PATH` (or `modules/config.DEFAULT_MODEL_PATH`) at the new
-   weights. The runtime stamps the new version onto every piece of evidence
-   automatically, so fines remain auditable across the swap.
-3. Re-run `python3 evaluate_pipeline.py` — the detector changed, so the
-   end-to-end story should be re-stated even though the pipeline logic did not.
-4. Record the decision and its evidence in [DECISIONS.md](DECISIONS.md), and
-   update [MODEL_EVALUATION.md](MODEL_EVALUATION.md).
+1. Report the chosen model on test, once:
+   `evaluate_uncertainty.py --split test --thresholds-from eval/results/uncertainty_val.json`.
+2. Bump the version and regenerate the manifest (weights hash, dataset
+   fingerprint).
+3. Point `MODEL_PATH` (or `modules/config.DEFAULT_MODEL_PATH`) at the new
+   weights. The runtime stamps the new version onto every evidence package.
+4. Re-derive the operating-point error rates from the new model's val confusion
+   matrix and re-run `evaluate_temporal.py` and `evaluate_pipeline.py`: the
+   decision rules were chosen for the old detector's error rates.
+5. Record the decision and its evidence in [DECISIONS.md](DECISIONS.md) and
+   [MODEL_EVALUATION.md](MODEL_EVALUATION.md).
 
-**Do not promote inside an evaluation change.** Changing default weights changes
-runtime behaviour and deserves its own commit and its own review — which is why
-`traffic_model_probe` is currently a *recommendation* in
-[MODEL_EVALUATION.md](MODEL_EVALUATION.md) §7 and not the shipped default,
-despite winning on both helmet classes.
+Applied so far: `traffic_model_v2_dedup` — not distinguishable overall,
+significantly worse on Plate → not promoted. `traffic_model_probe` —
+significantly worse overall → not promoted (an earlier test-split
+"recommendation" to promote it is withdrawn).
 
 ---
 
@@ -199,11 +224,13 @@ despite winning on both helmet classes.
 
 - **Never evaluate on `train`.** If a number looks surprisingly good, check the
   split before believing it.
-- **Never tune on `test`.** Tune on `val`; use `test` to decide.
+- **Never tune or choose on `test`.** Choose on `val`; report on `test` once.
 - **Never quote a metric you did not generate.** Every number in these docs has a
   command that reproduces it and a JSON file in `eval/results/` behind it.
 - **Never promote on a class-average alone.** Read the per-class table.
 - **Re-audit hygiene after any data change.**
-- **Check the error budget before retraining at all.** If the bottleneck is OCR
-  (it currently is, at 76.8%), a better detector is not the highest-value work
-  available.
+- **Check the error analysis before retraining at all.** The current budget
+  says the detector owns most lost end-to-end F1, but the analysis says the
+  cause is *data* (disjoint labels, 27 WithHelmet instances, head coverings,
+  label noise) — relabelling beats another training run
+  ([ERROR_ANALYSIS.md](ERROR_ANALYSIS.md) §3).

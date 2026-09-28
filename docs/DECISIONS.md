@@ -189,13 +189,16 @@ plain 5-frame streak.
 error rates measured on the *validation* split and swept rules, choosing on one
 seed and reporting on another. Finding: a plain streak's false-flag rate *grows
 with time in view* under temporally correlated errors (a helmeted rider seen for
-2 s gets many chances at one lucky run of flips: 35% flagged at moderate
+2 s gets many chances at one lucky run of flips: 31.5% flagged at moderate
 correlation), and k-of-n voting is worse still. A fraction converges instead of
 accumulating chances. No rule met the pre-stated ≤ 1% target, so the stated
-fallback (minimise the worst case) chose this one: worst design case 2.0% on the
-held-out seed. **Cost, accepted and stated:** a rider seen on fewer than 12 frames
-is never fined. Triple-riding was not part of the experiment, so it was not
-changed.
+fallback (minimise the worst case) chose this one: worst design case 1.2% on the
+held-out seed, vs 31.5% for the old rule. Re-run at 4× the sample (1,200 riders
+per condition) the same rule won; the runner-up is the same gate with a 3-frame
+streak (1.67% vs 1.33% on dev), so the *gate* is the robust finding and 3 vs 5
+frames is within noise. **Cost, accepted and stated:** a rider seen on fewer than
+12 frames is never fined. Triple-riding was not part of the experiment, so it was
+not changed.
 
 ## 16. OCR vote thresholds chosen by experiment; an exact tie always abstains
 

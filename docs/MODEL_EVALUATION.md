@@ -1,306 +1,227 @@
 # Model evaluation — the detector, on its own
 
-This page is about **one question only**: how good is the YOLO detector at
-finding and classifying boxes? It deliberately says nothing about tracking, OCR,
-or whether the system issues correct fines — those are a different question with
-a different answer, in [END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md).
-Mixing the two is the most misleading thing this project could do, so they are
-kept apart everywhere.
+*"What can the detector actually see?"* — measured separately from the pipeline
+built around it ([END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md)).
 
-Every number here was produced by running the model on labelled data. Nothing is
-estimated, rounded up, or carried over from a training log. The generating
-commands are at the bottom and the raw output lives in `eval/results/`.
-
----
+Every number on this page is read from a generated file under `eval/results/`
+(named next to each table) and can be regenerated with the commands in §10.
+Each of those files carries a provenance block: weights SHA-256, dataset
+content fingerprint, split fingerprint, git commit, library versions, hardware.
 
 ## 1. What was evaluated
 
 | | |
 |---|---|
-| Model | `traffic-4class@1.0.0` (`runs/detect/traffic_model-2/weights/best.pt`) |
-| Architecture | YOLOv8n, 3.0 M params, 8.1 GFLOPs, 73 fused layers |
-| Trained | 15 epochs, imgsz 640, batch 16, seed 0, from `yolov8n.pt` |
-| Dataset | `master_traffic_violation_dataset` (`sha256:bef022b6e9fd485e`) |
-| Device | Apple M4 (MPS), torch 2.12.1, ultralytics 8.4.71 |
-| Inference | conf 0.25, IoU 0.5, imgsz 640 |
+| model | `traffic-4class@1.0.0` — YOLOv8n, 15 epochs, Ultralytics defaults, seed 0 |
+| weights | `sha256:d49f7983…712cbd` (`models/manifests/traffic-4class.json`) |
+| training data | `master_traffic_violation_dataset` — fingerprint `sha256:362a262721cd15ab` |
+| held-out data | `eval/clean_splits` (val 352 / test 175 images after removing near-duplicates of training images) — fingerprint `sha256:e1be4f14028241d1` |
+| hardware | Apple M4, MPS · torch 2.12.1 · ultralytics 8.4.71 |
 
-Classes, in dataset order: `Plate`, `WithHelmet`, `WithoutHelmet`,
-`TripleRiding`.
+## 2. Protocol — and what changed from earlier versions of this page
 
----
+1. **Choose on validation, report on test.** Model comparisons and threshold
+   choices are made on val. Test is evaluated once, for the model already
+   chosen. (Earlier, models were compared and a candidate "rejected" or
+   "recommended" on the test split — which is tuning on test.)
+2. **Standard mAP protocol.** mAP comes from Ultralytics `val()` at conf 0.001,
+   NMS IoU 0.7. It used to be computed at the *operating* threshold (conf 0.25,
+   NMS 0.5), which truncates the precision/recall curve: same weights, same
+   split, **0.727 → 0.769 mAP@50 on test**. The operating threshold is still
+   used where it belongs — the confusion matrix and error analysis.
+3. **Uncertainty.** Per-class AP@50 comes with a 95% image-bootstrap CI
+   (2,000 resamples). Differences between models use a *paired* bootstrap on the
+   same resampled images and are called real only if the CI excludes zero.
+4. **Two AP flavours, both reported.** `val()` uses *multi-label* NMS (a box can
+   carry a second class hypothesis); the pipeline calls `predict()`, which is
+   single-label. Bootstrap AP is computed from `predict()` outputs with
+   Ultralytics' own AP formula (pinned by a test), so it measures what the
+   pipeline actually receives. The gap between the two is largest exactly where
+   classes are confusable — WithHelmet.
 
-## 2. Splits, and which number to believe
+## 3. Headline — de-leaked **test** split
 
-Three splits exist. Which one a metric comes from changes what it means, so all
-three are reported rather than the flattering one:
+`eval/results/eval_traffic_model-2_test_clean.json`, `eval/results/uncertainty_test.json`
 
-| split | images | what it means |
-|---|---:|---|
-| `train` | 11,195 | the model saw these. Never evaluated on. |
-| `val` | 383 | used during training; **not** an unseen test set |
-| `test` | 194 | genuinely held out — never used for training or model selection |
-| `test` (de-leaked) | 175 | the above, minus images that duplicate training data |
-
-The de-leaked split exists because the held-out data was not, in fact, entirely
-held out.
-
-### Leakage was measured, not assumed
-
-The training images were re-hashed by an offline augmentation pass
-(`aug_<hash>.jpg`), so a held-out image cannot be matched to its training copy
-by filename — which is why [DATASET.md](DATASET.md) previously recorded leakage
-as **UNVERIFIED**. `audit_dataset.py` compares *pixel content* with a 64-bit
-difference hash instead:
-
-| split | images | near-duplicates of a training image | rate |
-|---|---:|---:|---:|
-| `val` | 383 | 31 | **8.1%** |
-| `test` | 194 | 19 | **9.8%** |
-
-Most matched at Hamming distance 0. Spot-checking by direct pixel comparison
-gave a mean absolute difference of 1–10 out of 255 — the *same photographs*,
-JPEG-recompressed. The leakage is real.
-
-**And it turned out not to matter much**, which is worth stating plainly because
-the opposite was expected:
-
-| split | mAP@50 | mAP@50-95 | precision | recall |
+| | mAP@50 | mAP@50-95 | P | R |
 |---|---:|---:|---:|---:|
-| `val` (contains leakage) | 0.6967 | 0.5021 | 0.7828 | 0.7398 |
-| `test` (contains leakage) | 0.7202 | 0.5270 | 0.7582 | 0.7773 |
-| **`test` de-leaked** | **0.7265** | **0.5320** | 0.7559 | 0.7846 |
+| `val()`, standard protocol | **0.769** | **0.558** | 0.794 | 0.744 |
+| `predict()` AP@50, 95% CI | **0.750** [0.690, 0.840] | — | — | — |
 
-Removing the leaked images moved mAP@50 by **+0.006** — in the *opposite*
-direction to inflation. Two honest readings of that: the leaked images were not
-systematically easier than the rest, and 19 images is too small a sample to shift
-a mean much either way. The de-leaked number is the one quoted from here on,
-because it is the one with a clean argument behind it, not because it is higher.
-
-**Caveat that still stands:** dHash catches recompression, resize and mild
-photometric duplicates. It will miss a heavy geometric augmentation (a large
-rotation or crop). So the de-leaked split is *cleaner*, not *provably clean*.
-
----
-
-## 3. Headline metrics — de-leaked held-out test split
-
-**mAP@50 0.7265 · mAP@50-95 0.5320 · mean precision 0.7559 · mean recall 0.7846**
-(175 images, 293 labelled instances)
-
-| class | precision | recall | mAP@50 | mAP@50-95 |
+| class | instances | AP@50 `val()` | AP@50 `predict()` [95% CI] | mAP@50-95 |
 |---|---:|---:|---:|---:|
-| `Plate` | 0.894 | 0.901 | 0.863 | 0.503 |
-| `WithHelmet` | 0.538 | 0.519 | **0.387** | 0.310 |
-| `WithoutHelmet` | 0.738 | 0.752 | 0.705 | 0.554 |
-| `TripleRiding` | 0.853 | 0.967 | **0.950** | 0.761 |
+| `TripleRiding` | 30 | 0.971 | 0.963 [0.897, 0.995] | 0.770 |
+| `Plate` | 131 | 0.887 | 0.889 [0.837, 0.938] | 0.516 |
+| `WithoutHelmet` | 105 | 0.791 | 0.734 [0.655, 0.820] | 0.612 |
+| `WithHelmet` | 27 | 0.426 | **0.415 [0.204, 0.729]** | 0.336 |
 
-Matching predictions to ground truth per image (`modules/evaluation.py`) gives
-the counts behind those rates:
+Validation, for comparison (`eval_traffic_model-2_val_clean.json`,
+`uncertainty_val.json`): `val()` mAP@50 0.766 / mAP@50-95 0.542; `predict()`
+AP@50 0.721 [0.668, 0.786].
 
-| class | TP | FP | FN | precision | recall | F1 |
-|---|---:|---:|---:|---:|---:|---:|
-| `Plate` | 114 | 13 | 17 | 0.898 | 0.870 | 0.884 |
-| `WithHelmet` | 14 | 13 | 13 | 0.519 | 0.519 | **0.519** |
-| `WithoutHelmet` | 78 | 35 | 27 | 0.690 | 0.743 | 0.716 |
-| `TripleRiding` | 29 | 4 | 1 | 0.879 | 0.967 | **0.921** |
+**How to read it.** The CI on WithHelmet spans half the scale: with 27 instances
+the class's AP is barely constrained. Any statement of the form "model X is
+better on WithHelmet by 0.05" is noise unless a paired test says otherwise.
+Plate's mAP@50-95 (0.52) is far below its mAP@50 (0.89): plates are *found* but
+boxed loosely — which matters for OCR crops more than for detection counts.
 
----
+## 4. At the operating threshold (conf 0.25)
 
-## 4. Class-wise error analysis
+| class | val P / R / F1 | test P / R / F1 |
+|---|---|---|
+| `Plate` | 0.906 / 0.818 / 0.860 | 0.898 / 0.870 / 0.884 |
+| `WithHelmet` | 0.346 / 0.692 / 0.462 | 0.519 / 0.519 / 0.519 |
+| `WithoutHelmet` | 0.721 / 0.718 / 0.719 | 0.690 / 0.743 / 0.716 |
+| `TripleRiding` | 0.845 / 0.845 / 0.845 | 0.879 / 0.967 / 0.921 |
 
-### Best class: `TripleRiding` (mAP@50 0.950, F1 0.921)
+Helmet confusions at this threshold: WithoutHelmet → WithHelmet 16 (val) / 8
+(test); WithHelmet → WithoutHelmet 4 / 3. Per rider-box on val: a helmeted rider
+is labelled WithoutHelmet **15.4%** of the time, a bare-headed rider WithHelmet
+7.7%, and 15–20% of rider boxes are missed. These are the rates the temporal
+experiment and the error budget use.
 
-Three-up riding changes the *silhouette* of the whole vehicle — a taller, wider,
-denser blob — so it is a large, distinctive, well-supported target. One missed
-instance in the whole split.
+## 5. Thresholds: chosen on val, checked once on test
 
-One thing it is not: a rider count. The detector has a single `TripleRiding`
-class, so three-up and four-up are the same detection. Four-up is at least as
-illegal, so fining on it is correct, but **the system detects a violation and
-does not count riders** — and does not claim to anywhere.
+`eval/results/uncertainty_val.md` picks each class's F1-optimal confidence on
+val; `uncertainty_test.md` applies those thresholds unchanged.
 
-### Worst class: `WithHelmet` (mAP@50 0.387, F1 0.519)
+- **WithoutHelmet: 0.375 transfers.** Versus the old 0.3 floor it removes 48 → 42
+  false boxes on val and 31 → 26 on test for one lost true positive (val) and
+  none (test). **Adopted** as `HELMET_MIN_CONF`.
+- **WithHelmet: does not transfer.** Val-optimal 0.675 gives F1 0.58 on val and
+  0.42 on test. With 26/27 instances the threshold itself is noise, so no
+  per-class threshold is used for it.
+- **TripleRiding**: val-optimal 0.55 is *worse* on test than 0.25 (0.90 vs
+  0.92). Not adopted.
 
-Three compounding causes, in order of how much they matter:
+## 6. Choosing a model — re-analysed with CIs
 
-1. **Scarcity.** Only **27** `WithHelmet` instances in the test split (and 27 in
-   val) against 4,862 in train. A handful of boxes swing the metric, so treat it
-   as indicative, not precise.
-2. **Genuine confusion with `WithoutHelmet`.** In the error-analysis pass: **8**
-   `WithoutHelmet`→`WithHelmet` and **3** the other way. A helmeted and a
-   bare head occupy the same few dozen pixels at these scales.
-3. **It is the one class where a wrong call is a wrong fine.** `Plate` and
-   `TripleRiding` errors cost a missed or duplicated detection; a helmet error
-   accuses the wrong person.
+`eval/results/uncertainty_val.md` (selection), `uncertainty_test.md` (report).
+Paired differences vs `traffic-4class@1.0.0`, **val**:
 
-The `class_confusions/` artifacts make this concrete rather than abstract. The
-first saved case is a plainly bare-headed rider on a clear, well-lit, centred
-frame, ground truth `WithoutHelmet`, predicted `WithHelmet` at **0.855
-confidence**. Not a hard image — a confidently wrong one.
+| candidate | what it is | Δ mAP@50 [95% CI] | significant per-class differences |
+|---|---|---|---|
+| `traffic_model_v2_dedup` | same recipe, de-duplicated training split | +0.021 [−0.022, +0.063] | WithoutHelmet **+0.046**; Plate **−0.022** |
+| `traffic_model_probe` | v1 fine-tuned 2 more epochs | **−0.051** [−0.095, −0.006] | Plate −0.041, TripleRiding −0.074 |
+| `traffic_model_r2` | earlier retrain (different size) | −0.030 [−0.067, +0.007] | Plate −0.085 |
 
-**What the runtime does about it** (this is why the pipeline exists): a
-`no_helmet` fine is never raised from a raw box. It requires the contradiction
-check — if the model asserts helmet *and* no-helmet on one rider, both are
-discarded — plus a multi-frame temporal streak. The measured value of that
-second requirement is in
-[END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §4.
+**Decision: keep v1.** Rule (stated before looking): promote only if the mAP@50
+gain's CI excludes zero *and* no class regresses significantly. v2 fails both;
+probe is significantly worse.
 
-### `WithoutHelmet` (mAP@50 0.705): the false-positive class
+This reverses the *reasons* recorded earlier, not the outcome for v2:
 
-35 false positives against 78 true positives — the highest FP count of any
-class. Since this is the class that drives the primary violation, its FP rate is
-the main reason the system is a review queue and not an enforcement authority.
+- "v2 rejected because WithHelmet regressed 0.387 → 0.299" — on test, the paired
+  difference is −0.039 [−0.210, +0.087]: **indistinguishable from noise**, and on
+  val v2 is nominally *better* on WithHelmet. The rejection stands on Plate, not
+  WithHelmet.
+- "Promote `traffic_model_probe` (wins on both helmet classes)" — a test-split
+  point estimate. On val it is significantly worse overall. That recommendation
+  is withdrawn.
 
-### `Plate` (mAP@50 0.863, mAP@50-95 0.503)
+### Seed variance
 
-Strong at "is there a plate here" (0.863), much weaker at pixel-tight boxes
-(0.503). Acceptable by design: OCR needs a readable crop, not a tight box. Note
-what this metric does **not** say — a detected `Plate` says nothing about whether
-OCR can read it. That is measured separately, and OCR is the system's real
-bottleneck ([END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §6).
+<!-- SEED-VARIANCE -->
 
----
+## 7. Robustness to image degradation (synthetic)
 
-## 5. Confidence: a score that ranks, not a probability
+`eval/results/robustness_val.md` — label-preserving transforms of real val
+images, paired against the same images clean. **Synthetic transforms; not a
+measurement on real night / rain footage.** Δ AP@50 (★ = CI excludes 0):
 
-Pooled over all classes, confidence separates correct from wrong: mean **0.810**
-when correct vs **0.669** when wrong (+0.142). Binned, the relationship is
-clearly monotonic overall:
+| transform | Plate | WithHelmet | WithoutHelmet | TripleRiding | mAP@50 |
+|---|---:|---:|---:|---:|---:|
+| motion blur 9 px | −0.137★ | −0.089 | −0.073★ | −0.114★ | −0.103★ |
+| motion blur 21 px | **−0.655★** | −0.415★ | −0.310★ | −0.531★ | −0.478★ |
+| low light (severe) | −0.320★ | −0.245★ | −0.364★ | −0.353★ | −0.321★ |
+| glare (mild) | −0.008 | **−0.158★** | −0.011 | −0.027★ | −0.051★ |
+| JPEG q=8 | −0.151★ | −0.055 | −0.104★ | −0.063★ | −0.093★ |
+| half resolution | −0.018★ | +0.002 | −0.001 | −0.002 | −0.005 |
+| 25% occluded | −0.359★ | −0.163★ | −0.376★ | −0.653★ | −0.388★ |
 
-```
-   score bin      n     acc
- 0.25-0.40      16   0.312
- 0.40-0.55      20   0.600
- 0.55-0.70      19   0.474
- 0.70-0.85     119   0.849
- 0.85-1.00     126   0.857
-```
+- **Plate is the most fragile class** — first to fall under blur, compression
+  and even halved resolution. Every fine depends on the plate, so for a real
+  camera motion blur (shutter speed vs vehicle speed) is the parameter to design
+  against, ahead of resolution.
+- **Glare hits WithHelmet specifically** (−0.16 even when mild): a shiny helmet
+  under glare stops looking like a helmet — the confusion that leads toward a
+  false no-helmet call.
+- Resolution loss down to ¼ barely matters except for plates.
 
-Spearman(score rank, accuracy rank) = **0.90**, top-bin minus bottom-bin accuracy
-= **+0.545**.
+## 8. What the errors actually are — manual review
 
-**But it is not uniform across classes**, and that is the finding the pooled
-number hides:
+`eval/results/manual_error_review.md`: the 16 highest-confidence false positives
+and 16 highest-confidence class confusions on val, inspected one by one (crops
+listed so anyone can re-check; judgements, not ground truth).
 
-| class | n | Spearman | top−bottom gap | reading |
-|---|---:|---:|---:|---|
-| `WithoutHelmet` | 113 | **1.00** | **+0.86** | strong ranking signal |
-| `Plate` | 127 | 0.60 | +0.25 | usable |
-| `WithHelmet` | 27 | −0.15 | +0.21 | weak, non-monotonic |
-| `TripleRiding` | 33 | **−0.20** | **−0.04** | **no signal — do not threshold** |
+- **11 of 16 top "false positives" are real objects the labels omit** —
+  bare-headed riders, plates (`TS 20 7607`, `MH34AJ 7050`), unlabelled riders.
+  Measured precision *understates* the detector for Plate and WithoutHelmet.
+- **At least 3 (probably 6) of 16 top class confusions are label errors** — a
+  rider in a full-face helmet labelled WithoutHelmet, a number plate labelled
+  WithoutHelmet, bare-headed riders labelled WithHelmet.
+- **Genuine model errors, by kind:**
+  - *Head coverings read as helmets* (4 of 16 confusions): women wearing a
+    dupatta or scarf are called WithHelmet. The consequence is a **missed**
+    violation (the safe direction for fines) — but it is a failure correlated
+    with a demographic group, i.e. a fairness problem, not only an accuracy one.
+  - *Context*: a man in a yellow helmet standing with a **bicycle**, and a
+    pedestrian beside a parked motorbike, are both called WithoutHelmet. The
+    model detects "person near two-wheeler", not "rider".
+  - *Helmeted rider called no-helmet* (2 confusions, 1–2 false positives): the
+    error that fines an innocent person. Rare in this sample, and it is what the
+    temporal rule and human review exist for.
 
-So: ordering a review queue by confidence is well-founded for `WithoutHelmet`,
-and **not** for `TripleRiding`, where a 0.9 detection is no more likely to be
-right than a 0.5 one. (`TripleRiding` is also the most accurate class overall, so
-there is simply little wrong-ness left for the score to sort.)
+## 9. Dataset composition is the largest hidden limit
 
-**This is a score-vs-accuracy curve, not calibration.** YOLO's objectness ×
-class score is a model output, not a probability; "0.8" does not mean "80%
-correct" and is never presented as such in the API, the UI or these docs. The
-path to an actual probability is Platt/isotonic calibration against labelled
-review outcomes (`modules/calibration.py`), which needs a labelled outcome set
-that does not exist yet — so no calibrator is applied.
+`eval/results/label_audit.md` (details in [DATASET.md](DATASET.md)): the dataset
+is two exports glued together with **disjoint label sets**. {Plate, WithHelmet,
+WithoutHelmet} and {TripleRiding} never appear in the same labelled image — in
+train, val or test. Consequences:
 
----
+- TripleRiding's excellent AP (0.96) is measured entirely on one source's
+  images, and plates / riders in those images were never labelled, so the model
+  learned them as background there. On val it predicts a plate on **65%** of
+  helmet-source images but **6%** of triple-riding images.
+- A fine needs a plate. On real footage, triple riding will therefore mostly be
+  **confirmed but withheld** — and no held-out metric can show it, because the
+  held-out labels share the gap.
 
-## 6. Inspectable failures
+## Confidence
 
-`evaluate_model.py --save-artifacts` writes representative failures as annotated
-context crops (**red** = prediction, **green** = ground truth) plus
-`eval/index.json` recording class, score, boxes, IoU and model version:
+Confidence ranks correctness well for WithoutHelmet (Spearman 1.00 on both val
+and test over score bins) and Plate (0.9 / 0.6). For WithHelmet and
+TripleRiding the rank correlation flips sign between val and test (0.95 → −0.15;
+0.7 → −0.2): at 27–58 instances even *whether* confidence is informative cannot
+be established. The system therefore never presents a score as a probability.
 
-| category | saved | meaning |
-|---|---:|---|
-| `false_positives/` | 30 (capped) | predicted a box where there is no ground truth |
-| `false_negatives/` | 30 (capped) | ground-truth box missed entirely |
-| `class_confusions/` | 12 | box found, wrong class |
-| `low_confidence/` | 12 | correct, but below 0.45 |
+## Limits of everything above
 
-The artifacts are gitignored: they are derived from dataset imagery whose licence
-is unverified, and they regenerate in seconds.
+- Held-out ≠ generalisation: val and test come from the same sources as training
+  and share their cameras, cities and biases.
+- WithHelmet has 26/27 instances per split; its numbers are wide intervals, not
+  facts.
+- Labels are noisy in both directions (§8); some "errors" are the model being
+  right.
+- The robustness transforms approximate real conditions; they do not reproduce
+  them.
+- The dataset's source and licence are unverified
+  ([data/DATASET_MANIFEST.md](../data/DATASET_MANIFEST.md)).
 
----
-
-## 7. Choosing a model by evidence
-
-Four checkpoints had accumulated in `runs/detect/`, and the shipped one was
-chosen by memory. `compare_models.py` evaluates every checkpoint on the identical
-de-leaked test split with identical inference settings:
-
-| model | mAP@50 | mAP@50-95 | `Plate` | `WithHelmet` | `WithoutHelmet` | `TripleRiding` | ms | MB |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `traffic_model_probe` | **0.741** | **0.546** | 0.840 | **0.470** | **0.771** | 0.882 | 27.9 | 6.0 |
-| `traffic_model_r2` | 0.728 | 0.519 | 0.836 | 0.422 | 0.752 | 0.902 | 27.4 | 23.4 |
-| `traffic_model-2` *(ships)* | 0.727 | 0.532 | **0.863** | 0.387 | 0.705 | **0.950** | 27.9 | 6.0 |
-| `traffic_model_helmetfix` | 0.500 | 0.339 | 0.871 | 0.417 | 0.711 | **0.000** | 28.0 | 6.0 |
-
-Lineage: `traffic_model-2` (15 ep from `yolov8n.pt`) → `traffic_model_probe`
-(+2 ep) → `traffic_model_r2` (+5 ep). `traffic_model_helmetfix` is
-`traffic_model-2` fine-tuned 3 epochs on the narrower `dataset_helmet_clean`.
-
-### The result worth reading twice
-
-**`traffic_model_helmetfix` scores 0.000 on `TripleRiding`.** The checkpoint
-named for fixing helmet detection forgot an entire violation class — textbook
-catastrophic forgetting from fine-tuning on a narrower dataset — and it barely
-moved helmet accuracy either (0.417 vs 0.387). Promoting it on the strength of
-its name would have silently disabled triple-riding enforcement. Its own leakage
-exposure against `dataset_helmet_clean` was not separately audited, but that only
-*flatters* it here, and it still loses decisively.
-
-### Recommendation, not an action
-
-`traffic_model_probe` beats the shipped model on both helmet classes
-(`WithHelmet` +0.083, `WithoutHelmet` +0.066) — the weak link and the driver of
-the primary violation — while giving up `TripleRiding` (−0.068) and `Plate`
-(−0.023). On a suite where helmet is the bottleneck class, that is the better
-trade.
-
-It is **not** promoted in this branch. Changing default weights changes runtime
-behaviour, wants its own version bump, manifest and evidence-trail check, and
-deserves a decision rather than a side effect of an evaluation commit. The
-evidence is recorded here so the decision can be made on it.
-
----
-
-## 8. Honest limits of everything above
-
-- **Held out ≠ generalisation.** The `test` split comes from the same pool as
-  `train`/`val` and shares its biases (camera types, cities, lighting). It
-  measures held-out performance, not performance on a new deployment.
-- **Small splits.** 175 images / 293 instances gives a ballpark, not tight
-  confidence intervals. `WithHelmet`'s 27 instances especially.
-- **De-leaked, not provably clean.** §2's caveat.
-- **One machine, one device.** Latency numbers are Apple M4 / MPS.
-- **`Plate` detection ≠ readable plate.**
-- **These numbers bound the system; they do not describe it.** A pipeline can be
-  no better than its detector on the things the detector decides — but it can be
-  *worse or better* on the things the pipeline decides. That is the whole point
-  of measuring both.
-
----
-
-## 9. Reproducing this page
+## 10. Reproducing this page
 
 ```bash
-# 1. audit split hygiene and build a de-leaked test split
 python3 audit_dataset.py --data master_traffic_violation_dataset/data.yaml \
     --write-clean-split eval/clean_splits
-
-# 2. evaluate the detector on it, saving failure artifacts
-python3 evaluate_model.py \
-    --model runs/detect/traffic_model-2/weights/best.pt \
-    --data eval/clean_splits/data.yaml --split test \
-    --name eval_traffic_model-2_test_clean \
-    --save-artifacts eval --benchmark
-
-# 3. compare every checkpoint on the same split
-python3 compare_models.py --data eval/clean_splits/data.yaml --split test
-
-# 4. regenerate the dataset manifest
-python3 dataset_manifest.py --data master_traffic_violation_dataset/data.yaml
+python3 audit_labels.py --data master_traffic_violation_dataset/data.yaml \
+    --model runs/detect/traffic_model-2/weights/best.pt
+M=runs/detect/traffic_model-2/weights/best.pt
+python3 evaluate_model.py --model $M --data eval/clean_splits/data.yaml --split val \
+    --out eval/results --name eval_traffic_model-2_val_clean --save-artifacts eval/artifacts_val
+python3 evaluate_model.py --model $M --data eval/clean_splits/data.yaml --split test \
+    --out eval/results --name eval_traffic_model-2_test_clean
+python3 evaluate_uncertainty.py --split val --name uncertainty_val --models $M <candidates…>
+python3 evaluate_uncertainty.py --split test --name uncertainty_test \
+    --thresholds-from eval/results/uncertainty_val.json --models $M <chosen…>
+python3 evaluate_robustness.py
 ```
-
-Raw output: `eval/results/*.json` (machine-readable) and `eval/results/*.md`.
-Weights and the dataset are gitignored, so these run locally; CI runs the
-model-free evaluations instead ([TESTING.md](TESTING.md)).

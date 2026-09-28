@@ -80,6 +80,42 @@ The **training images are pre-augmented offline**, not augmented on-the-fly:
   augmentation on top, but doubling up on already-augmented data is usually not
   helpful and should be measured (see [EVALUATION.md](EVALUATION.md)).
 
+## Label coverage — the dataset is two datasets with disjoint labels
+
+Measured by `audit_labels.py` (`eval/results/label_audit.md`), which also checks
+for malformed labels, duplicate boxes and same-rider WithHelmet/WithoutHelmet
+annotations (none found in any split) and reports each split's source mix.
+
+| split | `ds1`/`dsv` images (helmet & plate source) | `dst` images (triple-riding source) | `aug` (offline-augmented, origin unknown) |
+|---|---:|---:|---:|
+| train | 1,887 | 323 | 8,985 |
+| val | 296 | 87 | 0 |
+| test | 146 | 48 | 0 |
+
+- `ds1`/`dsv` images carry **only** Plate / WithHelmet / WithoutHelmet labels;
+  `dst` images carry **only** TripleRiding. The class co-occurrence matrix
+  confirms it for every split: **no labelled image contains both a TripleRiding
+  box and any other class** — not even in the augmented training images.
+- So on triple-riding images, the plate and the riders' heads were never
+  labelled: the model was *trained* to treat them as background there, and the
+  held-out labels *score* them the same way. The model probe in the same report
+  shows it: the detector predicts a plate on **65%** of val `ds1` images but
+  **6%** of `dst` images, and no-helmet on 61% vs 11%.
+- Every held-out TripleRiding instance comes from `dst`; every held-out Plate and
+  helmet instance comes from `ds1`. Each class's metric describes one source.
+- **Consequence for the system:** a fine needs a plate, so triple riding will
+  mostly be *confirmed but withheld* on real footage, and a triple rider's missing
+  helmet is under-detected. No held-out metric can reveal this, because the
+  labels share the gap. The fix is data, not code: annotate plates and heads on
+  the `dst` images (or train with per-source label masks so unlabelled classes
+  are ignored rather than taught as background).
+
+Visual review of the highest-confidence val errors
+(`eval/results/manual_error_review.md`) adds that labels are noisy in both
+directions: 11 of the 16 top "false positives" are real, unlabelled riders or
+plates, and at least 3 of the 16 top class confusions are mislabelled (a
+full-face helmet labelled WithoutHelmet, a plate labelled WithoutHelmet).
+
 ## Known bias, gaps and risks
 
 These are stated honestly because the spec (and good practice) forbids claiming
@@ -114,8 +150,17 @@ dataset quality without evidence:
   clean.
 * **Geographic/plate bias.** Plates and RTO decoding assume the Indian plate
   format (`modules/plate_info.py`); the imagery skews to Indian road scenes.
-* **Small, imbalanced eval sets.** 383 val / 194 test images is enough for a
-  ballpark but not for tight confidence intervals, especially for `WithHelmet`.
+* **Small, imbalanced eval sets.** 352 val / 175 test images after de-leaking.
+  The bootstrap CI on test WithHelmet AP@50 is [0.20, 0.73] — the class is
+  barely measured ([MODEL_EVALUATION.md](MODEL_EVALUATION.md) §3).
+* **Training set is 80% augmented copies.** 8,985 of 11,195 training images are
+  offline-augmented (`aug_*`, with their origin not recoverable from the name),
+  which is why per-class train counts are equal (4,862) while val/test are not.
+  The de-duplicated split built by `build_train_split.py` kept ~52% of images;
+  a model trained on it was statistically indistinguishable from v1 overall.
+* **Head coverings.** Riders wearing a dupatta or scarf are called WithHelmet by
+  the model (4 of the 16 top val confusions). The training data under-represents
+  them; the effect is missed violations concentrated in one group of riders.
 * **`Plate` ≠ readable plate.** A `Plate` box being detected says nothing about
   whether OCR can read it; OCR quality is evaluated separately (see
   `evaluate_ocr.py` and [EVALUATION.md](EVALUATION.md)).
@@ -132,9 +177,15 @@ gap, not claimed as done.
 
 [../data/DATASET_MANIFEST.md](../data/DATASET_MANIFEST.md) and
 `data/dataset_manifest.json` carry the same facts per split as a generated,
-diffable artifact (content-hash version, per-split class counts, background
-counts, split-hygiene block, and the provenance fields still marked
-`UNVERIFIED`). Regenerate with:
+diffable artifact (content version, per-split class counts, background counts,
+split-hygiene block, and the provenance fields still marked `UNVERIFIED`).
+
+The version is the shared content fingerprint (`modules/provenance.py`): a hash
+of every label file's bytes plus image names and sizes, independent of where the
+dataset lives. It replaced two schemes that hashed per-class *counts* (a moved
+box kept the same "version") and, in one case, the absolute path (moving the
+repo changed it). The same id is recorded in the model manifest and in every
+evaluation report. Regenerate with:
 
 ```bash
 python3 dataset_manifest.py --data master_traffic_violation_dataset/data.yaml \

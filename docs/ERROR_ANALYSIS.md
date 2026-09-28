@@ -1,112 +1,83 @@
-# Error analysis
+# Error analysis and error budget
 
-Where this system is wrong, why, and what the pipeline does about it. Every
-number here is measured (see [EVALUATION.md](EVALUATION.md) for how); this page
-is the honest failure-mode companion to it.
+Where the system fails, which layer owns each failure, and whether it is fixed
+by better data, better pipeline logic, or not at all yet. Every row points at
+the generated evidence behind it. Detector metrics are in
+[MODEL_EVALUATION.md](MODEL_EVALUATION.md); pipeline metrics in
+[END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md).
 
-> **Quantified since this page was written:**
-> [MODEL_EVALUATION.md](MODEL_EVALUATION.md) §4 has the class-wise breakdown on
-> the de-leaked held-out test split with inspectable failure crops, and
-> [END_TO_END_EVALUATION.md](END_TO_END_EVALUATION.md) §6 has the **error
-> budget** — which stage actually costs the system most. Short answer: **OCR, at
-> 76.8% of measured sensitivity**, well ahead of detector class-confusion
-> (15.3%) and detector recall (7.3%). A corrupted plate misattributes a fine; a
-> *missing* plate costs almost nothing because other frames recover it. See
-> [ERROR_BUDGET.md](ERROR_BUDGET.md) for the consolidated cross-stage view.
+## 1. Failure taxonomy
 
-## 1. Detector: the weakest link, and its specific failures
+| # | failure | evidence | owner | fix by training / data? | pipeline mitigation | still unresolved |
+|---|---|---|---|---|---|---|
+| F1 | **Helmeted rider called no-helmet** — the error that fines an innocent person | 15.4% of helmeted rider boxes on val (`eval_traffic_model-2_val_clean.json`); examples in `manual_error_review.md`; glare costs WithHelmet −0.16 AP (`robustness_val.md`) | detector | more WithHelmet data (27 instances per held-out split is the root problem); glare augmentation | streak + ≥70%-of-≥12-frames gate (worst-case false-flag 31.5% → 1.2%, `temporal_confirmation.md`); contradiction safeguard; per-frame floor 0.375; human review | a rider misclassified *consistently* across frames (highly correlated errors: 6–7% false flags in the stress case); photos get no temporal defence |
+| F2 | **Person near a two-wheeler ≠ rider** — cyclist in a helmet, pedestrian by a parked bike, called WithoutHelmet | `manual_error_review.md` FP #8, #9 | detector / data | hard negatives: pedestrians, cyclists, parked bikes | video: needs ≥12 observed frames; a plate must associate | a person standing by a parked bike for 12+ frames can be confirmed, and a photo of one is fined outright if the plate reads. A "vehicle is moving" gate would close this — and would also exempt bare-headed riders waiting at a red light, so it is a policy choice, not a free fix |
+| F3 | **Rider box missed** | 15–20% of rider boxes on val | detector | more data; resolution matters less than blur (`robustness_val.md`) | one blank frame tolerated; gate counts *observed* frames | the largest owner of end-to-end F1 at the measured operating point (§2) |
+| F4 | **Head covering read as a helmet** — dupatta/scarf → WithHelmet | 4 of the 16 top val confusions (`manual_error_review.md`) | data | add head-covering riders to training | none possible downstream | missed violations concentrated in one group of riders — a fairness problem |
+| F5 | **Triple riding without a plate** | disjoint label sets; plate predicted on 6% of triple-riding images vs 65% elsewhere (`label_audit.md`) | data | label plates/heads on the triple-riding source, or mask unlabelled classes | confirmed triple riding without a plate is withheld and logged, never fined against a guess | most triple riding on real footage will be withheld; held-out metrics cannot show it |
+| F6 | **OCR misreads** — wrong glyph, consistent misread, invalid format | clean *synthetic* renders: 37.5% read exactly (`evaluate_ocr.py --labels data/ocr_sanity/labels.csv`); `ocr_stabilizer_selection.md` | OCR | a plate-specific recogniser; a labelled plate-sequence set to measure it | structure-aware look-alike correction; vote needs 3 reads, ≥35% agreement, ≥0.3 margin; ties abstain; wrong-plate ≤ ~1% in simulation | coverage: at 12% character noise only ~28% of vehicles get a plate. Field accuracy is **unmeasured** |
+| F7 | **Correlated detector errors defeat temporal voting** | a plain streak flags 31.5% of helmeted riders at 2 s dwell under moderate correlation; k-of-n is worse (`temporal_confirmation.md`) | decision rule (given the detector) | a better detector | track-level fraction gate (this is why it exists) | real temporal correlation is unmeasured (no labelled video) — swept, not known |
+| F8 | **Short dwell** — rider in view < 12 frames | `brief_pass` scenario is a miss by design | decision rule | — | — | never fined: the stated price of F1/F7 protection |
+| F9 | **Association under full overlap** — one bike directly behind another | `crossing` scenario: association accuracy 0.95, 2 frames merged (`pipeline_evaluation.md`) | association | — | merge thresholds (IoU 0.5 / containment 0.8) chosen by `tracking_eval.py`; identity survives the crossing | from boxes alone, fully overlapping riders cannot be separated |
+| F10 | **Identity split on re-entry** — rider leaves view > 15 frames | `reappears_after_exit` scenario | tracking | — | one fine per (plate, violation) per run (**fixed**; used to fine twice) | two different vehicles with the same OCR'd plate in one run are fined once (the safe direction) |
+| F11 | **Stale plate box** — OCR/speed on where the plate *was* | e2e test `test_plate_occlusion_never_ocrs_a_stale_box` | pipeline | — | **fixed**: OCR, speed and evidence crops require the plate in the current frame | — |
+| F12 | **Speed geometry** — motion toward the camera | constant pixels-per-metre misses every overspeeder (MAE 41.8 km/h); homography MAE 11.3 (`pipeline_evaluation.md`, synthetic) | speed | — | homography calibration; speed skipped without calibration; calibration scaled with frame resize (**fixed**: read 2/3 speed on downscaled video) | no surveyed ground truth; ±11 km/h is not enforcement grade |
+| F13 | **Label noise** in held-out data | 11 of the 16 top val FPs are unlabelled real objects; ≥3 of 16 top confusions mislabelled (`manual_error_review.md`) | data | relabel val/test | — | measured precision understates the detector; WithHelmet numbers are noisy on top of small |
 
-The detector bounds everything downstream. Measured on the val split
-(`traffic-4class@1.0.0`): mAP@50 **0.697**, mAP@50-95 **0.502**.
+## 2. Error budget — oracle ablation at the measured operating point
 
-### `WithHelmet` is the worst class (P 0.42, mAP@50 0.44)
-Two compounding causes:
-- **Data scarcity** — only **27** `WithHelmet` instances in the val split, so the
-  metric is high-variance (a handful of boxes swing it).
-- **Genuine confusion** — the model mixes up helmeted vs un-helmeted heads: in the
-  error-analysis pass, **16** `WithoutHelmet`→`WithHelmet` confusions and **4** the
-  other way. This is the single most consequential error mode, because a wrong
-  helmet call is a wrong *fine*.
+`eval/results/pipeline_evaluation.md` § Error budget. Every stage fails at its
+per-frame rate measured on val (rider missed 15–20%, helmet class flipped
+7.7–15.4%, plate missed 18%); OCR, which has no field measurement, is swept.
+Each stage is then made perfect in turn; the end-to-end fine F1 it recovers is
+its share. Synthetic scenarios, independent per-frame faults.
 
-**Mitigation in the runtime (not the model):** a `no_helmet` fine is never raised
-from a raw box. It requires (a) the **contradiction check** — if the same rider is
-called both helmet and no-helmet in a frame, it's treated as ambiguous and
-dropped, not fined; and (b) a **multi-frame temporal streak** (`HelmetStateMachine`)
-before confirmation. A single confident-but-wrong frame cannot produce a fine.
-The contradiction case is locked by a regression test (`test_main_helpers.py`).
+| OCR read-error rate | F1, all faults | rider recall | helmet class | plate recall | OCR |
+|---|---:|---:|---:|---:|---:|
+| 10% | 0.951 | **47%** | 36% | 11% | 6% |
+| 30% | 0.954 | **57%** | 43% | 0% | 0% |
+| 50% | 0.953 | **53%** | 39% | 7% | 1% |
 
-### `Plate` localization is loose (mAP@50-95 0.43)
-Boxes aren't pixel-tight. This is acceptable by design: OCR only needs a readable
-crop, not a tight box, and `Plate` mAP@50 (0.81) — the "is there a plate here"
-question — is strong.
+Faults are drawn with common random numbers — one independent stream per stage
+— so making one stage perfect changes only that stage's outcomes; an earlier
+version shared one stream and an "oracle" run could score below the faulty run
+by chance.
 
-### Confidence is discriminative but not calibrated
-Mean confidence **0.809 when correct vs 0.561 when wrong** (+0.248 separation). So
-the score is useful for **ranking** a review queue, but "0.8" does **not** mean
-"80% correct". The UI labels it a score everywhere and never a probability;
-calibration tooling exists but no calibrator is applied without a labelled
-outcome set ([EVALUATION.md](EVALUATION.md) §5).
+Reading it:
 
-## 2. Tracking/association: the crossing case
+- At the measured detector rates **the pipeline absorbs most detector noise**:
+  end-to-end F1 falls from 0.970 (no faults; the gap is the by-design short-dwell
+  miss) to ~0.95.
+- What remains is owned by the **detector** — missed rider boxes first (47–57%),
+  helmet class flips second (36–43%) — and that ranking holds across the whole
+  OCR sweep.
+- Single-glyph OCR errors barely move F1, even at 50% of reads, because
+  look-alike correction plus voting absorbs them (and when they don't, the vote
+  abstains rather than electing the wrong plate). OCR's real risk is not F1 but
+  **wrong plates** under consistent misreads — measured separately in
+  `ocr_stabilizer_selection.md`, and the reason the vote needs a margin.
+- This replaces an earlier budget that called OCR "76.8% of system sensitivity".
+  That figure compared 30% per-*character* OCR corruption (a 10-glyph plate then
+  almost never reads cleanly) with 30% per-*box* detector faults — a statement
+  about units, not about the system.
 
-The end-to-end synthetic suite (`evaluate_system.py`) is precision = recall = 1.0
-across 8 scenarios. The `crossing` case used to be the one weak point — heavy
-mid-cross overlap dropped association accuracy to 0.85 with 4 ID switches — and
-has since been **fixed at its root**:
+## 3. What the analysis says to do next, in order
 
-- The frame-by-frame diagnosis ([ERROR_BUDGET.md](ERROR_BUDGET.md) §3) showed the
-  fault was in the **association** layer, not the tracker: `merge_bodies` unioned
-  two different vehicles into one body (at IoU 0.43) *before the tracker ran*.
-- Raising the body-merge thresholds to the canonical 0.5 IoU / 0.8 containment
-  removes every switch — **13 → 0** across 8 targeted scenarios, association
-  accuracy **0.760 → 0.989**, and fines **10/5/2 → 12/0/0** (the old thresholds
-  issued 5 false-positive fines and missed 2 real ones). No motion model was
-  added; the tracker was never the bottleneck.
+1. **Label plates and heads on the triple-riding images** (F5). The single
+   change that turns a whole violation type from "withheld" into "fineable" —
+   and the precondition for measuring it at all.
+2. **More WithHelmet and head-covering riders, plus hard negatives** (F1, F2,
+   F4). WithHelmet's AP CI is [0.20, 0.73]: nothing about that class can be
+   tuned until it is measured on more than 27 instances.
+3. **Decide the parked-vehicle policy** (F2). A motion gate is a few lines in
+   `ViolationPipeline`, but it trades the pedestrian-by-a-parked-bike false
+   positive for missing riders stopped at a signal; better hard negatives (item 2)
+   attack the same error without that trade.
+4. **A labelled plate-sequence set** (F6) — the only way to replace the
+   simulated OCR numbers with real ones, and to know how much coverage the
+   conservative vote actually costs.
+5. **Fix the held-out labels** (F13) before any further model comparison.
 
-**The design defence still stands regardless:** temporal confirmation + OCR
-plate-voting attribute each fine to the correct *plate* even when a *track id*
-churns, so the pipeline absorbs a tracker failure. A 2-frame occlusion is
-survived with no ID switch (`max_age` keeps the track LOST then re-confirms the
-same id). This is why the design confirms over a streak and votes the plate
-rather than trusting any single frame or id.
-
-## 3. OCR: the failure the stabilizer is built for
-
-A single OCR frame flickers look-alikes (`0/O`, `1/I`, `8/B`, `5/S`), drops
-readings, and can invent a plate. Left unchecked, a fine could be issued against
-the wrong vehicle.
-
-**Mitigation:** `PlateStabilizer` collects readings across frames, scores each by
-OCR confidence **and** structural validity (must match a real Indian plate
-structure), and elects a plate by weighted temporal voting — refusing to report
-until it has seen enough observations. `correct_plate` only proposes a look-alike
-fix if it makes the string match a valid structure within a small edit bound.
-(No labelled OCR set ships with the repo, so no field OCR accuracy is asserted;
-the voting/correction logic is unit-tested in `test_plate_recognizer.py`.)
-
-A performance note that is *not* an accuracy trade-off: once the stabilizer has
-locked a high-confidence plate, per-frame OCR is skipped (measured +74.9%
-throughput) and the recorded fine is **byte-identical** — verified in
-`test_pipeline_integration.py`.
-
-## 4. Known systemic limitations (honest)
-
-- **Component ≠ field accuracy.** §1 numbers are on a small, same-pool val set;
-  they don't claim real-world accuracy. See the leakage/imbalance caveats in
-  [DATASET.md](DATASET.md).
-- **Speed is an estimate, not radar.** Only usable with a homography calibration;
-  perspective-blind for motion toward the camera without it
-  ([EVALUATION.md](EVALUATION.md) §4).
-- **The model is the ceiling.** A strong pipeline around a mediocre detector is
-  still bounded by the detector — which is exactly why every flag is a *candidate*
-  for human review, never a verdict.
-
-## 5. How each failure is contained (summary)
-
-| Failure mode | Root cause | Containment |
-|--------------|-----------|-------------|
-| Wrong helmet call | detector class confusion, scarce `WithHelmet` data | contradiction check + temporal streak |
-| Single-frame false positive | model flicker | confirm over N consecutive frames |
-| Wrong plate on a fine | OCR character flicker | temporal voting + structure-valid correction |
-| ID switch when bikes cross | association merged two bodies under heavy overlap | **fixed** at root (merge thresholds 0.5 IoU / 0.8 containment: 13→0 switches); plate-voting remains the fallback |
-| Overconfident wrong flag | uncalibrated score | shown as a score; mandatory human review |
+What training can fix: F1–F5. What only the pipeline can fix: F7–F11 (done where
+marked). What neither can fix without new data: the size of the WithHelmet
+uncertainty, real OCR accuracy, real temporal error correlation.
