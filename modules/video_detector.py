@@ -92,6 +92,7 @@ def process_video(
     helmet_min_conf=0.375,
     triple_min_conf=0.3,
     pipeline_config=None,
+    device=None,
 ):
     """Detect two-wheeler violations across a video.
 
@@ -119,6 +120,8 @@ def process_video(
                       must clear to count toward confirmation.
         pipeline_config: a full :class:`PipelineConfig`; overrides the
                       individual threshold arguments above when given.
+        device:       inference device passed to YOLO (None = library default,
+                      which on Apple silicon means the CPU).
         max_frames:   optional cap for a quick run.
 
     Returns a summary dict: frames processed, vehicles confirmed, output path,
@@ -168,6 +171,9 @@ def process_video(
     model_kwargs = {"verbose": False}
     if conf_threshold is not None:
         model_kwargs["conf"] = conf_threshold
+    if device:
+        model_kwargs["device"] = device
+        applied["device"] = device
 
     writer = None
     frame_idx = 0

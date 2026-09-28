@@ -71,7 +71,15 @@ def main(argv=None) -> int:
         return 2
 
     model, reader = load_models(model_path)
-    result = analyze_image(args.image, model, reader, evidence_dir=config.evidence_dir)
+    from modules.yolo_io import resolve_device
+
+    det = config.detection
+    result = analyze_image(
+        args.image, model, reader, evidence_dir=config.evidence_dir,
+        conf=det.conf_threshold, contradiction_iou=det.contradiction_iou,
+        helmet_min_conf=det.helmet_min_conf, triple_min_conf=det.triple_min_conf,
+        device=resolve_device(det.device),
+    )
 
     if result.get("error"):
         log.error("%s", result["error"])
@@ -80,23 +88,27 @@ def main(argv=None) -> int:
     for det in result["detections"]:
         print("Detected:", det["label"])
 
-    plate_number = result["plate"]
-    if plate_number:
-        print("Plate:", plate_number)
     if result["evidence_file"]:
         print("Evidence saved:", result["evidence_file"])
 
-    if plate_number and result["violations"]:
-        image_name = (
-            os.path.basename(result["evidence_file"]) if result["evidence_file"] else None
-        )
-        for violation in result["violations"]:
-            print("Violation:", violation)
+    # Per vehicle: each violation is reported against the plate of ITS rider,
+    # and only when that plate reads as a valid plate (see analyze_image).
+    reported = 0
+    for v in result["vehicles"]:
+        if v["plate"]:
+            print("Plate:", v["plate"])
+        for rec in v["violations"]:
+            print("Violation:", rec["type"], "->", v["plate"],
+                  f"(score {rec['confidence']:.2f})")
+            reported += 1
             if not args.no_report:
-                _report(args.api_url, config.server.detect_api_key,
-                        plate_number, violation, image_name)
-    else:
-        print("No valid violation found.")
+                _report(args.api_url, config.server.detect_api_key, v["plate"],
+                        rec["type"], rec["evidence"]["annotated_path"])
+        for a in v["abstained"]:
+            print("Not recorded:", a["type"], "-", a["reason"],
+                  f"(plate read: {v['plate_raw']!r})")
+    if not reported:
+        print("No violation recorded.")
 
     return 0
 

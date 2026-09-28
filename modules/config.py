@@ -199,6 +199,10 @@ class DetectionConfig:
     # (never lock) and restore per-frame OCR.
     ocr_lock_confidence: float = 0.90
     ocr_lock_min_observations: int = 5
+    # Inference device: auto | cpu | mps | cuda[:N]. Ultralytics itself only
+    # auto-selects CUDA — on Apple silicon it silently runs on the CPU unless
+    # told otherwise — so the device is resolved explicitly and recorded.
+    device: str = "auto"
 
     @classmethod
     def from_env(cls) -> "DetectionConfig":
@@ -216,6 +220,7 @@ class DetectionConfig:
             trace_max_frames=_env_int("DETECTION_TRACE_MAX_FRAMES", 20),
             ocr_lock_confidence=_env_float("OCR_LOCK_CONFIDENCE", 0.90),
             ocr_lock_min_observations=_env_int("OCR_LOCK_MIN_OBSERVATIONS", 5),
+            device=_env_str("DETECT_DEVICE", "auto"),
         )
 
 

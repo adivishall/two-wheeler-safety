@@ -102,7 +102,7 @@ def _draw_annotations(img, detections, plate_text_by_box):
 def analyze_image(
     image_path, model, reader, evidence_dir="evidence", conf=0.25, *,
     contradiction_iou=0.1, helmet_min_conf=0.375, triple_min_conf=0.3,
-    model_version=None, pipeline_version=None, source_id=None,
+    model_version=None, pipeline_version=None, source_id=None, device=None,
 ):
     """Detect violations and read plates in a single image, per vehicle.
 
@@ -145,7 +145,10 @@ def analyze_image(
 
     # Predict on the decoded array we already hold (not the path) so the model
     # and the OCR crops are guaranteed to see the same pixels.
-    results = model.predict(source=img, conf=conf, verbose=False)
+    predict_kwargs = {"conf": conf, "verbose": False}
+    if device:
+        predict_kwargs["device"] = device
+    results = model.predict(source=img, **predict_kwargs)
 
     detections = []
     dets = []

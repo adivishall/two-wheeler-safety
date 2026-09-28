@@ -96,6 +96,7 @@ def run_official_val(model, data_path, split, imgsz, conf, iou, device) -> dict:
 def run_error_analysis(
     model, split_dir, class_names, conf, iou, max_images,
     *, artifacts: ArtifactWriter | None = None, low_conf_threshold: float = 0.45,
+    device: str | None = None,
 ) -> dict:
     """Second pass: match predictions to GT for confusions + FP/FN + confidence.
 
@@ -124,7 +125,8 @@ def run_error_analysis(
         h, w = img.shape[:2]
         gt = _read_gt(label_path, w, h)
 
-        result = model.predict(source=image_path, conf=conf, verbose=False)[0]
+        result = model.predict(source=image_path, conf=conf, verbose=False,
+                               **({"device": device} if device else {}))[0]
         preds = []
         for b in result.boxes:
             cls = int(b.cls[0])
@@ -214,17 +216,20 @@ def run_error_analysis(
     return out
 
 
-def benchmark_inference(model, split_dir, n: int) -> dict:
-    """Measure per-image inference latency over the first ``n`` split images."""
+def benchmark_inference(model, split_dir, n: int, device: str | None = None) -> dict:
+    """Measure per-image inference latency over the first ``n`` split images,
+    on ``device`` (recorded — Ultralytics otherwise silently uses the CPU on
+    Apple silicon)."""
     pairs = list(_iter_image_label_pairs(split_dir))[:n]
     if not pairs:
         return {}
+    kw = {"verbose": False, **({"device": device} if device else {})}
     # Warm up (first inference includes lazy CUDA/graph init).
-    model.predict(source=pairs[0][0], verbose=False)
+    model.predict(source=pairs[0][0], **kw)
     times = []
     for image_path, _ in pairs:
         t0 = time.perf_counter()
-        model.predict(source=image_path, verbose=False)
+        model.predict(source=image_path, **kw)
         times.append((time.perf_counter() - t0) * 1000.0)
     times.sort()
     mean = sum(times) / len(times)
@@ -234,6 +239,8 @@ def benchmark_inference(model, split_dir, n: int) -> dict:
         "p50_ms": round(times[len(times) // 2], 2),
         "p90_ms": round(times[int(len(times) * 0.9)], 2),
         "fps": round(1000.0 / mean, 1) if mean else 0.0,
+        "device": device or "library default",
+        "state": "warm (1 warm-up call), batch 1, file decode included",
     }
 
 
@@ -523,12 +530,14 @@ def main(argv=None) -> int:
             payload["error_analysis"] = run_error_analysis(
                 model, split_dir, class_names, args.conf, args.iou, args.max_images,
                 artifacts=artifacts, low_conf_threshold=args.low_conf_threshold,
+                device=device,
             )
         else:
             log.warning("split dir not found (%s); skipping error analysis", split_dir)
 
     if args.benchmark and split_dir and os.path.isdir(split_dir):
-        payload["benchmark"] = benchmark_inference(model, split_dir, args.benchmark_images)
+        payload["benchmark"] = benchmark_inference(model, split_dir, args.benchmark_images,
+                                                   device=device)
 
     md_path, json_path = write_reports(args.out, payload["name"], payload)
     log.info("wrote %s and %s", md_path, json_path)

@@ -101,20 +101,28 @@ def test_evaluate_ocr_simulate_runs_without_easyocr(tmp_path):
     assert set(data["default_noise"]["policies"]) == {"last", "best_conf", "temporal"}
 
 
-def test_evaluate_pipeline_writes_every_output_format(tmp_path):
-    rc = evaluate_pipeline.main([
-        "--out", str(tmp_path), "--name", "p", "--trials", "2", "--quiet",
-    ])
+@pytest.fixture(scope="module")
+def pipeline_run(tmp_path_factory):
+    """One full evaluate_pipeline run shared by the tests that only read its
+    outputs (each full run takes seconds; the reproducibility test below still
+    runs it twice on purpose)."""
+    out = tmp_path_factory.mktemp("pipeline_eval")
+    rc = evaluate_pipeline.main(["--out", str(out), "--name", "p",
+                                 "--trials", "2", "--quiet"])
+    return rc, out
+
+
+def test_evaluate_pipeline_writes_every_output_format(pipeline_run):
+    rc, out = pipeline_run
     assert rc == 0
     for suffix in (".json", ".md", ".csv"):
-        assert (tmp_path / f"p{suffix}").exists()
-    assert (tmp_path / "latest.json").exists()
+        assert (out / f"p{suffix}").exists()
+    assert (out / "latest.json").exists()
 
 
-def test_evaluate_pipeline_csv_is_well_formed(tmp_path):
-    evaluate_pipeline.main(["--out", str(tmp_path), "--name", "p",
-                            "--trials", "2", "--quiet"])
-    with open(tmp_path / "p.csv", newline="") as fh:
+def test_evaluate_pipeline_csv_is_well_formed(pipeline_run):
+    _rc, out = pipeline_run
+    with open(out / "p.csv", newline="") as fh:
         rows = list(csv.DictReader(fh))
     assert rows
     assert set(rows[0]) == {"section", "subject", "metric", "value"}
@@ -133,25 +141,23 @@ def test_evaluate_pipeline_only_runs_requested_sections(tmp_path):
     assert "system" not in data
 
 
-def test_evaluate_pipeline_markdown_separates_model_from_pipeline(tmp_path):
+def test_evaluate_pipeline_markdown_separates_model_from_pipeline(pipeline_run):
     """The report must not let a reader mistake pipeline metrics for detector
     metrics — that conflation is the single most misleading thing this project
     could publish."""
-    evaluate_pipeline.main(["--out", str(tmp_path), "--name", "p",
-                            "--trials", "2", "--quiet"])
-    md = (tmp_path / "p.md").read_text()
+    _rc, out = pipeline_run
+    md = (out / "p.md").read_text()
     assert "pipeline logic" in md
     assert "MODEL_EVALUATION.md" in md
     assert "No model weights" in md
 
 
-def test_evaluate_pipeline_summary_is_small_enough_for_a_dashboard(tmp_path):
-    evaluate_pipeline.main(["--out", str(tmp_path), "--name", "p",
-                            "--trials", "2", "--quiet"])
-    summary = json.loads((tmp_path / "latest.json").read_text())
+def test_evaluate_pipeline_summary_is_small_enough_for_a_dashboard(pipeline_run):
+    _rc, out = pipeline_run
+    summary = json.loads((out / "latest.json").read_text())
     assert set(summary) >= {"end_to_end", "violations", "error_budget",
                             "ocr_policy", "speed", "generated_at"}
-    assert os.path.getsize(tmp_path / "latest.json") < 4096
+    assert os.path.getsize(out / "latest.json") < 4096
 
 
 def test_evaluate_pipeline_is_reproducible(tmp_path):
@@ -159,7 +165,7 @@ def test_evaluate_pipeline_is_reproducible(tmp_path):
     moves between runs cannot be cited."""
     def run(name):
         evaluate_pipeline.main(["--out", str(tmp_path), "--name", name,
-                                "--trials", "3", "--quiet"])
+                                "--trials", "2", "--quiet"])
         d = json.loads((tmp_path / f"{name}.json").read_text())
         d.pop("generated_at")
         return d

@@ -104,6 +104,18 @@ log.info("database ready at %s", DB_PATH)
 # from loading the models twice.
 _models = None
 _models_lock = threading.Lock()
+_device = None  # resolved once, with the models
+
+
+def inference_device() -> str:
+    """DETECT_DEVICE resolved to a concrete backend (auto -> cuda/mps/cpu)."""
+    global _device
+    if _device is None:
+        from modules.yolo_io import resolve_device
+
+        _device = resolve_device(config.detection.device)
+        log.info("inference device: %s", _device)
+    return _device
 
 
 def get_models():
@@ -297,7 +309,7 @@ def analyze():
             conf=det.conf_threshold, contradiction_iou=det.contradiction_iou,
             helmet_min_conf=det.helmet_min_conf, triple_min_conf=det.triple_min_conf,
             model_version=MODEL_VERSION, pipeline_version=PIPELINE_VERSION,
-            source_id=source_id,
+            source_id=source_id, device=inference_device(),
         )
     finally:
         try:
@@ -465,6 +477,7 @@ def analyze_video():
                 source_id=source_id,
                 session_id=session_id,
                 trace_enabled=det.trace_enabled,
+                device=inference_device(),
             )
             now = datetime.now(timezone.utc).isoformat()
             status = _STOP_STATUS.get(summary.get("stopped_reason"), "completed")

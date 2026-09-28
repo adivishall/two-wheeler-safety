@@ -155,6 +155,7 @@ def main(argv=None) -> int:
     from modules.detector import load_models
     from modules.pipeline import pipeline_config_from_detection
     from modules.video_detector import process_video
+    from modules.yolo_io import resolve_device
 
     model_path = args.model or config.model_path
     if not os.path.exists(model_path):
@@ -187,6 +188,7 @@ def main(argv=None) -> int:
             max_width=config.detection.max_video_width,
             conf_threshold=config.detection.conf_threshold,
             pipeline_config=pipeline_config_from_detection(config.detection),
+            device=resolve_device(config.detection.device),
         )
     except ValueError as exc:
         log.error("%s", exc)

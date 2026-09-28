@@ -8,11 +8,19 @@ device so results are comparable across runs.
 
     python3 benchmark.py \\
         --model runs/detect/traffic_model-2/weights/best.pt \\
-        --image samples/test.jpg --video sample.mp4 --iterations 30
+        --image samples/test.jpg --video demo_traffic.mp4 --max-frames 120 \\
+        --ocr-lock-ab --devices cpu mps --micro
 
-Sections are skipped cleanly when their input is absent (e.g. no ``--video``),
-so the tool is useful even with just a sample image. The repo ships no weights
-or video, so this is run locally against the owner's model/footage.
+Every result states what a benchmark result must state to be comparable: the
+device each number was ACTUALLY measured on (Ultralytics silently runs on the
+CPU on Apple silicon unless told otherwise — an earlier version of this file
+labelled CPU numbers "mps"), cold vs warm, batch size (always 1: the pipeline
+processes frames one at a time), input resolution and a hash of each input
+file, model identity by weights hash, library versions and hardware. Output:
+``eval/results/benchmark.{json,md}``.
+
+Sections are skipped cleanly when their input is absent (e.g. no ``--video``).
+The repo ships no weights or video; the input hashes say which files were used.
 """
 
 from __future__ import annotations
@@ -61,21 +69,27 @@ def _peak_rss_mb() -> float | None:
         return None
 
 
-def benchmark_image(model, reader, image_path, iterations) -> dict:
+def benchmark_image(model, reader, image_path, iterations, device=None) -> dict:
     import cv2
 
-    out = {"image": image_path}
-    # Inference latency.
-    model.predict(source=image_path, verbose=False)  # warm up
+    img = cv2.imread(image_path)
+    out = {"image": image_path, "device": device or "library default",
+           "resolution": list(img.shape[1::-1]) if img is not None else None,
+           "batch": 1}
+    kw = {"verbose": False, **({"device": device} if device else {})}
+    # Cold: the first call on this device pays lazy backend/graph init.
+    t0 = time.perf_counter()
+    model.predict(source=image_path, **kw)
+    out["first_call_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
     times = []
     for _ in range(iterations):
         t0 = time.perf_counter()
-        result = model.predict(source=image_path, verbose=False)[0]
+        result = model.predict(source=image_path, **kw)[0]
         times.append((time.perf_counter() - t0) * 1000.0)
     out["inference"] = summarize_times(times)
+    out["inference"]["state"] = "warm"
 
     # OCR latency on the first detected Plate crop (or the whole image if none).
-    img = cv2.imread(image_path)
     crop = img
     for b in result.boxes:
         if model.names[int(b.cls[0])] == "Plate":
@@ -94,7 +108,7 @@ def benchmark_image(model, reader, image_path, iterations) -> dict:
 
 
 def benchmark_video(model, reader, video_path, max_frames, *,
-                    ocr_lock: bool = True) -> dict:
+                    ocr_lock: bool = True, device: str | None = None) -> dict:
     import tempfile
 
     from modules.profiling import StageProfiler
@@ -126,6 +140,7 @@ def benchmark_video(model, reader, video_path, max_frames, *,
             profiler=profiler,
             ocr_lock_confidence=lock_conf,
             ocr_lock_min_observations=lock_obs,
+            device=device,
         )
         elapsed = time.perf_counter() - t0
     finally:
@@ -136,6 +151,7 @@ def benchmark_video(model, reader, video_path, max_frames, *,
     frames = summary.get("frames", 0)
     return {
         "video": video_path,
+        "device": device or "library default",
         "ocr_lock": ocr_lock,
         "ocr_lock_confidence": lock_conf,
         "frames": frames,
@@ -146,6 +162,102 @@ def benchmark_video(model, reader, video_path, max_frames, *,
         "ms_per_frame": round(elapsed * 1000.0 / frames, 2) if frames else 0.0,
         "stage_profile": summary.get("profile", {}),
     }
+
+
+def _media_info(path: str) -> dict:
+    """Resolution / fps / frames and a content hash of a local input file."""
+    import cv2
+
+    from modules.model_manifest import sha256_file
+
+    info: dict = {"path": path, "sha256": sha256_file(path)}
+    cap = cv2.VideoCapture(path)
+    if cap.isOpened():
+        info.update(width=int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                    height=int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                    fps=round(cap.get(cv2.CAP_PROP_FPS), 3),
+                    frames=int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
+    cap.release()
+    return info
+
+
+def benchmark_micro(model, reader, image_path, device) -> dict:
+    """The stages the video profile can only sample once: DB writes, the
+    model-free decision core per frame, and the HTTP/Flask overhead of
+    /analyze over a direct analyze_image call on the same image and model."""
+    import tempfile
+
+    out: dict = {}
+    tmp = tempfile.mkdtemp(prefix="bench_")
+
+    from modules.db import Database
+
+    db = Database(os.path.join(tmp, "b.db"))
+    ev = {"original_path": "o.jpg", "annotated_path": "a.jpg",
+          "plate_crop_path": "p.jpg", "metadata_path": "m.json"}
+    times = []
+    for i in range(200):
+        t0 = time.perf_counter()
+        db.record_fine(f"MH12AB{i:04d}", "no_helmet", "a.jpg", confidence=0.8,
+                       track_id=i, evidence=ev)
+        times.append((time.perf_counter() - t0) * 1000.0)
+    out["db_record_fine"] = summarize_times(times)
+
+    from modules.association import DetBox
+    from modules.pipeline import ViolationPipeline
+
+    pipe = ViolationPipeline()
+    times = []
+    for f in range(300):
+        dets = []
+        for k, x in enumerate((100, 300, 500)):
+            x += 3 * f
+            label = "WithoutHelmet" if k == 1 else "WithHelmet"
+            dets += [DetBox(label, (x, 100, x + 60, 200), 0.9),
+                     DetBox("Plate", (x + 10, 205, x + 50, 235), 0.9)]
+        t0 = time.perf_counter()
+        pipe.step(f, dets, timestamp=f / 25.0, read_plate=lambda b: ("MH12AB1234", 0.9))
+        times.append((time.perf_counter() - t0) * 1000.0)
+    out["decision_core_step_3_bikes"] = summarize_times(times)
+
+    if image_path and os.path.exists(image_path):
+        # Import the app against throwaway storage — never the real traffic.db.
+        os.environ["TRAFFIC_DB_PATH"] = os.path.join(tmp, "app.db")
+        os.environ["EVIDENCE_DIR"] = os.path.join(tmp, "evidence")
+        if device:
+            os.environ["DETECT_DEVICE"] = device
+        import app as app_module
+        from modules.detector import analyze_image
+
+        app_module._models = (model, reader)
+        client = app_module.app.test_client()
+        with open(image_path, "rb") as fh:
+            payload = fh.read()
+        name = os.path.basename(image_path)
+
+        def api_call():
+            from io import BytesIO
+
+            return client.post("/analyze", data={"image": (BytesIO(payload), name)},
+                               content_type="multipart/form-data")
+
+        api_call()
+        analyze_image(image_path, model, reader, evidence_dir=os.path.join(tmp, "e"),
+                      device=device)
+        direct, api = [], []
+        for _ in range(10):
+            t0 = time.perf_counter()
+            analyze_image(image_path, model, reader, evidence_dir=os.path.join(tmp, "e"),
+                          device=device)
+            direct.append((time.perf_counter() - t0) * 1000.0)
+            t0 = time.perf_counter()
+            api_call()
+            api.append((time.perf_counter() - t0) * 1000.0)
+        d, a = summarize_times(direct), summarize_times(api)
+        out["analyze_direct"] = d
+        out["analyze_via_api"] = a
+        out["api_overhead_ms"] = round(a["mean_ms"] - d["mean_ms"], 2)
+    return out
 
 
 def parse_args(argv=None):
@@ -161,8 +273,14 @@ def parse_args(argv=None):
     ap.add_argument("--ocr-lock-ab", action="store_true",
                     help="run the video benchmark twice (lock on and off) and "
                          "report the measured speedup")
-    ap.add_argument("--device", default="auto", help="cuda | mps | cpu | auto")
-    ap.add_argument("--out", default="reports", help="output directory")
+    ap.add_argument("--device", default="auto",
+                    help="device for the video benchmark: cuda | mps | cpu | auto")
+    ap.add_argument("--devices", nargs="*", default=None,
+                    help="also time single-image inference on each of these devices")
+    ap.add_argument("--micro", action="store_true",
+                    help="also time DB writes, the decision core, and API overhead")
+    ap.add_argument("--out", default="eval/results", help="output directory")
+    ap.add_argument("--name", default="benchmark", help="report name")
     return ap.parse_args(argv)
 
 
@@ -179,6 +297,7 @@ def main(argv=None) -> int:
 
     device = resolve_device(args.device)
     from modules.detector import load_models
+    from modules.provenance import run_provenance
 
     t0 = time.perf_counter()
     model, reader = load_models(args.model)
@@ -194,25 +313,32 @@ def main(argv=None) -> int:
             "processor": platform.processor() or platform.machine(),
         },
         "model_load_seconds": load_seconds,
+        "model_load_state": "cold: YOLO + EasyOCR constructed from disk in this process",
+        "inputs": {},
     }
 
     if args.image and os.path.exists(args.image):
+        payload["inputs"]["image"] = _media_info(args.image)
         payload["image_benchmark"] = benchmark_image(
-            model, reader, args.image, args.iterations
-        )
+            model, reader, args.image, args.iterations, device=device)
+        for dev in args.devices or []:
+            payload.setdefault("image_by_device", {})[dev] = benchmark_image(
+                model, reader, args.image, args.iterations, device=dev)
     elif args.image:
         log.warning("image not found: %s", args.image)
 
     if args.video and os.path.exists(args.video):
+        payload["inputs"]["video"] = _media_info(args.video)
         payload["video_benchmark"] = benchmark_video(
             model, reader, args.video, args.max_frames,
-            ocr_lock=not args.no_ocr_lock,
+            ocr_lock=not args.no_ocr_lock, device=device,
         )
         if args.ocr_lock_ab:
             # The baseline arm: same clip, same model, lock disabled. Both arms
             # in one process so the comparison is not across machine states.
             payload["video_benchmark_no_ocr_lock"] = benchmark_video(
                 model, reader, args.video, args.max_frames, ocr_lock=False,
+                device=device,
             )
             locked = payload["video_benchmark"]["throughput_fps"]
             unlocked = payload["video_benchmark_no_ocr_lock"]["throughput_fps"]
@@ -228,7 +354,14 @@ def main(argv=None) -> int:
     elif args.video:
         log.warning("video not found: %s", args.video)
 
+    if args.micro:
+        payload["micro"] = benchmark_micro(model, reader, args.image, device)
+
     payload["peak_rss_mb"] = _peak_rss_mb()
+    payload["provenance"] = run_provenance(model_paths=[args.model],
+                                           config={"device": device, "batch": 1,
+                                                   "iterations": args.iterations,
+                                                   "max_frames": args.max_frames})
 
     ab = payload.get("ocr_lock_speedup")
     if ab:
@@ -237,19 +370,96 @@ def main(argv=None) -> int:
               f"({ab['locked_ocr_calls']} OCR calls) = {ab['speedup_pct']:+.1f}%")
 
     os.makedirs(args.out, exist_ok=True)
-    name = f"benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    path = os.path.join(args.out, f"{name}.json")
+    path = os.path.join(args.out, f"{args.name}.json")
     with open(path, "w") as fh:
         json.dump(payload, fh, indent=2, sort_keys=True)
+    with open(os.path.join(args.out, f"{args.name}.md"), "w") as fh:
+        fh.write(render_markdown(payload))
 
     _print_summary(payload)
-    print(f"\nBenchmark JSON: {path}")
+    print(f"\nBenchmark: {path} (+ .md)")
     return 0
+
+
+def render_markdown(p: dict) -> str:
+    env = p.get("provenance", {}).get("environment", {})
+    mdl = (p.get("provenance", {}).get("models") or [{}])[0]
+    lines = ["# Performance benchmark", "",
+             f"- Generated: {p['generated_at']}",
+             f"- Hardware: {env.get('chip') or env.get('processor')} · {env.get('platform')}",
+             f"- Software: python {env.get('python')} · torch {env.get('torch')} · "
+             f"ultralytics {env.get('ultralytics')} · opencv {env.get('cv2')}",
+             f"- Model: `{mdl.get('version')}` (`{str(mdl.get('sha256'))[:23]}…`)",
+             "- Batch size 1 throughout (the pipeline processes frames one at a time).",
+             f"- Model load (cold, YOLO + EasyOCR): **{p['model_load_seconds']} s**",
+             ""]
+    for key, info in p.get("inputs", {}).items():
+        lines.append(f"- Input {key}: `{info['path']}` {info.get('width')}×{info.get('height')}"
+                     + (f", {info.get('frames')} frames @ {info.get('fps')} fps"
+                        if key == "video" else "")
+                     + f", `{info['sha256'][:23]}…`")
+    lines.append("")
+    rows = []
+    ib = p.get("image_benchmark")
+    if ib:
+        rows.append((ib["device"], ib))
+    for dev, b in (p.get("image_by_device") or {}).items():
+        rows.append((dev, b))
+    if rows:
+        lines += ["## Single image — YOLO inference", "",
+                  "| device | first call (cold) | warm mean | p50 | p90 | FPS |",
+                  "|---|---:|---:|---:|---:|---:|"]
+        seen = set()
+        for dev, b in rows:
+            if dev in seen:
+                continue
+            seen.add(dev)
+            i = b["inference"]
+            lines.append(f"| {dev} | {b['first_call_ms']} ms | {i['mean_ms']} ms | "
+                         f"{i['p50_ms']} | {i['p90_ms']} | {i['fps']} |")
+        if ib and ib.get("ocr"):
+            lines += ["", f"EasyOCR on the plate crop: {ib['ocr']['mean_ms']} ms mean "
+                      f"(p90 {ib['ocr']['p90_ms']})."]
+        lines.append("")
+    for key, title in (("video_benchmark", "OCR lock on (shipped)"),
+                       ("video_benchmark_no_ocr_lock", "OCR lock off")):
+        vb = p.get(key)
+        if not vb:
+            continue
+        prof = vb.get("stage_profile") or {}
+        lines += [f"## Video — {title} — device {vb['device']}", "",
+                  f"{vb['frames']} frames in {vb['wall_seconds']} s → "
+                  f"**{vb['throughput_fps']} FPS** ({vb['ms_per_frame']} ms/frame), "
+                  f"{vb['ocr_calls']} OCR calls.", "",
+                  "| stage | % of wall | ms/call | calls |", "|---|---:|---:|---:|"]
+        for name, st in (prof.get("stages") or {}).items():
+            lines.append(f"| {name} | {st['pct_of_wall']}% | {st['ms_per_call']} | {st['calls']} |")
+        other = prof.get("unaccounted_pct_of_wall", 0)
+        lines += [f"| unaccounted (draw, glue) | {other}% | | |", ""]
+    ab = p.get("ocr_lock_speedup")
+    if ab:
+        lines += [f"OCR lock A/B (same clip, same process): {ab['unlocked_fps']} → "
+                  f"**{ab['locked_fps']} FPS ({ab['speedup_pct']:+.1f}%)**, "
+                  f"{ab['unlocked_ocr_calls']} → {ab['locked_ocr_calls']} OCR calls.", ""]
+    mi = p.get("micro")
+    if mi:
+        lines += ["## Micro-benchmarks", "", "| operation | mean | p90 |", "|---|---:|---:|"]
+        for name in ("db_record_fine", "decision_core_step_3_bikes", "analyze_direct",
+                     "analyze_via_api"):
+            if name in mi:
+                lines.append(f"| {name} | {mi[name]['mean_ms']} ms | {mi[name]['p90_ms']} ms |")
+        if "api_overhead_ms" in mi:
+            lines += ["", f"HTTP + Flask + validation + DB overhead of `/analyze` over a direct "
+                      f"call: **{mi['api_overhead_ms']} ms**."]
+        lines.append("")
+    if p.get("peak_rss_mb") is not None:
+        lines.append(f"Peak RSS: {p['peak_rss_mb']} MB.")
+    return "\n".join(lines) + "\n"
 
 
 def _print_summary(p: dict) -> None:
     print("\n=== Benchmark ===")
-    print(f"Device: {p['device']}  |  model load: {p['model_load_seconds']}s")
+    print(f"Device: {p['device']}  |  model load (cold): {p['model_load_seconds']}s")
     ib = p.get("image_benchmark")
     if ib and ib.get("inference"):
         i = ib["inference"]
