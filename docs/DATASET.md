@@ -140,7 +140,8 @@ dataset quality without evidence:
   Most matched at Hamming distance 0; spot-checking by direct pixel comparison
   gave a mean absolute difference of 1–10/255 — the same photographs,
   JPEG-recompressed. **The leakage is real.** Measured impact: evaluating on a
-  de-leaked test split moved mAP@50 by **+0.006** (0.7202 → 0.7265), i.e. the
+  de-leaked test split moved mAP@50 by **+0.006** (0.7202 → 0.7265, both under the
+  old conf-0.25 protocol), i.e. the
   leakage was *not* inflating the headline metric. Quote the de-leaked number
   anyway, because it is the one with a clean argument behind it
   ([MODEL_EVALUATION.md](MODEL_EVALUATION.md) §2).

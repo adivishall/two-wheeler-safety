@@ -63,10 +63,14 @@ jobs:
           python evaluate_pipeline.py --out "$RUNNER_TEMP/eval" --trials 3
           python evaluate_system.py --json "$RUNNER_TEMP/eval/system.json"
           python evaluate_ocr.py --simulate --out "$RUNNER_TEMP/eval" --name ocr_sim
+          python evaluate_temporal.py --riders 5 --out "$RUNNER_TEMP/eval" \
+              --noise-from none   # measured rates are built in when no val report exists
           # Every CLI must at least parse its arguments without the heavy stack.
           for cli in evaluate_model evaluate_ocr evaluate_pipeline \
                      evaluate_system compare_models audit_dataset \
-                     dataset_manifest train_traffic benchmark; do
+                     dataset_manifest train_traffic benchmark \
+                     evaluate_temporal evaluate_uncertainty evaluate_robustness \
+                     audit_labels evaluate_tracking; do
             python "$cli.py" --help > /dev/null || exit 1
           done
 
