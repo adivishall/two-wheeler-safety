@@ -227,7 +227,7 @@ Full failure taxonomy and error budget: [docs/ERROR_ANALYSIS.md](docs/ERROR_ANAL
 | [MODEL_EVALUATION](docs/MODEL_EVALUATION.md) | detector metrics, CIs, model selection, robustness, manual error review |
 | [END_TO_END_EVALUATION](docs/END_TO_END_EVALUATION.md) | pipeline metrics, rule-selection experiments |
 | [ERROR_ANALYSIS](docs/ERROR_ANALYSIS.md) | failure taxonomy, ownership, error budget, what to do next |
-| [EVALUATION](docs/EVALUATION.md) | methodology, tools, reproducibility, performance |
+| [EVALUATION](docs/EVALUATION.md) · [EXPERIMENTS](docs/EXPERIMENTS.md) | methodology, tools, reproducibility, performance · every experiment in one shape |
 | [AUDIT](docs/AUDIT.md) | every defect found in v1.0.0, with fix and test |
 | [DATASET](docs/DATASET.md) · [MODEL_VERSIONING](docs/MODEL_VERSIONING.md) | data provenance, label coverage, model identity |
 | [API](docs/API.md) · [SECURITY](docs/SECURITY.md) · [PRIVACY](docs/PRIVACY.md) · [DEPLOYMENT](docs/DEPLOYMENT.md) | the application |

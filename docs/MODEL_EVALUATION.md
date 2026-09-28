@@ -103,7 +103,7 @@ Paired differences vs `traffic-4class@1.0.0`, **val**:
 |---|---|---|---|
 | `traffic_model_v2_dedup` | same recipe, de-duplicated training split | +0.021 [−0.022, +0.063] | WithoutHelmet **+0.046**; Plate **−0.022** |
 | `traffic_model_probe` | v1 fine-tuned 2 more epochs | **−0.051** [−0.095, −0.006] | Plate −0.041, TripleRiding −0.074 |
-| `traffic_model_r2` | earlier retrain (different size) | −0.030 [−0.067, +0.007] | Plate −0.085 |
+| `traffic_model_r2` | v1 fine-tuned 7 more epochs (probe + 5) | −0.030 [−0.067, +0.007] | Plate −0.085 |
 
 **Decision: keep v1.** Rule (stated before looking): promote only if the mAP@50
 gain's CI excludes zero *and* no class regresses significantly. v2 fails both;
