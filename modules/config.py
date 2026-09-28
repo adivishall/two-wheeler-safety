@@ -32,7 +32,7 @@ from typing import overload
 # behaviour or evidence format changes; stamped into every evidence package so a
 # fine records which code produced it (distinct from the model version, which
 # records which weights). Single source of truth for the project version.
-PIPELINE_VERSION = "1.0.0"
+PIPELINE_VERSION = "1.1.0"
 
 # Default location of the trained YOLO weights. Nothing in the repo ships the
 # weights (they are gitignored); this is where ``train_traffic.py`` writes them
@@ -171,7 +171,11 @@ class DetectionConfig:
 
     conf_threshold: float = 0.25  # YOLO min box confidence
     streak_threshold: int = 5  # consecutive frames to confirm a violation
-    helmet_min_conf: float = 0.3  # no-helmet frame must clear this to count
+    # no-helmet frame must clear this to count. 0.375 is WithoutHelmet's
+    # F1-optimal box threshold on the VALIDATION split (evaluate_uncertainty.py);
+    # vs the old 0.3 it drops ~13% of false no-helmet boxes on val and ~16% on
+    # test for one lost true positive in 209 (val) / none (test).
+    helmet_min_conf: float = 0.375
     # Helmet track-level gate (modules/temporal_eval.py): a no-helmet decision
     # also needs >= this many frames with a rider box, this share no-helmet.
     helmet_min_observed: int = 12
@@ -201,7 +205,7 @@ class DetectionConfig:
         return cls(
             conf_threshold=_env_float("DETECT_CONF_THRESHOLD", 0.25),
             streak_threshold=_env_int("STREAK_THRESHOLD", 5),
-            helmet_min_conf=_env_float("HELMET_MIN_CONF", 0.3),
+            helmet_min_conf=_env_float("HELMET_MIN_CONF", 0.375),
             helmet_min_observed=_env_int("HELMET_MIN_OBSERVED", 12),
             helmet_min_fraction=_env_float("HELMET_MIN_FRACTION", 0.7),
             triple_min_conf=_env_float("TRIPLE_MIN_CONF", 0.3),

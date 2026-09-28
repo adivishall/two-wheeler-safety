@@ -91,7 +91,7 @@ class PipelineConfig:
     # never fining a rider seen on fewer than 12 frames.
     helmet_min_observed: int = 12
     helmet_min_fraction: float = 0.7
-    helmet_min_conf: float = 0.3  # HELMET_MIN_CONF
+    helmet_min_conf: float = 0.375  # HELMET_MIN_CONF (val-selected, see config.py)
     triple_min_conf: float = 0.3  # TRIPLE_MIN_CONF
     speed_limit_kmh: float = 40.0  # SPEED_LIMIT_KMH
     ocr_lock_confidence: float = 0.90  # stop re-OCRing a locked plate

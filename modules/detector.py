@@ -101,7 +101,7 @@ def _draw_annotations(img, detections, plate_text_by_box):
 
 def analyze_image(
     image_path, model, reader, evidence_dir="evidence", conf=0.25, *,
-    contradiction_iou=0.1, helmet_min_conf=0.3, triple_min_conf=0.3,
+    contradiction_iou=0.1, helmet_min_conf=0.375, triple_min_conf=0.3,
     model_version=None, pipeline_version=None, source_id=None,
 ):
     """Detect violations and read plates in a single image, per vehicle.

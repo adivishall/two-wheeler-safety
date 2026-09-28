@@ -89,7 +89,7 @@ def process_video(
     ocr_lock_confidence=0.90,
     ocr_lock_min_observations=5,
     conf_threshold=None,
-    helmet_min_conf=0.3,
+    helmet_min_conf=0.375,
     triple_min_conf=0.3,
     pipeline_config=None,
 ):
