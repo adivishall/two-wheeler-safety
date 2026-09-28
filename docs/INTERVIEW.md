@@ -206,8 +206,8 @@ versus ~3% for the old rule, at the cost of naming *any* plate less often.
   vehicles (dataset gap, `label_audit.md`).
 - Judge helmets on riders wearing head coverings; it tends to call them helmeted.
 - Tell a rider from a person standing next to a parked bike, or a cyclist.
-- Read plates reliably: on clean *synthetic* renders EasyOCR reads 37.5% exactly;
-  real accuracy is unmeasured.
+- Read plates reliably: on clean *synthetic* renders EasyOCR reads 37.5% exactly
+  (`eval/results/ocr_sanity_check.json`, n = 8); real accuracy is unmeasured.
 - Fine riders in view for under ~0.5 s (12 frames).
 - Measure speed like radar: ±11 km/h even with a homography, in simulation.
 - Anything about generalisation to another city or camera: there is no external

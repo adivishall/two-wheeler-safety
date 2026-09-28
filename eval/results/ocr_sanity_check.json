@@ -1,0 +1,88 @@
+{
+  "count": 48,
+  "generated_at": "2026-09-28T10:17:07.604380+00:00",
+  "labels": "data/ocr_sanity/labels.csv",
+  "results": {
+    "none": {
+      "by_condition": {
+        "angle": {
+          "char_accuracy": 0.825,
+          "confidence_separation": 0.0099,
+          "exact_match": 0.25,
+          "invalid_rate": 0.75,
+          "mean_conf_correct": 0.7652,
+          "mean_conf_wrong": 0.7552,
+          "mean_edit_distance": 1.75,
+          "n": 8,
+          "normalized_match": 0.25
+        },
+        "blur": {
+          "char_accuracy": 0.9125,
+          "confidence_separation": 0.0875,
+          "exact_match": 0.625,
+          "invalid_rate": 0.375,
+          "mean_conf_correct": 0.7932,
+          "mean_conf_wrong": 0.7057,
+          "mean_edit_distance": 0.875,
+          "n": 8,
+          "normalized_match": 0.625
+        },
+        "clean": {
+          "char_accuracy": 0.8375,
+          "confidence_separation": 0.325,
+          "exact_match": 0.375,
+          "invalid_rate": 0.625,
+          "mean_conf_correct": 0.9483,
+          "mean_conf_wrong": 0.6233,
+          "mean_edit_distance": 1.625,
+          "n": 8,
+          "normalized_match": 0.375
+        },
+        "lowlight": {
+          "char_accuracy": 0.85,
+          "confidence_separation": 0.2589,
+          "exact_match": 0.5,
+          "invalid_rate": 0.5,
+          "mean_conf_correct": 0.9231,
+          "mean_conf_wrong": 0.6641,
+          "mean_edit_distance": 1.5,
+          "n": 8,
+          "normalized_match": 0.5
+        },
+        "occluded": {
+          "char_accuracy": 0.625,
+          "confidence_separation": -0.7821,
+          "exact_match": 0.0,
+          "invalid_rate": 0.625,
+          "mean_conf_correct": 0.0,
+          "mean_conf_wrong": 0.7821,
+          "mean_edit_distance": 3.75,
+          "n": 8,
+          "normalized_match": 0.0
+        },
+        "small": {
+          "char_accuracy": 0.6625,
+          "confidence_separation": -0.3339,
+          "exact_match": 0.0,
+          "invalid_rate": 1.0,
+          "mean_conf_correct": 0.0,
+          "mean_conf_wrong": 0.3339,
+          "mean_edit_distance": 3.375,
+          "n": 8,
+          "normalized_match": 0.0
+        }
+      },
+      "overall": {
+        "char_accuracy": 0.7854,
+        "confidence_separation": 0.2316,
+        "exact_match": 0.2917,
+        "invalid_rate": 0.6458,
+        "mean_conf_correct": 0.8595,
+        "mean_conf_wrong": 0.6279,
+        "mean_edit_distance": 2.1458,
+        "n": 48,
+        "normalized_match": 0.2917
+      }
+    }
+  }
+}
