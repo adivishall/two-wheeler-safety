@@ -325,6 +325,8 @@
             font-size: 13.5px; font-weight: 600;
             background: var(--success-bg); color: var(--success);
         }
+        .cb-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 0.8rem; padding: 2px 0; }
+        .cb-kv span:first-child { color: var(--text-3, #888); }
         .abstain-list { margin-top: 10px; padding: 8px 10px; border-left: 3px solid var(--amber, #d98c00);
                         background: rgba(217, 140, 0, 0.08); border-radius: 6px; text-align: left; }
         .abstain-title { font-weight: 600; font-size: 0.85rem; margin: 0 0 4px; }
@@ -1761,7 +1763,10 @@
 
         // ---- Detail modal: evidence viewer + confidence breakdown + review ----
 
+        let currentViolationId = null;
+
         async function openDetail(id) {
+            currentViolationId = id;
             let d;
             try {
                 d = await fetch(`/api/violations/${id}`).then(r => r.json());
@@ -1856,12 +1861,54 @@
                     "No per-component breakdown (single-image detection).";
                 return;
             }
+            const cfg = meta.config_snapshot || {};
+            const votes = meta.plate_votes || {};
+            const kv = (k, v) => `<div class="cb-kv"><span>${escapeHtml(k)}</span><span>${escapeHtml(String(v))}</span></div>`;
+            // How the decision was reached, not just the score: the temporal
+            // evidence, the plate vote, and the thresholds this run applied.
+            const decision = [
+                c.supporting_frames != null ? kv("Supporting frames", c.supporting_frames +
+                    (cfg.confirm_window ? ` (streak needed ${meta.violation === "no_helmet" ? (cfg.helmet_confirm_window || cfg.confirm_window) : cfg.confirm_window})` : "")) : "",
+                meta.violation === "no_helmet" && cfg.helmet_min_observed ? kv("Helmet gate",
+                    `≥${Math.round((cfg.helmet_min_fraction || 0) * 100)}% of ≥${cfg.helmet_min_observed} observed frames`) : "",
+                meta.video_time_s != null ? kv("Video time", meta.video_time_s + " s (frame " + meta.frame_index + ")") : "",
+                meta.track_id != null ? kv("Vehicle track", "#" + meta.track_id) : "",
+            ].join("");
+            const vote = votes.stable ? [
+                kv("Plate read", votes.stable),
+                votes.agreement != null ? kv("Vote agreement", votes.agreement) : "",
+                votes.margin != null ? kv("Margin over runner-up", votes.margin + (votes.runner_up ? ` (${votes.runner_up})` : "")) : "",
+                votes.observations != null ? kv("Readings", votes.observations + (votes.disagreeing ? `, ${votes.disagreeing} disagreeing` : "")) : "",
+                votes.raw ? kv("Raw OCR", votes.raw) : "",
+            ].join("") : "";
+            const prov = [
+                meta.model_version ? kv("Model", meta.model_version) : "",
+                meta.pipeline_version ? kv("Pipeline", meta.pipeline_version) : "",
+                cfg.device ? kv("Device", cfg.device) : "",
+                meta.hashes ? kv("Files hashed", Object.keys(meta.hashes).length + " (SHA-256)") : "",
+            ].join("");
             el.innerHTML = `<div class="cb-title">Confidence breakdown</div>` +
                 confRow("Detection", c.detection) +
                 confRow("Temporal", c.temporal) +
                 confRow("Association", c.association) +
                 confRow("OCR", c.ocr) +
-                confRow("Final score", c.final, true);
+                confRow("Final score", c.final, true) +
+                (decision ? `<div class="cb-title" style="margin-top:12px">How it was decided</div>${decision}` : "") +
+                (vote ? `<div class="cb-title" style="margin-top:12px">Plate vote</div>${vote}` : "") +
+                (prov ? `<div class="cb-title" style="margin-top:12px">Provenance</div>${prov}` +
+                    `<div id="integrity" class="cb-kv"><span>Evidence integrity</span><span>checking…</span></div>` : "");
+            if (currentViolationId != null) verifyEvidence(currentViolationId);
+        }
+
+        async function verifyEvidence(id) {
+            const el = document.getElementById("integrity");
+            if (!el) return;
+            try {
+                const r = await fetch(`/api/violations/${id}/verify`).then(x => x.json());
+                el.lastElementChild.textContent = r.ok === true
+                    ? `✓ all ${r.checked} files match their recorded hashes`
+                    : r.ok === false ? `✗ ${r.mismatched.length} file(s) changed or missing` : "not available";
+            } catch (err) { el.lastElementChild.textContent = "not available"; }
         }
 
         async function submitReview(id, status) {

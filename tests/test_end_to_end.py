@@ -470,6 +470,17 @@ def test_video_job_persists_a_traceable_record(monkeypatch, tmp_path, app_env):
         from modules.evidence import verify_evidence
 
         assert verify_evidence(str(tmp_path / "evidence"), name).ok
+        # The sidecar is servable (the review modal reads it) and verifiable
+        # through the API; tampering with an image is detected.
+        side = c.get(detail["evidence"]["metadata"])
+        assert side.status_code == 200 and side.get_json()["plate_votes"]["stable"]
+        vid = items["items"][0]["id"]
+        assert c.get(f"/api/violations/{vid}/verify").get_json()["ok"] is True
+        crop = side.get_json()["files"]["plate_crop"]
+        with open(tmp_path / "evidence" / crop, "ab") as fh:
+            fh.write(b"tampered")
+        bad = c.get(f"/api/violations/{vid}/verify").get_json()
+        assert bad["ok"] is False and bad["mismatched"][0][0] == "plate_crop"
 
 
 def test_withheld_violations_are_persisted_not_just_logged(monkeypatch, tmp_path, app_env):

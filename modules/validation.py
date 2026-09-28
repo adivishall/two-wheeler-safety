@@ -92,6 +92,17 @@ def safe_evidence_name(path_or_name: str | None) -> str | None:
     return base
 
 
+def safe_json_name(name: str | None) -> str | None:
+    """A bare ``*.json`` basename (an evidence sidecar), or None. Same rules as
+    :func:`safe_evidence_name`: no directory part, no traversal, no NUL."""
+    if not name:
+        return None
+    base = os.path.basename(str(name).replace("\\", "/"))
+    if base != name or base in (".", "..") or "\0" in base:
+        return None
+    return base if file_extension(base) == ".json" else None
+
+
 def validate_plate(plate: str | None) -> str | None:
     """Return the normalized plate if it's plausible (alphanumeric, bounded
     length), else None. Structural/format validation happens upstream in the

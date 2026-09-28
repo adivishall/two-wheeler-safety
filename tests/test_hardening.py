@@ -183,3 +183,24 @@ def test_detection_env_vars_reach_the_pipeline(monkeypatch):
         (7, 0.55, 0.45, 50.0, 15, 0.8)
     snap = cfg.snapshot()
     assert snap["confirm_window"] == 7 and snap["helmet_min_conf"] == 0.55
+
+
+def test_verify_endpoint_never_fakes_a_pass_for_records_without_a_sidecar(monkeypatch,
+                                                                          tmp_path):
+    _mod, c = _client(monkeypatch, tmp_path)
+    c.post("/detect", json={"plate": "MH12AB1234", "violation": "no_helmet",
+                            "image_path": "evidence/x.jpg"})
+    vid = c.get("/api/violations").get_json()["items"][0]["id"]
+    r = c.get(f"/api/violations/{vid}/verify").get_json()
+    assert r["ok"] is None and r["checked"] == 0
+    assert c.get("/api/violations/999999/verify").status_code == 404
+
+
+@pytest.mark.parametrize("name,ok", [
+    ("a_b.json", True), ("../x.json", False), ("x.jpg", False), ("..", False),
+    ("dir/x.json", False), ("", False),
+])
+def test_safe_json_name(name, ok):
+    from modules.validation import safe_json_name
+
+    assert (safe_json_name(name) is not None) is ok

@@ -18,6 +18,7 @@ from modules.validation import (
     is_allowed_extension,
     safe_evidence_name,
     safe_extension,
+    safe_json_name,
     sniff_image,
     sniff_video,
     validate_plate,
@@ -202,8 +203,12 @@ def evidence(filename):
     # Only ever serve a plain basename with an allowed media extension from the
     # evidence directory — no subpaths, no traversal. (send_from_directory is
     # itself traversal-safe; this is defense in depth + a media-type allowlist.)
+    # JSON sidecars are served too: the review modal reads the confidence
+    # breakdown, plate vote and applied thresholds from them. (They used to be
+    # blocked by this allowlist, so that panel could never load.)
     name = os.path.basename(filename)
-    if name != filename or file_extension(name) not in (IMAGE_EXTENSIONS | VIDEO_EXTENSIONS):
+    allowed = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS | {".json"}
+    if name != filename or file_extension(name) not in allowed:
         abort(404)
     return send_from_directory(EVIDENCE_DIR, name)
 
@@ -752,6 +757,27 @@ def api_session_detail(session_id):
         session_id=session_id, limit=_arg_int("limit", 100)
     )
     return jsonify(s)
+
+
+@app.route("/api/violations/<int:violation_id>/verify")
+def api_violation_verify(violation_id):
+    """Re-hash a violation's evidence files against the SHA-256 recorded in its
+    sidecar at creation: {ok, checked, mismatched}. ok=null when the record has
+    no sidecar (e.g. a /detect record or pre-1.1 data) — never a fake pass."""
+    from modules.evidence import verify_evidence
+
+    detail = db.get_violation(violation_id)
+    if detail is None:
+        return jsonify({"error": "violation not found"}), 404
+    meta_url = (detail.get("evidence") or {}).get("metadata")
+    if not meta_url:
+        return jsonify({"ok": None, "checked": 0, "mismatched": [],
+                        "reason": "no evidence sidecar for this record"})
+    name = safe_json_name(meta_url.rsplit("/", 1)[-1])
+    if name is None or not os.path.exists(os.path.join(EVIDENCE_DIR, name)):
+        return jsonify({"ok": None, "checked": 0, "mismatched": [],
+                        "reason": "evidence sidecar not found"})
+    return jsonify(verify_evidence(EVIDENCE_DIR, name).as_dict())
 
 
 @app.route("/api/violations/<int:violation_id>/trace")
