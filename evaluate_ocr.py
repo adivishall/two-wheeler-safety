@@ -309,9 +309,12 @@ def _write_stabilizer_md(args, exp: dict) -> None:
         f"- {exp['sequences_per_rate']} simulated plate sequences per condition, "
         f"{exp['frames_per_sequence']} frames each; selected on seed {exp['dev_seed']}, "
         f"reported on seed {exp['test_seed']}.",
-        f"- Objective: {sel['objective']}; if none qualifies, minimise the worst-case "
-        "wrong-plate rate (ties -> coverage; exact ties on both -> the more "
-        "conservative config: larger margin, then more observations).",
+        "- **Scored at the moment the pipeline commits**: the first read after which "
+        "the vote elects anything (when a held violation is fined) — not after all "
+        "reads.",
+        f"- Objective: {sel['objective']}. If none qualifies: every config within 2 "
+        "standard errors of the lowest worst-case wrong-plate rate is treated as "
+        "equally safe and the most coverage wins (then the more conservative).",
         "- `sys` = share of plates whose sequences contain a *consistent* look-alike "
         "misread (the same glyph misread the same way on half the frames).",
         "- wrong-plate rate = share of ALL vehicles fined against a plate that is not "

@@ -200,25 +200,35 @@ frames is within noise. **Cost, accepted and stated:** a rider seen on fewer tha
 12 frames is never fined. Triple-riding was not part of the experiment, so it was
 not changed.
 
-## 16. OCR vote thresholds chosen by experiment; an exact tie always abstains
+## 16. OCR vote thresholds chosen by experiment, scored where the pipeline commits
 
-**Decision.** The stabilizer elects a plate only with ≥ 3 observations, ≥ 35% of
-vote weight, and a ≥ 0.3 margin over the best competing valid plate. An exact tie
-abstains regardless.
+**Decision.** The stabilizer elects a plate only when the winner has ≥ 3 valid
+readings of its own, ≥ 35% of vote weight, and a ≥ 0.3 margin over the best
+competing valid plate. An exact tie abstains regardless.
 
-**Why.** `evaluate_ocr.py --simulate --policy-sweep` added *consistent* misreads
-(the same glyph misread the same way on many frames — what a real plate image
-does) to the noise model. The old rule (2 observations, no margin) named the
-wrong plate for up to 3.2% of vehicles; this one ~1% (1.2% worst case on the
-held-out seed), at roughly 30% less coverage. That is the trade a system that
-fines people must make: a withheld fine costs revenue, a wrong plate fines an
-innocent owner. A tie used to be broken by string order — a coin flip.
+**Why.** A wrong plate fines an innocent owner; a withheld fine costs revenue.
+`evaluate_ocr.py --simulate --policy-sweep` measures that trade on simulated
+plate sequences with look-alike errors and, in half the design conditions,
+*consistent* misreads (one glyph read the same wrong way on many frames — what a
+real plate image does). It scores each config **at the moment the pipeline
+commits** — the first read after which anything is elected, which is when a
+held violation is fined — and chooses on one seed, reports on another.
 
-**How the choice nearly went wrong.** The first run used 200 sequences per
-condition and picked `agreement ≥ 0.5`, which halves coverage; the configs it
-was separating differed by 2–4 sequences. At 1,000 sequences that pick did not
-survive, and the objective chose the margin instead. The experiment now runs at
-the larger size by default, and the record of the reversal is kept here.
+**How the choice was made — including two corrections.**
+
+1. The first run used 200 sequences per condition and picked `agreement ≥ 0.5`;
+   the configs it separated differed by 2–4 sequences. At 1,000 sequences that
+   pick did not survive (the experiment now runs at 1,000).
+2. An independent review then found the experiment scored the plate after *all*
+   reads, a later and better-informed moment than the pipeline's commit — and
+   that `min_observations` counted junk reads, so one valid reading could elect
+   a plate. Scored at the commit point, the 1.0.0 rule names the wrong plate for
+   40–86% of vehicles under this noise model. `min_support` was added and the
+   thresholds re-selected. No config met the pre-stated ≤ 1% worst case; the
+   fallback is noise-aware: every config within 2 standard errors of the lowest
+   worst-case wrong-plate rate counts as equally safe, and the most coverage
+   wins — because a plain arg-min was, again, being decided by one sequence
+   between configs six coverage points apart.
 
 ## 17. The photo path uses the same association, and is stricter than video
 
@@ -297,3 +307,17 @@ arguments it actually ran with; the web job passes every env threshold through.
 `SPEED_LIMIT_KMH` and more while stamping those env values into evidence — so
 evidence could claim a threshold the run never used, which is the one thing an
 audit trail must not do.
+
+## 24. A locked plate keeps being checked, and a fine needs a recent agreeing read
+
+**Decision.** After the vote locks a plate, OCR re-reads it every 10 visible
+frames; a disagreeing valid read drops the agreement below the lock threshold,
+so reading resumes. A fine is emitted only if a valid reading agreed with the
+elected plate on that track within the last 25 frames (1 s at 25 fps).
+
+**Why.** The tracker can switch identities (one bike passing directly behind
+another). A lock that never re-reads keeps the first vehicle's plate on the
+track forever, and the second vehicle's violation is fined under it — found by
+review, reproduced in `tests/test_pipeline_core.py`. The re-check costs a
+fraction of the lock's savings (one read in ten instead of none); the
+freshness interlock is a safety rule rather than a tuned threshold.

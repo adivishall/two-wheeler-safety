@@ -94,12 +94,16 @@ Per frame: EasyOCR `detail=1` on the plate crop; the reading's confidence is its
 weakest text box. `PlateStabilizer` normalises, applies look-alike correction
 *only* toward a valid Indian plate structure (≤ 2 edits: `O↔0`, `I↔1`, `B↔8`, …),
 down-weights structurally invalid reads ×0.25, and elects a plate by
-confidence-weighted vote. It **abstains** unless there are ≥ 3 observations, the
-winner holds ≥ 35% of vote weight, and beats the best competing valid plate by
-≥ 0.3 of the weight; an exact tie always abstains. Abstentions carry a reason (`contested`,
-`low_agreement`, `too_few_observations`, `no_valid_reading`). Once a plate is
-elected with agreement ≥ 0.9 over ≥ 5 reads, OCR stops for that track (the
-measured optimisation; the vote cannot change after that). `plate_info` decodes
+confidence-weighted vote. It **abstains** unless the winner has ≥ 3 valid
+readings of its own, holds ≥ 35% of vote weight, and beats the best competing
+valid plate by ≥ 0.3 of the weight; an exact tie always abstains. Abstentions
+carry a reason (`too_few_supporting_reads`, `contested`, `low_agreement`,
+`no_valid_reading`, …). Once a plate is elected with agreement ≥ 0.9 over ≥ 5
+reads, OCR runs only every 10th visible frame for that track (the measured
+optimisation) — and a re-read that disagrees breaks the lock. A fine also needs
+a valid reading that **agreed with the elected plate within the last 25 frames**
+on that track, so a track whose identity switched cannot be fined under the
+previous vehicle's plate (withheld as `plate_not_recently_confirmed`). `plate_info` decodes
 the registration region (state + RTO) from the public code scheme; it never
 resolves an owner.
 

@@ -1,6 +1,8 @@
 # Audit register — v1.1.0
 
-A hostile review of the v1.0.0 system, run as four reviewers: an ML engineer,
+A hostile review of the v1.0.0 system (30 findings), then an independent
+review of the fixes themselves (8 more, §"Found by an independent review"),
+run as four reviewers: an ML engineer,
 a backend engineer, a computer-vision interviewer and a skeptical hiring
 manager. Each finding is a defect in shipped behaviour or in a published claim,
 with the evidence that it was real, the commit that fixed it, and the test or
@@ -60,6 +62,25 @@ impact; **L** = hardening.
 | H1 | M | `demo.py` stamped illustrative sessions with the real model version, and attached a photo of plate MH02DL4596 as evidence for "KA05CD9876". | `0dc248f` — demo version string; photos only for the plate they show; labelled placeholders otherwise |
 | H2 | M | `seed_demo.py` records hand-chosen violation types (overspeed from a photo) indistinguishably from pipeline output. | `0dc248f` — labelled "[curated demo seed] not pipeline output" |
 | H3 | M | Published numbers that did not survive the audit: OCR "76.8%" bottleneck, "precision/recall 1.00", mAP 0.727, "probe wins", "1.50 false positives even with a perfect detector" (the suite contains designed flickers). | README, RESUME, evaluation docs rewritten from regenerated results |
+
+## Found by an independent review of the 1.1.0 changes
+
+After the fixes above, a separate reviewer audited *this* branch's code and
+found eight more defects, each confirmed by running code. They are recorded
+here because the most serious ones sat exactly where a fine lands on the wrong
+owner — the plate-identity layer — and two survived the first round of fixes.
+All fixed in `3902441`, each with a regression test.
+
+| # | sev | finding | fix | pinned by |
+|---|---|---|---|---|
+| R1 | H | **One valid OCR reading could elect a plate**: `min_observations` counted unreadable reads, so 1 valid + 2 junk reads elected (margin 0.67). And the OCR-threshold experiment scored the plate after all reads, while the pipeline commits at the *first* election — under-counting wrong plates several-fold (4.6% vs 0.2% in one condition). | winner must have 3 supporting valid reads; experiment scores at the commit point; thresholds re-selected | `test_one_valid_read_among_junk_cannot_elect_a_plate`, `test_stabilizer_is_scored_at_the_moment_the_pipeline_commits` |
+| R2 | H | **The OCR lock froze a track's plate**: after an identity switch the second rider was fined under the first rider's plate. | locked plates re-read every 10 frames; a fine needs an agreeing read within 25 frames | `test_pipeline_core.py::test_identity_switch_under_the_ocr_lock_does_not_fine_the_first_plate`, `…_stale_plate_is_not_used_for_a_late_confirmation` |
+| R3 | M | `/detect` honoured only `DETECT_API_KEY`: open with role keys configured. | role keys honoured too | `test_detect_honours_role_keys_too` |
+| R4 | M | A violation whose plate stabilised only on frames without a rider box was never fined; its withheld reason was frozen. | emission retried every frame with the last rider box | `test_violation_fined_when_plate_stabilises_only_without_a_rider_box` |
+| R5 | M | The test report applied the baseline's val thresholds to every model. | per-model thresholds | `test_each_model_is_reported_at_its_own_val_thresholds` |
+| R6 | L | OCR time profiled per frame, not per call (benchmark under-counted calls with several plates). | per-call accounting | `test_profiler_counts_every_ocr_call_not_every_frame` |
+| R7 | L | Provenance `dirty` ignored untracked source files. | untracked code counts | `test_dirty_flag_ignores_generated_results` |
+| R8 | L | Error-budget OCR stream took a variable number of draws, so one oracle shifted another stage's outcomes. | constant draws per opportunity | — (noise, not bias) |
 
 ## What the review did not find
 
