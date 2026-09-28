@@ -95,8 +95,8 @@ weakest text box. `PlateStabilizer` normalises, applies look-alike correction
 *only* toward a valid Indian plate structure (≤ 2 edits: `O↔0`, `I↔1`, `B↔8`, …),
 down-weights structurally invalid reads ×0.25, and elects a plate by
 confidence-weighted vote. It **abstains** unless there are ≥ 3 observations, the
-winner holds ≥ 50% of vote weight, and beats the best competing valid plate by
-≥ 0.2; an exact tie always abstains. Abstentions carry a reason (`contested`,
+winner holds ≥ 35% of vote weight, and beats the best competing valid plate by
+≥ 0.3 of the weight; an exact tie always abstains. Abstentions carry a reason (`contested`,
 `low_agreement`, `too_few_observations`, `no_valid_reading`). Once a plate is
 elected with agreement ≥ 0.9 over ≥ 5 reads, OCR stops for that track (the
 measured optimisation; the vote cannot change after that). `plate_info` decodes

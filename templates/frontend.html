@@ -1675,7 +1675,8 @@
                   <div class="stat-grid" style="margin-bottom:16px">
                     ${stat("Frames", d.frames_processed || 0)}
                     ${stat("Vehicles", d.vehicles_tracked || 0)}
-                    ${stat("FPS", d.processing_fps != null ? d.processing_fps.toFixed(1) : "—")}
+                    ${stat("Processing FPS", d.processing_fps != null ? d.processing_fps.toFixed(1) : "—")}
+                    ${stat("Withheld (no trustworthy plate)", d.violations_withheld || 0)}
                   </div>
                   ${d.error ? `<div class="error-msg" style="margin-bottom:16px">${escapeHtml(d.error)}</div>` : ""}
 

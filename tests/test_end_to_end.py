@@ -472,6 +472,23 @@ def test_video_job_persists_a_traceable_record(monkeypatch, tmp_path, app_env):
         assert verify_evidence(str(tmp_path / "evidence"), name).ok
 
 
+def test_withheld_violations_are_persisted_not_just_logged(monkeypatch, tmp_path, app_env):
+    frames = [rider(80 + 3 * f, "WithoutHelmet", 0) for f in range(N)]
+    script = Script(frames, {0: ["MH12AB1234", "MH12AB1284"]})  # contested plate
+    install_video(monkeypatch, script)
+    monkeypatch.setattr(app_env, "get_models",
+                        lambda: (FakeModel(script), FakeReader(script)))
+    with app_env.app.test_client() as c:
+        started = _upload(c)
+        assert _wait(c, started["job_id"])["status"] == "done"
+        session = app_env.db.get_session(started["session_id"])
+        assert session["violations_detected"] == 0
+        assert session["violations_withheld"] == 1
+        events = app_env.db.list_audit(record_id=started["session_id"])
+        withheld = [e for e in events if e["event"] == "violation_withheld"]
+        assert len(withheld) == 1 and '"contested"' in withheld[0]["metadata"]
+
+
 def test_cancelled_video_job_is_not_recorded_as_completed(monkeypatch, tmp_path, app_env):
     frames = [rider(80 + 3 * f, "WithoutHelmet", 0) for f in range(N)]
     script = Script(frames, {0: "MH12AB1234"})

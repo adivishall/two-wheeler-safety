@@ -199,16 +199,23 @@ changed.
 
 ## 16. OCR vote thresholds chosen by experiment; an exact tie always abstains
 
-**Decision.** The stabilizer elects a plate only with ≥ 3 observations, an
-outright majority of vote weight (≥ 0.5, was 0.35), and a ≥ 0.2 margin over the
-best competing valid plate. An exact tie abstains regardless.
+**Decision.** The stabilizer elects a plate only with ≥ 3 observations, ≥ 35% of
+vote weight, and a ≥ 0.3 margin over the best competing valid plate. An exact tie
+abstains regardless.
 
-**Why.** `evaluate_ocr.py --simulate --policy-sweep` added *consistent*
-misreads (the same glyph misread the same way on many frames — what a real plate
-image does) to the noise model. The old rule named the wrong plate for up to 3.5%
-of vehicles; this one 1.5%, at about half the coverage. That is the trade a
-system that fines people must make: a withheld fine costs revenue, a wrong plate
-fines an innocent owner. A tie used to be broken by string order — a coin flip.
+**Why.** `evaluate_ocr.py --simulate --policy-sweep` added *consistent* misreads
+(the same glyph misread the same way on many frames — what a real plate image
+does) to the noise model. The old rule (2 observations, no margin) named the
+wrong plate for up to 3.2% of vehicles; this one ~1% (1.2% worst case on the
+held-out seed), at roughly 30% less coverage. That is the trade a system that
+fines people must make: a withheld fine costs revenue, a wrong plate fines an
+innocent owner. A tie used to be broken by string order — a coin flip.
+
+**How the choice nearly went wrong.** The first run used 200 sequences per
+condition and picked `agreement ≥ 0.5`, which halves coverage; the configs it
+was separating differed by 2–4 sequences. At 1,000 sequences that pick did not
+survive, and the objective chose the margin instead. The experiment now runs at
+the larger size by default, and the record of the reversal is kept here.
 
 ## 17. The photo path uses the same association, and is stricter than video
 

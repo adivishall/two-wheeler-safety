@@ -42,14 +42,7 @@ _TO_LETTER = {"0": "O", "1": "I", "2": "Z", "4": "A", "5": "S", "6": "G", "8": "
 @dataclass(frozen=True)
 class PlateConfig:
     min_observations: int = 3  # never elect a plate from one or two frames
-    # Share of all vote weight the winner must hold. 0.5 = an outright majority.
-    # Was 0.35 (with 2 observations, no margin); evaluate_ocr.py --simulate
-    # --policy-sweep found that when some plates are misread CONSISTENTLY (same
-    # glyph, same wrong way, on many frames) the old rule named the wrong plate
-    # for up to ~3.5% of vehicles; this one ~1.5%, at roughly half the
-    # coverage — a fine withheld rather than a fine issued to the wrong owner
-    # (eval/results/ocr_stabilizer_selection.md).
-    min_confidence: float = 0.5
+    min_confidence: float = 0.35  # share of all vote weight the winner must hold
     max_edits: int = 2  # cap on look-alike substitutions per correction (conservative:
     #                     an all-digit junk string needs >=3 to look like a plate)
     enable_correction: bool = True
@@ -57,10 +50,14 @@ class PlateConfig:
     require_known_state: bool = False  # if True, the stable plate must decode()
     # The winner's vote share must beat the best *competing valid plate* by at
     # least this much (as a fraction of all vote weight), so a plate read as two
-    # strings in alternation (7 reads vs 6) abstains instead of being decided by
-    # one frame. Same measured cost as no margin in the sweep, chosen on the
-    # stated conservative tie-break.
-    min_margin: float = 0.2
+    # strings (a consistent misread: 7 reads vs 6) abstains instead of being
+    # decided by one frame. Chosen with min_observations=3 by
+    # `evaluate_ocr.py --simulate --policy-sweep` (1,000 sequences/condition):
+    # with consistent misreads in the noise model the old rule (2 obs, no
+    # margin) named the wrong plate for up to 3.2% of vehicles; this one ~1%,
+    # at roughly 30% less coverage — a fine withheld rather than a fine issued
+    # to the wrong owner (eval/results/ocr_stabilizer_selection.md).
+    min_margin: float = 0.3
 
 
 DEFAULT_PLATE_CONFIG = PlateConfig()

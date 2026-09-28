@@ -400,7 +400,7 @@ def _cond(rate: float, systematic: float) -> str:
 
 
 def stabilizer_sweep(*, rates=DEFAULT_NOISE_SWEEP, systematic=SYSTEMATIC_RATES,
-                     frames: int = 10, repeats: int = 10, seed: int = 1234) -> dict:
+                     frames: int = 10, repeats: int = 50, seed: int = 1234) -> dict:
     """Every candidate config at every noise condition, on identical sequences."""
     cands = stabilizer_candidates()
     out: dict = {}
@@ -455,9 +455,15 @@ def select_stabilizer(results: dict, *, design_rates=DESIGN_RATES,
 
 
 def stabilizer_experiment(*, dev_seed: int = 1234, test_seed: int = 5678,
-                          repeats: int = 10, frames: int = 10) -> dict:
+                          repeats: int = 50, frames: int = 10) -> dict:
     """Select on one seed, report on another (the reported numbers are not the
-    ones the choice was made on)."""
+    ones the choice was made on).
+
+    ``repeats=50`` (1,000 sequences per condition): the first run used 10
+    (200 sequences), where the worst-case wrong-plate rates being compared
+    differed by 2-4 sequences, and it picked a different, far more costly
+    config (agreement >= 0.5). At 5x the sample that choice did not survive —
+    the selection must be stable to sample size before it is shipped."""
     dev = stabilizer_sweep(seed=dev_seed, repeats=repeats, frames=frames)
     choice = select_stabilizer(dev)
     test = stabilizer_sweep(seed=test_seed, repeats=repeats, frames=frames)

@@ -103,6 +103,9 @@ class Database:
                         violations_detected INTEGER DEFAULT 0,
                         violations_confirmed INTEGER DEFAULT 0,
                         violations_dismissed INTEGER DEFAULT 0,
+                        -- confirmed by the state machines but NOT fined: no
+                        -- trustworthy plate (the pipeline abstained).
+                        violations_withheld INTEGER DEFAULT 0,
                         processing_fps REAL,
                         output_path TEXT,
                         status TEXT DEFAULT 'processing',
@@ -204,6 +207,9 @@ class Database:
             "review_notes": "TEXT",
             "detection_status": "TEXT NOT NULL DEFAULT 'confirmed'",
             "session_id": "TEXT",
+        })
+        self._add_missing_columns(conn, "sessions", {
+            "violations_withheld": "INTEGER DEFAULT 0",
         })
         self._add_missing_columns(conn, "processing_jobs", {
             "started_at": "DATETIME",
@@ -970,7 +976,8 @@ class Database:
     _SESSION_FIELDS = {
         "source", "ended_at", "model_version", "pipeline_version",
         "frames_processed", "vehicles_tracked", "violations_detected",
-        "violations_confirmed", "violations_dismissed", "processing_fps",
+        "violations_confirmed", "violations_dismissed", "violations_withheld",
+        "processing_fps",
         "output_path", "status", "error",
     }
 

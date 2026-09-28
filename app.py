@@ -468,11 +468,22 @@ def analyze_video():
             )
             now = datetime.now(timezone.utc).isoformat()
             status = _STOP_STATUS.get(summary.get("stopped_reason"), "completed")
+            withheld = summary.get("unfined_confirmations") or []
+            # An abstention is a decision too: persist each one (audit log) so
+            # "confirmed but not fined — no trustworthy plate" is traceable
+            # after the in-memory job result expires.
+            for h in withheld:
+                db.log_event("violation_withheld", record_type="session",
+                             record_id=session_id, actor="pipeline",
+                             metadata={"track_id": h.get("track_id"),
+                                       "violation": h.get("violation"),
+                                       "reason": h.get("reason")})
             db.update_session(
                 session_id, ended_at=now, status=status,
                 frames_processed=summary.get("frames", 0),
                 vehicles_tracked=summary.get("plates_tracked", 0),
                 violations_detected=len(summary.get("violations", [])),
+                violations_withheld=len(withheld),
                 # Frames this run processed per wall-clock second — NOT the
                 # source video's frame rate, which is what used to be stored.
                 processing_fps=summary.get("processing_fps"),
