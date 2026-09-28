@@ -457,6 +457,9 @@ class Database:
         data (never fabricated). Returns totals, a per-type breakdown, a
         review-status breakdown, the vehicle count, and the most recent
         violations."""
+        # Clamp: SQLite treats a negative LIMIT as "no limit", so an unclamped
+        # ?recent=-1 would return every violation in the table.
+        recent_limit = max(0, min(int(recent_limit), 100))
         conn = self._connect()
         try:
             totals = conn.execute(
@@ -872,21 +875,29 @@ class Database:
             )
         conn = self._connect()
         try:
-            row = conn.execute(
-                "SELECT status FROM violations WHERE id = ?", (violation_id,)
-            ).fetchone()
-            if row is None:
-                return False
-            current = row["status"]
-            if not self.valid_payment_transition(current, new_status):
-                raise ValueError(
-                    f"illegal payment transition {current!r} -> {new_status!r}"
-                )
             with conn:
-                conn.execute(
-                    "UPDATE violations SET status = ? WHERE id = ?",
-                    (new_status, violation_id),
+                row = conn.execute(
+                    "SELECT status FROM violations WHERE id = ?", (violation_id,)
+                ).fetchone()
+                if row is None:
+                    return False
+                current = row["status"]
+                if not self.valid_payment_transition(current, new_status):
+                    raise ValueError(
+                        f"illegal payment transition {current!r} -> {new_status!r}"
+                    )
+                # Compare-and-set on the status we validated against. Two
+                # concurrent requests (paid vs cancelled) both read 'unpaid';
+                # without the AND status = ? guard the second write would
+                # silently overwrite a terminal state the first just set.
+                cur = conn.execute(
+                    "UPDATE violations SET status = ? WHERE id = ? AND status = ?",
+                    (new_status, violation_id, current),
                 )
+                if cur.rowcount == 0:
+                    raise ValueError(
+                        "payment status changed concurrently; re-read and retry"
+                    )
                 self._log_event(
                     conn, f"payment_{new_status}", "violation",
                     str(violation_id), actor, {"from": current},

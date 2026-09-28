@@ -2,6 +2,7 @@ import os
 import tempfile
 import threading
 import uuid
+from datetime import datetime, timezone
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
@@ -18,6 +19,7 @@ from modules.validation import (
     safe_evidence_name,
     safe_extension,
     sniff_image,
+    sniff_video,
     validate_plate,
     validate_violation,
 )
@@ -119,15 +121,21 @@ def get_models():
 def record_fine(plate, violation, image_path, **extra):
     """Insert one fine and return the amount charged. Kept as a thin wrapper so
     the CLIs and video pipeline can pass it as a ``record_fn`` callback. Accepts
-    keyword-only extras (confidence, track_id, session_id, detection_trace) that
-    the video pipeline supplies; the photo/detect routes call it with three
-    positional args and no extras, unchanged."""
+    keyword-only extras (confidence, track_id, session_id, detection_trace,
+    evidence) that the pipelines supply; ``/detect`` calls it with three
+    positional args and no extras.
+
+    ``evidence`` is the package's file set (original / annotated / plate crop /
+    JSON sidecar). Persisting all of it — not just one image — is what lets a
+    stored fine be traced back to its hashes, model version and confidence
+    breakdown."""
     return db.record_fine(
         plate, violation, image_path,
         confidence=extra.get("confidence"),
         track_id=extra.get("track_id"),
         session_id=extra.get("session_id"),
         detection_trace=extra.get("detection_trace"),
+        evidence=extra.get("evidence"),
     )
 
 @app.after_request
@@ -244,10 +252,20 @@ def detect():
 @app.route("/analyze", methods=["POST"])
 def analyze():
     """Run detection + OCR on an uploaded image, record any violations, and
-    return what was found so the web UI can show it without the terminal."""
+    return what was found so the web UI can show it without the terminal.
+
+    Violations are decided and recorded *per vehicle*: each one is fined
+    against the plate the association layer paired with that rider, and only
+    when that plate reads as a valid plate. Whatever the model saw but the
+    rules won't stand behind comes back under ``abstained`` with a reason."""
 
     from modules.detector import analyze_image
 
+    # Recording a fine is a write: once role keys are configured it needs the
+    # same role as reviewing one (open by default for local/demo use).
+    denied = _require_role("reviewer")
+    if denied:
+        return denied
     if _rate_limited():
         return jsonify({"error": "rate limit exceeded"}), 429
 
@@ -261,6 +279,7 @@ def analyze():
     # Server-controlled temp name (never the user's filename); validate the file
     # is really an image by its magic bytes before handing it to OpenCV.
     suffix = safe_extension(upload.filename, IMAGE_EXTENSIONS, ".jpg")
+    source_id = os.path.basename(upload.filename or "upload")
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
 
@@ -272,7 +291,14 @@ def analyze():
                 return jsonify({"error": "file is not a valid image"}), 400
 
         model, reader = get_models()
-        result = analyze_image(tmp_path, model, reader)
+        det = config.detection
+        result = analyze_image(
+            tmp_path, model, reader, evidence_dir=EVIDENCE_DIR,
+            conf=det.conf_threshold, contradiction_iou=det.contradiction_iou,
+            helmet_min_conf=det.helmet_min_conf, triple_min_conf=det.triple_min_conf,
+            model_version=MODEL_VERSION, pipeline_version=PIPELINE_VERSION,
+            source_id=source_id,
+        )
     finally:
         try:
             os.remove(tmp_path)
@@ -282,28 +308,61 @@ def analyze():
     if result.get("error"):
         return jsonify({"error": result["error"]}), 400
 
-    plate = result["plate"]
-
-    if not plate:
-        return jsonify({
-            "plate": None,
-            "message": "Couldn't read a number plate in that photo. Try a clearer image."
-        })
-
     evidence_url = None
     if result["evidence_file"]:
         evidence_url = "/evidence/" + os.path.basename(result["evidence_file"])
 
-    recorded = []
-    for violation in result["violations"]:
-        amount = record_fine(plate, violation, result["evidence_file"])
-        recorded.append({"type": violation, "amount": amount})
+    recordable = [v for v in result["vehicles"] if v["violations"]]
+    session_id = None
+    if recordable:
+        # One session per upload, so an image fine is traceable to the model
+        # and pipeline version that raised it, exactly like a video fine.
+        session_id = uuid.uuid4().hex
+        db.create_session(session_id, source=source_id, model_version=MODEL_VERSION,
+                          pipeline_version=PIPELINE_VERSION)
 
-    return jsonify({
-        "plate": plate,
+    vehicles = []
+    recorded = []
+    for v in result["vehicles"]:
+        fined = []
+        for rec in v["violations"]:
+            amount = record_fine(
+                v["plate"], rec["type"], rec["evidence"]["annotated_path"],
+                confidence=rec["confidence"], session_id=session_id,
+                evidence=rec["evidence"],
+            )
+            fined.append({"type": rec["type"], "amount": amount,
+                          "confidence": rec["confidence"]})
+        recorded.extend({**f, "plate": v["plate"]} for f in fined)
+        vehicles.append({
+            "plate": v["plate"], "plate_raw": v["plate_raw"],
+            "violations": fined, "abstained": v["abstained"],
+        })
+
+    if session_id:
+        db.update_session(
+            session_id, ended_at=datetime.now(timezone.utc).isoformat(),
+            status="completed", frames_processed=1,
+            vehicles_tracked=len(result["vehicles"]),
+            violations_detected=len(recorded),
+        )
+
+    primary = result["plate"]
+    payload = {
+        "plate": primary,
         "evidence": evidence_url,
-        "violations": recorded,
-    })
+        # Back-compat: the primary vehicle's fines (what the photo tab shows).
+        "violations": [
+            {"type": r["type"], "amount": r["amount"], "confidence": r["confidence"]}
+            for r in recorded if r["plate"] == primary
+        ],
+        "vehicles": vehicles,
+    }
+    if not primary:
+        payload["message"] = (
+            "Couldn't read a valid number plate in that photo. Try a clearer image."
+        )
+    return jsonify(payload)
 
 # =====================================
 # ANALYZE AN UPLOADED VIDEO (background job + progress)
@@ -321,8 +380,22 @@ job_manager = JobManager(
 )
 
 
+# How a run stopped -> the status persisted for its session/job. A cancelled or
+# time-limited run is NOT "completed": its violations are real but the video
+# was only partly analysed, and the record has to say so.
+_STOP_STATUS = {
+    "end_of_video": "completed",
+    "max_frames": "completed",
+    "cancelled": "cancelled",
+    "time_limit": "truncated",
+}
+
+
 @app.route("/analyze_video", methods=["POST"])
 def analyze_video():
+    denied = _require_role("reviewer")
+    if denied:
+        return denied
     if _rate_limited():
         return jsonify({"error": "rate limit exceeded"}), 429
 
@@ -337,11 +410,27 @@ def analyze_video():
     source_id = os.path.basename(upload.filename or "upload")
     fd, tmp_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
-    upload.save(tmp_path)
 
-    if os.path.getsize(tmp_path) > MAX_VIDEO_MB * 1024 * 1024:
-        os.remove(tmp_path)
-        return jsonify({"error": f"video exceeds {MAX_VIDEO_MB} MB limit"}), 400
+    def _discard():
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+    try:
+        upload.save(tmp_path)
+        if os.path.getsize(tmp_path) > MAX_VIDEO_MB * 1024 * 1024:
+            _discard()
+            return jsonify({"error": f"video exceeds {MAX_VIDEO_MB} MB limit"}), 400
+        # Content, not just the name: an .mp4 that isn't a video container is
+        # rejected here instead of being handed to the decoder in a worker.
+        with open(tmp_path, "rb") as fh:
+            if not sniff_video(fh.read(16)):
+                _discard()
+                return jsonify({"error": "file is not a supported video"}), 400
+    except Exception:
+        _discard()
+        raise
 
     out_name = f"annotated_{uuid.uuid4().hex}.mp4"
 
@@ -353,57 +442,58 @@ def analyze_video():
                       pipeline_version=PIPELINE_VERSION)
     db.create_job(session_id, "video", source=source_id)
 
-    def target(progress_cb, cancel_check):
-        from datetime import datetime, timezone
+    det = config.detection
 
+    def target(progress_cb, cancel_check):
+        from modules.pipeline import pipeline_config_from_detection
         from modules.video_detector import process_video
         try:
             model, reader = get_models()
             # pixels_per_meter unset: speed/overspeed needs calibration, so it's
             # skipped rather than reporting a meaningless number (same as CLI).
+            # Every threshold comes from the env config, so what evidence
+            # records as "applied" is what was applied.
             summary = process_video(
                 tmp_path, model, reader, os.path.join(EVIDENCE_DIR, out_name),
                 record_fn=record_fine, progress_cb=progress_cb,
                 cancel_check=cancel_check, max_seconds=MAX_VIDEO_SECONDS,
+                max_width=det.max_video_width,
+                conf_threshold=det.conf_threshold,
+                pipeline_config=pipeline_config_from_detection(det),
                 model_version=MODEL_VERSION,
                 pipeline_version=PIPELINE_VERSION,
                 source_id=source_id,
-                config_snapshot={
-                    "conf_threshold": config.detection.conf_threshold,
-                    "streak_threshold": config.detection.streak_threshold,
-                    "speed_limit_kmh": config.detection.speed_limit_kmh,
-                },
                 session_id=session_id,
-                trace_enabled=config.detection.trace_enabled,
-                trace_max_frames=config.detection.trace_max_frames,
-                ocr_lock_confidence=config.detection.ocr_lock_confidence,
-                ocr_lock_min_observations=config.detection.ocr_lock_min_observations,
+                trace_enabled=det.trace_enabled,
             )
             now = datetime.now(timezone.utc).isoformat()
+            status = _STOP_STATUS.get(summary.get("stopped_reason"), "completed")
             db.update_session(
-                session_id, ended_at=now, status="completed",
+                session_id, ended_at=now, status=status,
                 frames_processed=summary.get("frames", 0),
                 vehicles_tracked=summary.get("plates_tracked", 0),
                 violations_detected=len(summary.get("violations", [])),
-                processing_fps=summary.get("fps"),
+                # Frames this run processed per wall-clock second — NOT the
+                # source video's frame rate, which is what used to be stored.
+                processing_fps=summary.get("processing_fps"),
                 output_path=summary.get("output"),
             )
-            db.update_job(session_id, status="completed", progress=1.0,
-                          completed_at=now, output=summary.get("output"))
+            job_fields = {"status": status, "completed_at": now,
+                          "output": summary.get("output")}
+            if status == "completed":
+                job_fields["progress"] = 1.0
+            db.update_job(session_id, **job_fields)
             return summary
         except Exception as exc:  # record the failure durably, then re-raise
             db.update_session(session_id, status="failed", error=str(exc))
             db.update_job(session_id, status="failed", error=str(exc))
             raise
         finally:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+            _discard()
 
     job_id = job_manager.submit("video", target)
     if job_id is None:
-        os.remove(tmp_path)
+        _discard()
         db.update_session(session_id, status="rejected",
                           error="concurrency cap reached")
         db.update_job(session_id, status="rejected")
@@ -430,6 +520,11 @@ def video_status(job_id):
 
 @app.route("/video_cancel/<job_id>", methods=["POST"])
 def video_cancel(job_id):
+    # Same role as starting a job: with auth on, a viewer can't stop someone
+    # else's analysis. (Job ids are unguessable uuid4s either way.)
+    denied = _require_role("reviewer")
+    if denied:
+        return denied
     if job_manager.cancel(job_id):
         return jsonify({"message": "cancellation requested"})
     return jsonify({"error": "job not found or not cancellable"}), 404

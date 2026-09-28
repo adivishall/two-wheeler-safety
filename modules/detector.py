@@ -1,19 +1,22 @@
 """Shared single-image detection + OCR + annotation.
 
-This is the one place the detection pipeline lives, so the `main_ocr.py`
-CLI and the web app's `/analyze` upload route behave identically instead of
-drifting apart. `analyze_image` runs the trained YOLO model on one image,
-OCRs the plate crop, decides which violations to report (with the same
-helmet-contradiction suppression the CLI always used), draws labeled boxes
-onto a copy of the image, and saves that annotated copy as the evidence
-photo.
+This is the one place the photo pipeline lives, so the `main_ocr.py` CLI and
+the web app's `/analyze` upload route behave identically instead of drifting
+apart. `analyze_image` runs the trained YOLO model on one image and hands the
+boxes to :func:`modules.pipeline.single_frame_decisions`, which uses the same
+Hungarian rider<->plate association as the video path — so with two bikes in a
+photo, each violation is attributed to the plate under *that* rider. (The old
+photo path fined every violation in the frame against whichever plate the loop
+happened to OCR last.) It then draws labeled boxes onto a copy of the image and
+writes an evidence package per recordable violation.
 """
 
 import os
 import re
-import time
 
 import cv2
+
+from modules.geometry import iou as _geometry_iou
 
 # BGR (OpenCV order) box colors per class, chosen to read clearly on road
 # footage: green plate, blue helmet-on, red helmet-off, orange triple-riding.
@@ -26,23 +29,8 @@ CLASS_COLORS = {
 DEFAULT_COLOR = (200, 200, 200)
 
 
-def iou(box_a, box_b):
-    """Intersection-over-union of two (x1, y1, x2, y2) boxes."""
-    ax1, ay1, ax2, ay2 = box_a
-    bx1, by1, bx2, by2 = box_b
-
-    inter_x1, inter_y1 = max(ax1, bx1), max(ay1, by1)
-    inter_x2, inter_y2 = min(ax2, bx2), min(ay2, by2)
-    inter_w, inter_h = max(0, inter_x2 - inter_x1), max(0, inter_y2 - inter_y1)
-    inter_area = inter_w * inter_h
-
-    if inter_area == 0:
-        return 0.0
-
-    area_a = (ax2 - ax1) * (ay2 - ay1)
-    area_b = (bx2 - bx1) * (by2 - by1)
-
-    return inter_area / float(area_a + area_b - inter_area)
+# Kept importable from here for existing callers; one shared definition.
+iou = _geometry_iou
 
 
 def clean_plate(text):
@@ -64,8 +52,11 @@ def load_models(model_path):
     return YOLO(model_path), easyocr.Reader(["en"])
 
 
-def _draw_annotations(img, detections, plate_number):
-    """Return a copy of `img` with a labeled box drawn for each detection."""
+def _draw_annotations(img, detections, plate_text_by_box):
+    """Return a copy of `img` with a labeled box drawn for each detection.
+
+    ``plate_text_by_box`` maps a plate box to the text read from THAT plate,
+    so with two bikes in frame each plate box is captioned with its own read."""
     annotated = img.copy()
 
     for det in detections:
@@ -76,8 +67,9 @@ def _draw_annotations(img, detections, plate_number):
 
         # For the plate, show the OCR'd number rather than the class name —
         # that's the useful thing to see on the evidence photo.
-        if det["label"] == "Plate" and plate_number:
-            caption = plate_number
+        plate_text = (plate_text_by_box or {}).get(tuple(det["box"]))
+        if det["label"] == "Plate" and plate_text:
+            caption = plate_text
         else:
             caption = f"{det['label']} {det['conf']:.2f}"
 
@@ -107,94 +99,140 @@ def _draw_annotations(img, detections, plate_number):
     return annotated
 
 
-def analyze_image(image_path, model, reader, evidence_dir="evidence", conf=0.25):
-    """Detect violations and read the plate in a single image.
+def analyze_image(
+    image_path, model, reader, evidence_dir="evidence", conf=0.25, *,
+    contradiction_iou=0.1, helmet_min_conf=0.3, triple_min_conf=0.3,
+    model_version=None, pipeline_version=None, source_id=None,
+):
+    """Detect violations and read plates in a single image, per vehicle.
 
     Returns a dict:
         {
-            "plate":         cleaned plate string, or None if none read,
-            "violations":    list of violation keys (no_helmet/triple_riding),
-            "evidence_file": path to the saved annotated image, or None,
+            "vehicles":      [{plate, plate_raw, plate_conf, plate_box, body_box,
+                               association, violations: [{type, confidence,
+                               confidence_breakdown, evidence: {...}}],
+                               abstained: [{type, reason}]}, ...],
+            "plate":         the primary vehicle's plate (first vehicle with a
+                             recordable violation, else the first valid plate),
+            "violations":    that vehicle's violation keys (back-compat shape),
+            "evidence_file": annotated image path for display, or None,
             "detections":    [{"label", "conf", "box"}, ...],
             "error":         str, only present if the image couldn't be read,
         }
 
-    `evidence_file` is written whenever a plate is read (annotated), even if
-    there's no violation — matching the CLI's long-standing behavior.
+    Only violations listed under ``vehicles[*].violations`` are recordable: they
+    have a structurally valid plate from the same vehicle. Everything the model
+    saw but the rules would not stand behind is under ``abstained`` with a
+    reason, so the caller can show it without fining anyone.
     """
+    import uuid
+
+    from modules.association import DetBox
+    from modules.confidence import compute_confidence, temporal_confidence
+    from modules.evidence import build_evidence
+    from modules.pipeline import PipelineConfig, single_frame_decisions
+
     img = cv2.imread(image_path)
     if img is None:
         return {
             "plate": None,
             "violations": [],
+            "vehicles": [],
             "evidence_file": None,
             "detections": [],
             "error": f"could not read image: {image_path}",
         }
 
-    results = model.predict(source=image_path, conf=conf, verbose=False)
+    # Predict on the decoded array we already hold (not the path) so the model
+    # and the OCR crops are guaranteed to see the same pixels.
+    results = model.predict(source=img, conf=conf, verbose=False)
 
     detections = []
-    without_helmet_boxes = []
-    with_helmet_boxes = []
-    plate_text = []
-
+    dets = []
     for r in results:
         for box in r.boxes:
             label = model.names[int(box.cls[0])]
             confidence = float(box.conf[0])
             xyxy = tuple(map(int, box.xyxy[0]))
+            detections.append({"label": label, "conf": confidence, "box": xyxy})
+            dets.append(DetBox(label, xyxy, confidence))
 
-            detections.append(
-                {"label": label, "conf": confidence, "box": xyxy}
-            )
+    def read_plate(plate_box):
+        x1, y1, x2, y2 = plate_box
+        crop = img[max(0, y1):y2, max(0, x1):x2]
+        if crop.size == 0:
+            return None
+        ocr = reader.readtext(crop, detail=1)
+        if not ocr:
+            return None
+        return "".join(t for _, t, _ in ocr), min(float(c) for _, _, c in ocr)
 
-            if label == "WithoutHelmet":
-                without_helmet_boxes.append(xyxy)
-            elif label == "WithHelmet":
-                with_helmet_boxes.append(xyxy)
-            elif label == "Plate":
-                x1, y1, x2, y2 = xyxy
-                plate_crop = img[y1:y2, x1:x2]
-                plate_text = reader.readtext(plate_crop, detail=0)
+    cfg = PipelineConfig(helmet_min_conf=helmet_min_conf, triple_min_conf=triple_min_conf)
+    vehicles = single_frame_decisions(
+        dets, read_plate, config=cfg, contradiction_iou=contradiction_iou)
 
-    plate_number = clean_plate("".join(plate_text)) if plate_text else None
-    if plate_number:
-        # A single photo can't be temporally voted, but a small, structure-valid
-        # look-alike correction (0/O, 1/I, 8/B, 5/S) still improves one reading.
-        # Only applied when it yields a real plate shape; otherwise left as-is.
-        from modules.plate_recognizer import correct_plate
+    plates_for_drawing = {
+        v.plate_box: (v.plate or clean_plate(v.plate_raw or "") or None)
+        for v in vehicles if v.plate_box is not None
+    }
+    annotated = _draw_annotations(img, detections, plates_for_drawing)
 
-        corrected, _ = correct_plate(plate_number)
-        plate_number = corrected or plate_number
-
-    # A WithoutHelmet box overlapping a WithHelmet box is the model
-    # contradicting itself on the same rider — tested against a real photo
-    # where the higher-confidence box was the wrong one, so trust neither.
-    # Only report no_helmet if some WithoutHelmet box has no such overlap.
-    violations = []
-    no_helmet_confirmed = any(
-        not any(iou(whb, wb) > 0.1 for wb in with_helmet_boxes)
-        for whb in without_helmet_boxes
-    )
-    if no_helmet_confirmed:
-        violations.append("no_helmet")
-
-    if any(d["label"] == "TripleRiding" for d in detections):
-        violations.append("triple_riding")
-
+    os.makedirs(evidence_dir, exist_ok=True)
     evidence_file = None
-    if plate_number:
-        os.makedirs(evidence_dir, exist_ok=True)
-        annotated = _draw_annotations(img, detections, plate_number)
-        # timestamped so re-scanning the same plate doesn't overwrite an
-        # earlier fine's evidence photo
-        evidence_file = f"{evidence_dir}/{plate_number}_{int(time.time())}.jpg"
+    if detections:
+        evidence_file = os.path.join(evidence_dir, f"scan_{uuid.uuid4().hex[:12]}.jpg")
         cv2.imwrite(evidence_file, annotated)
 
+    out_vehicles = []
+    for v in vehicles:
+        recs = []
+        for viol in v.violations:
+            # temporal = 1/confirm_window: a photo is one frame of evidence,
+            # and the score says so instead of pretending otherwise.
+            score = compute_confidence(
+                viol["type"], detection=viol["detection"],
+                temporal=temporal_confidence(1, cfg.confirm_window),
+                association=v.association, ocr=v.plate_conf, supporting_frames=1,
+            )
+            pkg = build_evidence(
+                evidence_dir, plate=v.plate, violation=viol["type"],
+                original=img, annotated=annotated, plate_box=v.plate_box,
+                violation_box=v.body_box, frame_index=0,
+                confidence=score.as_dict(), model_version=model_version,
+                pipeline_version=pipeline_version, source_id=source_id,
+                config_snapshot={
+                    "mode": "single_image", "conf_threshold": conf,
+                    "helmet_min_conf": helmet_min_conf,
+                    "triple_min_conf": triple_min_conf,
+                    "contradiction_iou": contradiction_iou,
+                },
+                plate_votes={"stable": v.plate, "raw": v.plate_raw,
+                             "ocr_confidence": round(v.plate_conf, 4),
+                             "observations": 1},
+            )
+            recs.append({
+                "type": viol["type"],
+                "confidence": score.final,
+                "confidence_breakdown": score.as_dict(),
+                "evidence": pkg.db_paths(),
+            })
+        out_vehicles.append({
+            "plate": v.plate,
+            "plate_raw": v.plate_raw,
+            "plate_conf": round(v.plate_conf, 4),
+            "plate_box": v.plate_box,
+            "body_box": v.body_box,
+            "association": round(v.association, 4),
+            "violations": recs,
+            "abstained": v.abstained,
+        })
+
+    primary = next((v for v in out_vehicles if v["violations"]), None) or next(
+        (v for v in out_vehicles if v["plate"]), None)
     return {
-        "plate": plate_number,
-        "violations": violations,
+        "vehicles": out_vehicles,
+        "plate": primary["plate"] if primary else None,
+        "violations": [r["type"] for r in primary["violations"]] if primary else [],
         "evidence_file": evidence_file,
         "detections": detections,
     }

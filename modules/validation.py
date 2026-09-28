@@ -3,7 +3,8 @@
 Kept dependency-free and separate from Flask so every rule is unit-testable
 without a request context. Covers:
 
-* allowed upload extensions (image / video) and image magic-byte sniffing,
+* allowed upload extensions (image / video) and image / video-container
+  magic-byte sniffing,
 * turning a caller-supplied ``image_path`` into a safe evidence basename
   (no directory traversal, must be an allowed image type),
 * plate / violation / amount validation,
@@ -27,7 +28,6 @@ _IMAGE_MAGIC = (
     b"\xff\xd8\xff",              # JPEG
     b"\x89PNG\r\n\x1a\n",        # PNG
     b"BM",                        # BMP
-    b"RIFF",                      # WEBP (RIFF....WEBP)
 )
 
 MAX_PLATE_LEN = 15
@@ -47,7 +47,23 @@ def sniff_image(head: bytes) -> bool:
     """True if ``head`` (first bytes of a file) looks like a supported image."""
     if not head:
         return False
+    if head[:4] == b"RIFF":  # RIFF is also AVI/WAV: only RIFF....WEBP is an image
+        return head[8:12] == b"WEBP"
     return any(head.startswith(sig) for sig in _IMAGE_MAGIC)
+
+
+def sniff_video(head: bytes) -> bool:
+    """True if ``head`` (first 12+ bytes) looks like a supported video container:
+    ISO-BMFF (.mp4/.mov: ``ftyp`` box at offset 4), AVI (``RIFF....AVI ``), or
+    Matroska/WebM (EBML magic). Rejects a renamed non-video before a worker
+    thread ever hands it to the decoder."""
+    if not head or len(head) < 12:
+        return False
+    if head[4:8] == b"ftyp":
+        return True
+    if head[:4] == b"RIFF" and head[8:12] == b"AVI ":
+        return True
+    return head[:4] == b"\x1a\x45\xdf\xa3"
 
 
 def safe_extension(filename: str, allowed: set[str], default: str) -> str:
@@ -104,20 +120,36 @@ class RateLimiter:
     """Per-key sliding-window limiter (in-memory, thread-safe). Fine for a
     single-process deployment; not a distributed limiter."""
 
+    # Sweep idle keys at most this often, so one-off clients (every distinct IP
+    # that ever hit a write route) can't grow the table without bound.
+    _SWEEP_EVERY_S = 60.0
+
     def __init__(self, max_requests: int, window_s: float):
         self.max_requests = max_requests
         self.window_s = window_s
         self._hits: dict[str, deque] = {}
         self._lock = threading.Lock()
+        self._last_sweep = 0.0
 
     def allow(self, key: str, now: float | None = None) -> bool:
         now = time.monotonic() if now is None else now
         with self._lock:
-            dq = self._hits.setdefault(key, deque())
             cutoff = now - self.window_s
+            if now - self._last_sweep >= self._SWEEP_EVERY_S:
+                self._sweep(cutoff)
+                self._last_sweep = now
+            dq = self._hits.setdefault(key, deque())
             while dq and dq[0] < cutoff:
                 dq.popleft()
             if len(dq) >= self.max_requests:
                 return False
             dq.append(now)
             return True
+
+    def _sweep(self, cutoff: float) -> None:
+        for k in [k for k, dq in self._hits.items() if not dq or dq[-1] < cutoff]:
+            del self._hits[k]
+
+    def tracked_keys(self) -> int:
+        with self._lock:
+            return len(self._hits)
