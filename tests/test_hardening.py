@@ -204,3 +204,21 @@ def test_safe_json_name(name, ok):
     from modules.validation import safe_json_name
 
     assert (safe_json_name(name) is not None) is ok
+
+
+def test_detect_honours_role_keys_too(monkeypatch, tmp_path):
+    """/detect writes fines; with role keys configured it must not stay open."""
+    _mod, c = _client(monkeypatch, tmp_path, {"REVIEWER_API_KEYS": "rev-key",
+                                              "VIEWER_API_KEYS": "view-key"})
+    body = {"plate": "MH12AB1234", "violation": "no_helmet", "image_path": "evidence/x.jpg"}
+    assert c.post("/detect", json=body).status_code == 403
+    assert c.post("/detect", json=body, headers={"X-API-Key": "view-key"}).status_code == 403
+    assert c.post("/detect", json=body, headers={"X-API-Key": "rev-key"}).status_code == 200
+
+
+def test_detect_key_still_works_alongside_role_keys(monkeypatch, tmp_path):
+    _mod, c = _client(monkeypatch, tmp_path, {"REVIEWER_API_KEYS": "rev-key",
+                                              "DETECT_API_KEY": "det-key"})
+    body = {"plate": "MH12AB1234", "violation": "no_helmet", "image_path": "evidence/x.jpg"}
+    assert c.post("/detect", json=body, headers={"X-API-Key": "det-key"}).status_code == 200
+    assert c.post("/detect", json=body, headers={"X-API-Key": "nope"}).status_code == 403

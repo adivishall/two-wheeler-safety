@@ -373,15 +373,19 @@ BUDGET_STAGES = (
 )
 
 
-def _misread(text: str, rng: random.Random) -> str:
-    """One look-alike glyph error, the kind OCR actually makes on plates."""
+def _misread(text: str, u_pos: float, u_alt: float) -> str:
+    """One look-alike glyph error, the kind OCR actually makes on plates.
+
+    Takes pre-drawn uniforms rather than an RNG so the caller draws the same
+    number of values at every opportunity (see :func:`fault_streams`)."""
     from modules.ocr_temporal_eval import CONFUSIONS
 
     idx = [i for i, ch in enumerate(text) if ch in CONFUSIONS]
     if not idx:
         return text
-    i = rng.choice(idx)
-    return text[:i] + rng.choice(CONFUSIONS[text[i]]) + text[i + 1:]
+    i = idx[min(int(u_pos * len(idx)), len(idx) - 1)]
+    alts = CONFUSIONS[text[i]]
+    return text[:i] + alts[min(int(u_alt * len(alts)), len(alts) - 1)] + text[i + 1:]
 
 
 _STREAMS = ("rider_miss", "class_flip", "plate_miss", "ocr_corrupt")
@@ -430,9 +434,13 @@ def apply_faults(scenario: Scenario, faults: dict, rng) -> Scenario:
                 if label in flip and u_flip < flip[label][1]:
                     label = flip[label][0]
                 dets.append(DetBox(label, d.box, d.conf))
-            u_ocr = streams["ocr_corrupt"].random()
+            # Always three draws from the OCR stream per opportunity — whether or
+            # not a plate text exists this frame (which depends on the
+            # plate-miss stream) — so the plate_recall oracle can't shift OCR's.
+            ocr_stream = streams["ocr_corrupt"]
+            u_ocr, u_pos, u_alt = ocr_stream.random(), ocr_stream.random(), ocr_stream.random()
             if text and u_ocr < ocr:
-                text = _misread(text, streams["ocr_corrupt"])
+                text = _misread(text, u_pos, u_alt)
             new_frame.append(VehicleFrame(vf.gt_id, dets, text))
         frames.append(new_frame)
     return Scenario(scenario.name, scenario.vehicles, frames)

@@ -157,8 +157,10 @@ def benchmark_video(model, reader, video_path, max_frames, *,
         "frames": frames,
         "wall_seconds": round(elapsed, 2),
         "throughput_fps": round(frames / elapsed, 2) if elapsed else 0.0,
-        "ocr_calls": (summary.get("profile", {}).get("stages", {})
-                      .get("ocr", {}).get("calls", 0)),
+        # The pipeline's own count of OCR calls (one per plate read), not the
+        # profiler's stage entries.
+        "ocr_calls": summary.get("ocr_calls", (summary.get("profile", {}).get("stages", {})
+                                               .get("ocr", {}).get("calls", 0))),
         "ms_per_frame": round(elapsed * 1000.0 / frames, 2) if frames else 0.0,
         "stage_profile": summary.get("profile", {}),
     }

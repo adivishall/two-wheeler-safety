@@ -41,7 +41,16 @@ _TO_LETTER = {"0": "O", "1": "I", "2": "Z", "4": "A", "5": "S", "6": "G", "8": "
 
 @dataclass(frozen=True)
 class PlateConfig:
-    min_observations: int = 3  # never elect a plate from one or two frames
+    min_observations: int = 3  # readings of any kind before a vote is held
+    # Readings that must support the WINNER specifically (valid reads of that
+    # exact plate). min_observations counts junk reads too, so without this one
+    # valid read + two unreadable ones elected a plate from a single frame.
+    # 3, with the margin below, chosen by `evaluate_ocr.py --simulate
+    # --policy-sweep` scored at the moment the pipeline COMMITS (first
+    # election): the 1.0.0 rule named the wrong plate for 40-86% of vehicles at
+    # that moment in simulation; this one for ~2% worst case
+    # (eval/results/ocr_stabilizer_selection.md).
+    min_support: int = 3
     min_confidence: float = 0.35  # share of all vote weight the winner must hold
     max_edits: int = 2  # cap on look-alike substitutions per correction (conservative:
     #                     an all-digit junk string needs >=3 to look like a plate)
@@ -51,12 +60,7 @@ class PlateConfig:
     # The winner's vote share must beat the best *competing valid plate* by at
     # least this much (as a fraction of all vote weight), so a plate read as two
     # strings (a consistent misread: 7 reads vs 6) abstains instead of being
-    # decided by one frame. Chosen with min_observations=3 by
-    # `evaluate_ocr.py --simulate --policy-sweep` (1,000 sequences/condition):
-    # with consistent misreads in the noise model the old rule (2 obs, no
-    # margin) named the wrong plate for up to 3.2% of vehicles; this one ~1%,
-    # at roughly 30% less coverage — a fine withheld rather than a fine issued
-    # to the wrong owner (eval/results/ocr_stabilizer_selection.md).
+    # decided by one frame. Selected together with min_support.
     min_margin: float = 0.3
 
 
@@ -263,6 +267,7 @@ class PlateStabilizer:
                 reverse=True,
             )
             winner = candidates[0]
+            support = sum(1 for o in valid_obs if o.used == winner)
             confidence = weights.get(winner, 0.0) / total if total else 0.0
             if len(candidates) > 1:
                 runner_up = candidates[1]
@@ -273,7 +278,9 @@ class PlateStabilizer:
                 not self.config.require_known_state
                 or decode_plate(winner).get("recognized", False)
             )
-            if confidence < self.config.min_confidence:
+            if support < self.config.min_support:
+                reason = "too_few_supporting_reads"
+            elif confidence < self.config.min_confidence:
                 reason = "low_agreement"
             elif margin < self.config.min_margin or (runner_up is not None and margin <= 0.0):
                 # An exact tie is never evidence for either plate; electing one

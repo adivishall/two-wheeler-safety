@@ -135,3 +135,42 @@ def test_pr_curve_and_json_roundtrip():
     back = records_from_json(records_to_json(recs))
     assert isinstance(back[0], ImageRecord)
     assert back[0].pred_tp.tolist() == recs[0].pred_tp.tolist()
+
+
+def test_each_model_is_reported_at_its_own_val_thresholds(tmp_path, monkeypatch):
+    """Regression: the test report applied the BASELINE's val thresholds to
+    every model, biasing operating-point comparisons toward the baseline."""
+    import json
+
+    import evaluate_uncertainty as eu
+
+    data = tmp_path / "d.yaml"
+    data.write_text("names: [A, B]\nval: v/images\ntest: t/images\n")
+    weights = []
+    for name in ("base", "cand"):
+        w = tmp_path / "runs" / name / "weights" / "best.pt"
+        w.parent.mkdir(parents=True)
+        w.write_bytes(name.encode())
+        weights.append(str(w))
+
+    def fake_predict(model_path, *_a, **_k):
+        # baseline's true boxes score 0.8, the candidate's 0.4: their F1-optimal
+        # thresholds differ, so borrowing one for the other is visible.
+        s = 0.8 if "base" in model_path else 0.4
+        return [rec([(0, BOX)], [(0, BOX, s), (0, FAR, s - 0.3)]) for _ in range(6)], NAMES
+
+    monkeypatch.setattr(eu, "load_or_predict", fake_predict)
+    out = tmp_path / "out"
+    assert eu.main(["--split", "val", "--name", "v", "--data", str(data), "--out", str(out),
+                    "--bootstrap", "20", "--models", *weights]) == 0
+    assert eu.main(["--split", "test", "--name", "t", "--data", str(data), "--out", str(out),
+                    "--bootstrap", "20", "--thresholds-from", str(out / "v.json"),
+                    "--models", *weights]) == 0
+    val = json.load(open(out / "v.json"))
+    test = json.load(open(out / "t.json"))
+    for vm, tm in zip(val["models"], test["models"]):
+        assert tm["thresholds_source"] == tm["label"]
+        assert tm["thresholds_applied"]["A"]["threshold"] == \
+            vm["thresholds_selected"]["A"]["threshold"]
+    assert test["models"][0]["thresholds_applied"]["A"]["threshold"] != \
+        test["models"][1]["thresholds_applied"]["A"]["threshold"]

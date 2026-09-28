@@ -58,6 +58,15 @@ class VehicleTrack:
     # Plate-under-rider overlap from the last frame where BOTH were detected,
     # so a frame that misses one of them doesn't reset the association score.
     association_score: float | None = None
+    # Last rider box seen (a confirmed violation can be emitted on a frame
+    # where only the plate was detected).
+    last_body_box: Box | None = None
+    # Plate-identity bookkeeping: the last frame OCR ran on this track, and the
+    # last frame a valid reading AGREED with the elected plate. A fine requires
+    # a recent agreeing read, so a track whose identity switched can't be fined
+    # under the previous vehicle's plate.
+    last_ocr_frame: int | None = None
+    plate_confirmed_frame: int | None = None
 
     # --- filled by later phases (kept here so the shape is stable) ---
     plate_observations: list = field(default_factory=list)  # Phase 2

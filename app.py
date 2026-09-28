@@ -229,8 +229,19 @@ def health():
 
 @app.route("/detect", methods=["POST"])
 def detect():
-
-    if DETECT_API_KEY and request.headers.get("X-API-Key") != DETECT_API_KEY:
+    # Two independent gates, either of which may be configured: the dedicated
+    # DETECT_API_KEY, and the role keys every other write route honours. A
+    # request passes if it satisfies whichever gates are configured — with role
+    # keys set and no DETECT_API_KEY, /detect used to stay open while every
+    # other write required the reviewer role.
+    key = request.headers.get("X-API-Key")
+    detect_ok = bool(DETECT_API_KEY) and key == DETECT_API_KEY
+    if config.server.auth_enabled:
+        role = config.server.role_for_key(key)
+        role_ok = role is not None and _ROLE_LEVELS[role] >= _ROLE_LEVELS["reviewer"]
+        if not (role_ok or detect_ok):
+            return jsonify({"error": "reviewer role or detect API key required"}), 403
+    elif DETECT_API_KEY and not detect_ok:
         return jsonify({"error": "invalid or missing API key"}), 401
 
     if _rate_limited():

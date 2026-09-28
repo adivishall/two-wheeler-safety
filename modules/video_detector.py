@@ -193,7 +193,8 @@ def process_video(
                 # A plate crop only when the plate is in THIS frame; otherwise
                 # the crop would show whatever now sits at the old location.
                 plate_box=track.plate_box if decision.plate_visible else None,
-                violation_box=decision.violation_box,
+                # Likewise the violation crop: only if the rider is in this frame.
+                violation_box=decision.violation_box if decision.violation_visible else None,
                 frame_index=decision.frame_index,
                 track_id=track.track_id,
                 confidence=decision.confidence.as_dict(),
@@ -300,7 +301,10 @@ def process_video(
             try:
                 return _read_plate_text(reader, crop)
             finally:
-                ocr_seconds += time.perf_counter() - t0
+                dt = time.perf_counter() - t0
+                ocr_seconds += dt
+                if profiler is not None:
+                    profiler.add("ocr", dt)  # one entry per OCR call, not per frame
 
         # Tracking + association + OCR voting + state machines, in one call.
         # OCR time is carved out so the stages stay non-overlapping.
@@ -309,8 +313,6 @@ def process_video(
                              read_plate=read_plate)
         step_seconds = time.perf_counter() - t0
         if profiler is not None:
-            if ocr_seconds:
-                profiler.add("ocr", ocr_seconds)
             profiler.add("track", max(0.0, step_seconds - ocr_seconds))
 
         for tf in step.tracks:

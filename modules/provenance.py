@@ -135,8 +135,13 @@ def git_state() -> dict:
     if not commit:
         return {"commit": None, "dirty": None}
     excludes = [f":(exclude){p}" for p in GENERATED_PATHS]
-    dirty = bool(run("status", "--porcelain", "--untracked-files=no", "--", ".", *excludes))
-    return {"commit": commit, "dirty": dirty}
+    tracked = run("status", "--porcelain", "--untracked-files=no", "--", ".", *excludes)
+    # Untracked SOURCE files count too: HEAD may import a module that exists
+    # only in this working tree, and then the named commit can't reproduce the
+    # result. (Untracked non-code — scratch notes, editor dirs — does not.)
+    untracked = run("ls-files", "--others", "--exclude-standard", "--", "*.py",
+                    "*.yaml", "*.yml", "*.toml", "*.txt")
+    return {"commit": commit, "dirty": bool(tracked) or bool(untracked)}
 
 
 def environment() -> dict:

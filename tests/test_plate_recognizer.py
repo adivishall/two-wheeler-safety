@@ -65,6 +65,7 @@ def test_majority_valid_reading_wins():
     stab = PlateStabilizer()
     stab.add("MH02DL4596", conf=0.9)
     stab.add("MH02DL4596", conf=0.8)
+    stab.add("MH02DL4596", conf=0.85)  # the shipped rule needs 3 supporting reads
     stab.add("MH02DL4590", conf=0.4)  # one noisy frame disagrees
     assert stab.stable_plate == "MH02DL4596"
     assert stab.disagreement_count == 1

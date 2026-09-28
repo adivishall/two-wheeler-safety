@@ -95,8 +95,17 @@ class PipelineConfig:
     helmet_min_conf: float = 0.375  # HELMET_MIN_CONF (val-selected, see config.py)
     triple_min_conf: float = 0.3  # TRIPLE_MIN_CONF
     speed_limit_kmh: float = 40.0  # SPEED_LIMIT_KMH
-    ocr_lock_confidence: float = 0.90  # stop re-OCRing a locked plate
+    ocr_lock_confidence: float = 0.90  # stop re-OCRing a locked plate every frame
     ocr_lock_min_observations: int = 5
+    # ...but keep checking it: a locked plate is re-read every N visible frames,
+    # and a disagreeing valid read drops the agreement below the lock threshold,
+    # so reading resumes. Without this, a track that switched to another
+    # vehicle kept the first vehicle's plate forever and fined it.
+    ocr_recheck_every: int = 10
+    # A fine needs a valid reading that agreed with the elected plate within
+    # this many frames on the same track (1 s at 25 fps). A safety interlock
+    # against identity switches, not a tuned threshold.
+    plate_fresh_frames: int = 25
     trace_max_frames: int = 20
     association: AssociationConfig = DEFAULT_CONFIG
     tracker: TrackerConfig = DEFAULT_TRACKER_CONFIG
@@ -158,6 +167,9 @@ class ViolationDecision:
     # True if the plate box was detected in THIS frame, i.e. a plate crop taken
     # from this frame shows the plate. False means the plate was read earlier.
     plate_visible: bool
+    # Same for the rider box: False when the decision is emitted on a frame
+    # where only the plate was detected (the box is the last one seen).
+    violation_visible: bool = True
     plate_votes: dict = field(default_factory=dict)
     speed: dict | None = None
     trace: list | None = None
@@ -278,23 +290,35 @@ class ViolationPipeline:
                 and stab is not None
                 and stab.num_observations >= cfg.ocr_lock_min_observations
             )
+            recheck_due = (
+                track.last_ocr_frame is None
+                or frame_index - track.last_ocr_frame >= cfg.ocr_recheck_every
+            )
             ocr_ran = False
             label = track.stable_plate if visible else None
-            if visible and read_plate is not None and not locked:
+            if visible and read_plate is not None and (not locked or recheck_due):
                 assert track.plate_box is not None  # implied by plate_visible
                 ocr_ran = True
                 self.ocr_calls += 1
+                track.last_ocr_frame = frame_index
                 reading = read_plate(track.plate_box)
                 if reading:
                     text, conf = reading
                     stab = self.stabilizers.setdefault(tid, PlateStabilizer(cfg.plate))
+                    before = stab.num_observations
                     stab.add(text, conf)
                     res = stab.result()
                     track.stable_plate = res.stable
                     track.plate_confidence = res.confidence
                     track.plate_observations = stab.observations
                     label = res.stable or res.normalized
+                    last = stab.observations[-1] if stab.num_observations > before else None
+                    if res.stable and last is not None and last.valid \
+                            and last.used == res.stable:
+                        track.plate_confirmed_frame = frame_index
 
+            if body is not None:
+                track.last_body_box = body.box
             # ---- association score: plate-under-rider overlap, remembered from
             # the last frame where both boxes were detected.
             if body is not None and visible:
@@ -345,11 +369,15 @@ class ViolationPipeline:
                 frame_idx=frame_index,
             )
             track.helmet_state = hstate.value
-            if hsm.confirmed and body is not None:
+            # Retried on every frame the track is seen once confirmed — even a
+            # frame with only the plate detected, which may be exactly the frame
+            # the plate finally stabilises on.
+            if hsm.confirmed and track.last_body_box is not None:
                 self._maybe_emit(
-                    decisions, track, "no_helmet", body.box, frame_index, timestamp,
-                    detection=hsm.best_conf, association=assoc,
+                    decisions, track, "no_helmet", track.last_body_box, frame_index,
+                    timestamp, detection=hsm.best_conf, association=assoc,
                     supporting_frames=hsm.supporting_frames,
+                    violation_visible=body is not None,
                 )
 
             # ---- triple riding.
@@ -361,11 +389,12 @@ class ViolationPipeline:
                 observed=body is not None,
             )
             track.triple_state = tstate.value
-            if tsm.confirmed and body is not None:
+            if tsm.confirmed and track.last_body_box is not None:
                 self._maybe_emit(
-                    decisions, track, "triple_riding", body.box, frame_index, timestamp,
-                    detection=tsm.best_conf, association=assoc,
+                    decisions, track, "triple_riding", track.last_body_box, frame_index,
+                    timestamp, detection=tsm.best_conf, association=assoc,
                     supporting_frames=tsm.frames_observed,
+                    violation_visible=body is not None,
                 )
 
             frames.append(TrackFrame(
@@ -392,6 +421,7 @@ class ViolationPipeline:
         self, decisions, track: VehicleTrack, violation: str, box: Box,
         frame_index: int, timestamp: float, *, detection: float,
         association: float, supporting_frames: int, speed: dict | None = None,
+        violation_visible: bool = True,
     ) -> None:
         key = (track.track_id, violation)
         if key in self._reported:
@@ -400,6 +430,12 @@ class ViolationPipeline:
         if not plate:
             res = self._plate_result(track.track_id)
             self._held[key] = (res.abstain_reason if res else None) or "no_plate_read"
+            return
+        confirmed_at = track.plate_confirmed_frame
+        if confirmed_at is None or frame_index - confirmed_at > self.config.plate_fresh_frames:
+            # Elected, but not re-read and agreed with on this track recently:
+            # the vehicle on the track now may not be the one that was read.
+            self._held[key] = "plate_not_recently_confirmed"
             return
         self._reported.add(key)
         self._held.pop(key, None)
@@ -427,7 +463,7 @@ class ViolationPipeline:
         decisions.append(ViolationDecision(
             track=track, violation=violation, plate=plate, violation_box=box,
             confidence=conf, frame_index=frame_index, timestamp=timestamp,
-            plate_visible=track.plate_visible,
+            plate_visible=track.plate_visible, violation_visible=violation_visible,
             plate_votes=res.votes_dict() if res else {},
             speed=speed,
             trace=list(self._traces.get(track.track_id, [])) if self.trace_enabled else None,

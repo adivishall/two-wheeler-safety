@@ -526,3 +526,19 @@ def test_renamed_non_video_is_rejected_before_a_worker_starts(app_env):
                    content_type="multipart/form-data")
         assert r.status_code == 400
         assert "not a supported video" in r.get_json()["error"]
+
+
+def test_profiler_counts_every_ocr_call_not_every_frame(monkeypatch, tmp_path):
+    """Regression: OCR time was added to the profiler once per FRAME, so with
+    three plated bikes the benchmark reported a third of the real calls and
+    three times the real ms/call."""
+    from modules.profiling import StageProfiler
+
+    frames = [rider(40 + 2 * f, "WithHelmet", 0) + rider(240 + 2 * f, "WithHelmet", 1)
+              + rider(440 + 2 * f, "WithHelmet", 2) for f in range(8)]
+    script = Script(frames, {0: "MH12AB1234", 1: "KA05MN6789", 2: "DL8CAF5031"})
+    summary, _ = run(monkeypatch, tmp_path, script, profiler=StageProfiler(),
+                     ocr_lock_confidence=1.1)
+    assert script.ocr_calls == 24
+    assert summary["ocr_calls"] == 24
+    assert summary["profile"]["stages"]["ocr"]["calls"] == 24

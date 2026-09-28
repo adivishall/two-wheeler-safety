@@ -355,16 +355,29 @@ def noise_sweep(
 # ---------------------------------------------------------------------------
 
 def _stabilizer_outcomes(pairs, config) -> dict:
-    """Coverage and wrong-plate rate of one PlateConfig over ``pairs``."""
+    """Coverage and wrong-plate rate of one PlateConfig over ``pairs``, scored
+    at the moment the pipeline COMMITS to a plate: the first read after which
+    the stabilizer elects anything.
+
+    That is when a held violation is fined (``ViolationPipeline`` fines as soon
+    as a confirmed violation has a stable plate), so it is the stopping time
+    that matters. An earlier version scored the plate after all reads — a later,
+    better-informed moment the pipeline never waits for — and under-counted
+    wrong plates several-fold (4.6% vs 0.2% in one condition)."""
     right = wrong = abstain = 0
     for truth, reads in pairs:
         stab = PlateStabilizer(config)
+        committed = None
         for r in reads:
             stab.add(r.text, conf=r.confidence)
-        res = stab.result()
-        if res.stable is None:
+            if r.text:
+                elected = stab.result().stable
+                if elected is not None:
+                    committed = elected
+                    break
+        if committed is None:
             abstain += 1
-        elif res.stable == truth:
+        elif committed == truth:
             right += 1
         else:
             wrong += 1
@@ -380,13 +393,17 @@ def _stabilizer_outcomes(pairs, config) -> dict:
 def stabilizer_candidates() -> list:
     from modules.plate_recognizer import PlateConfig
 
-    out = []
-    for obs in (2, 3):
+    # The rule 1.0.0 shipped (2 readings of any kind, no support or margin
+    # requirement), kept as a candidate so the report compares against it.
+    out = [("1.0.0 rule: obs>=2, agreement>=0.35, no margin",
+            PlateConfig(min_observations=2, min_support=1, min_confidence=0.35,
+                        min_margin=0.0))]
+    for support in (1, 2, 3):
         for agree in (0.35, 0.5):
             for margin in (0.0, 0.1, 0.2, 0.3):
-                out.append((f"obs>={obs}, agreement>={agree}, margin>={margin}",
-                            PlateConfig(min_observations=obs, min_confidence=agree,
-                                        min_margin=margin)))
+                out.append((f"support>={support}, agreement>={agree}, margin>={margin}",
+                            PlateConfig(min_observations=3, min_support=support,
+                                        min_confidence=agree, min_margin=margin)))
     return out
 
 
@@ -417,7 +434,7 @@ def stabilizer_sweep(*, rates=DEFAULT_NOISE_SWEEP, systematic=SYSTEMATIC_RATES,
 
 def select_stabilizer(results: dict, *, design_rates=DESIGN_RATES,
                       design_systematic=SYSTEMATIC_RATES,
-                      max_wrong: float = MAX_WRONG_PLATE) -> dict:
+                      max_wrong: float = MAX_WRONG_PLATE, n_sequences: int = 1000) -> dict:
     """Max mean coverage over the design conditions s.t. wrong-plate rate <=
     max_wrong in every one; if none qualifies, minimum worst-case wrong rate."""
     keys = [_cond(r, s) for s in design_systematic for r in design_rates]
@@ -434,21 +451,29 @@ def select_stabilizer(results: dict, *, design_rates=DESIGN_RATES,
 
     def caution(t):
         # Exact ties on the measured objectives go to the MORE conservative
-        # config (larger margin, then more observations): same measured cost,
-        # plus protection in cases the noise model does not generate (e.g. a
-        # plate read as two strings in strict alternation). Specified after the
-        # first run produced exact ties between margins 0.0 / 0.1 / 0.2.
+        # config (larger margin, then more supporting reads): same measured
+        # cost, plus protection in cases the noise model does not generate (e.g.
+        # a plate read as two strings in strict alternation). Specified after
+        # the first run produced exact ties between margins 0.0 / 0.1 / 0.2.
         c = cfgs[t["config"]]
-        return (c.min_margin, c.min_observations)
+        return (c.min_margin, c.min_support)
 
     feasible = [t for t in table if t["feasible"]]
     if feasible:
         best = max(feasible, key=lambda t: (t["mean_coverage"], caution(t)))
         how = "primary objective"
     else:
-        best = min(table, key=lambda t: (t["worst_wrong_plate_rate"], -t["mean_coverage"],
-                                         tuple(-x for x in caution(t))))
-        how = "fallback: minimum worst-case wrong-plate rate; exact ties -> more conservative"
+        # Fallback, noise-aware: every config whose worst-case wrong-plate rate
+        # is within 2 standard errors of the lowest one is treated as equally
+        # safe, and the one with the most coverage wins (then the more
+        # conservative). A plain arg-min let 1-sequence differences decide —
+        # twice — between configs whose coverage differed by 6+ points.
+        lo = min(t["worst_wrong_plate_rate"] for t in table)
+        se = (max(lo, 1e-3) * (1 - lo) / max(1, n_sequences)) ** 0.5
+        band = [t for t in table if t["worst_wrong_plate_rate"] <= lo + 2 * se]
+        best = max(band, key=lambda t: (t["mean_coverage"], caution(t)))
+        how = (f"fallback: no config met the target; most coverage among configs within "
+               f"2 SE ({2 * se:.2%}) of the lowest worst-case wrong-plate rate ({lo:.1%})")
     return {"objective": (f"max mean coverage s.t. wrong-plate rate <= {max_wrong:.0%} "
                           f"in every design condition ({', '.join(keys)})"),
             "table": table, "selected": best["config"], "selected_by": how}
@@ -465,9 +490,9 @@ def stabilizer_experiment(*, dev_seed: int = 1234, test_seed: int = 5678,
     config (agreement >= 0.5). At 5x the sample that choice did not survive —
     the selection must be stable to sample size before it is shipped."""
     dev = stabilizer_sweep(seed=dev_seed, repeats=repeats, frames=frames)
-    choice = select_stabilizer(dev)
+    choice = select_stabilizer(dev, n_sequences=repeats * len(SAMPLE_PLATES))
     test = stabilizer_sweep(seed=test_seed, repeats=repeats, frames=frames)
-    previous = "obs>=2, agreement>=0.35, margin>=0.0"
+    previous = "1.0.0 rule: obs>=2, agreement>=0.35, no margin"
     return {
         "frames_per_sequence": frames,
         "sequences_per_rate": repeats * len(SAMPLE_PLATES),

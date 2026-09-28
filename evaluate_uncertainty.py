@@ -126,6 +126,9 @@ def render_markdown(p: dict) -> str:
             pb = m["paired_vs_baseline"]
             for n in [*names, "map50"]:
                 d = pb["map50"] if n == "map50" else pb["per_class"][n]
+                if d["diff"] is None:  # no instances of this class in the split
+                    lines.append(f"| `{m['label']}` | {n} | — | — | — | no instances |")
+                    continue
                 verdict = ("**better**" if d["significant"] and d["diff"] > 0 else
                            "**worse**" if d["significant"] else "not distinguishable")
                 lines.append(
@@ -145,8 +148,10 @@ def render_markdown(p: dict) -> str:
                              f"{t['recall']} | {t['f1']} |")
             lines.append("")
         if "thresholds_applied" in m:
-            lines += [f"## Thresholds chosen on `{p['thresholds_from']}`, applied here — "
-                      f"`{m['label']}`", "",
+            src_note = ("its own val-selected thresholds"
+                        if m.get("thresholds_source") == m["label"]
+                        else f"`{m.get('thresholds_source')}`'s thresholds (none selected for it)")
+            lines += [f"## `{m['label']}` at {src_note} from `{p['thresholds_from']}`", "",
                       "| class | threshold | precision | recall | F1 |",
                       "|---|---:|---:|---:|---:|"]
             for n in names:
@@ -193,11 +198,20 @@ def main(argv=None) -> int:
     from modules.provenance import run_provenance
 
     device = yolo_io.resolve_device(args.device)
-    applied = None
+    # Each model gets the thresholds selected for IT on val. (Applying the
+    # baseline's thresholds to every model biased any comparison at operating
+    # thresholds toward the baseline.) A model with no val selection falls back
+    # to the baseline's, and the report says so.
+    val_thresholds: dict[str, dict] = {}
+    base_label = None
     if args.thresholds_from:
         with open(args.thresholds_from) as fh:
             src = json.load(fh)
-        applied = {k: v["threshold"] for k, v in src["models"][0]["thresholds_selected"].items()}
+        for m in src["models"]:
+            if "thresholds_selected" in m:
+                val_thresholds[m["label"]] = {k: v["threshold"]
+                                              for k, v in m["thresholds_selected"].items()}
+        base_label = src["models"][0]["label"]
 
     models = []
     base_records = None
@@ -215,8 +229,12 @@ def main(argv=None) -> int:
                 records, base_records, names, n_boot=args.bootstrap, seed=args.seed)
         if args.split == "val":
             entry["thresholds_selected"] = f1_optimal_thresholds(records, names)
-        if applied is not None:
-            entry["thresholds_applied"] = apply_thresholds(records, names, applied)
+        if val_thresholds:
+            own = val_thresholds.get(entry["label"])
+            source = entry["label"] if own is not None else base_label
+            entry["thresholds_source"] = source
+            entry["thresholds_applied"] = apply_thresholds(
+                records, names, own if own is not None else val_thresholds[base_label])
         models.append(entry)
 
     payload = {

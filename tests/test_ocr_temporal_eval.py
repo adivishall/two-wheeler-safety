@@ -121,7 +121,7 @@ def test_two_way_tie_abstains():
     assert conf == pytest.approx(0.5)
     # The tie rule holds on its own, even with the old permissive thresholds.
     stab = PlateStabilizer(PlateConfig(min_confidence=0.35, min_observations=2,
-                                       min_margin=0.0))
+                                       min_support=1, min_margin=0.0))
     for r in reads:
         stab.add(r.text, r.confidence)
     res = stab.result()
@@ -130,8 +130,7 @@ def test_two_way_tie_abstains():
 
 
 def test_a_clear_majority_beats_a_single_dissenter():
-    reads = [FrameRead("AB12CD3456", 0.4), FrameRead("AB12CD3456", 0.4),
-             FrameRead("ZZ99YY8888", 0.4)]
+    reads = [FrameRead("AB12CD3456", 0.4)] * 3 + [FrameRead("ZZ99YY8888", 0.4)]
     text, conf, abstained = apply_policy("temporal", reads)
     assert (text, abstained) == ("AB12CD3456", False)
     assert conf > 0.6
@@ -261,8 +260,31 @@ def test_stabilizer_selection_protocol():
         assert set(rows) <= {sel["selected"], exp["previous_default"]}
     # Exact ties go to the more conservative config.
     res = {c: {n: {"coverage": 0.5, "wrong_plate_rate": 0.0}
-               for n in ("obs>=2, agreement>=0.5, margin>=0.0",
-                         "obs>=3, agreement>=0.5, margin>=0.2")}
+               for n in ("support>=1, agreement>=0.5, margin>=0.0",
+                         "support>=2, agreement>=0.5, margin>=0.2")}
            for c in ("sub=0.04,sys=0.0",)}
     sel = select_stabilizer(res, design_rates=(0.04,), design_systematic=(0.0,))
-    assert sel["selected"] == "obs>=3, agreement>=0.5, margin>=0.2"
+    assert sel["selected"] == "support>=2, agreement>=0.5, margin>=0.2"
+
+
+def test_stabilizer_is_scored_at_the_moment_the_pipeline_commits():
+    """A wrong plate elected early and corrected later still counts as wrong:
+    the pipeline fines a held violation at the FIRST election."""
+    from modules.ocr_temporal_eval import FrameRead, _stabilizer_outcomes
+    from modules.plate_recognizer import PlateConfig
+
+    cfg = PlateConfig(min_observations=2, min_support=1, min_confidence=0.35, min_margin=0.0)
+    reads = [FrameRead("MH12AB1284", 0.9), FrameRead("MH12AB1284", 0.9)] + \
+        [FrameRead("MH12AB1234", 0.9)] * 8
+    out = _stabilizer_outcomes([("MH12AB1234", reads)], cfg)
+    assert out["wrong_plate_rate"] == 1.0  # committed after 2 reads, then outvoted
+
+
+def test_one_valid_read_among_junk_cannot_elect_a_plate():
+    from modules.plate_recognizer import PlateStabilizer
+
+    stab = PlateStabilizer()
+    for text in ("MH12AB1284", "QQQQ", "12AB1Z3"):
+        stab.add(text, 0.9)
+    res = stab.result()
+    assert res.stable is None and res.abstain_reason == "too_few_supporting_reads"

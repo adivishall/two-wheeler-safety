@@ -171,3 +171,9 @@ def test_dirty_flag_ignores_generated_results(tmp_path, monkeypatch):
     assert git_state()["dirty"] is False
     (tmp_path / "code.py").write_text("x = 2\n")
     assert git_state()["dirty"] is True
+    git("checkout", "--", "code.py")
+    assert git_state()["dirty"] is False
+    (tmp_path / "notes.md").write_text("scratch")  # untracked non-code: not dirty
+    assert git_state()["dirty"] is False
+    (tmp_path / "new_rule.py").write_text("x = 3\n")  # untracked source: dirty
+    assert git_state()["dirty"] is True

@@ -40,8 +40,11 @@ def authed(monkeypatch, tmp_path):
 
 
 def _seed_violation(client):
+    # /detect writes a fine, so with role keys configured it needs the reviewer
+    # key like every other write (it used to be seedable anonymously).
     client.post("/detect", json={"plate": "MH12AB1234", "violation": "no_helmet",
-                                 "image_path": "evidence/x.jpg"})
+                                 "image_path": "evidence/x.jpg"},
+                headers={"X-API-Key": "rev-key"})
     return client.get("/api/violations").get_json()["items"][0]["id"]
 
 

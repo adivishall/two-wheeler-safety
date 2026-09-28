@@ -185,11 +185,11 @@ def test_ocr_lock_skips_redundant_ocr_without_changing_the_fine(stub_video_io, t
     calls_off, fines_off, viol_off = run(1.1)
     assert calls_off == N_FRAMES
 
-    # Lock enabled: OCR stops after the plate locks (5 readings), so far fewer
-    # calls — but the same single fine for the same plate.
+    # Lock enabled: after the plate locks (5 readings) OCR only re-checks it
+    # every 10 frames (frame 15 here) — far fewer calls, same single fine.
     calls_on, fines_on, viol_on = run(0.90)
     assert calls_on < calls_off
-    assert calls_on == 5  # locks exactly at ocr_lock_min_observations
+    assert calls_on == 6  # 5 to lock + 1 periodic re-check
     assert fines_on == fines_off == [(PLATE_TEXT, "no_helmet")]
     assert viol_on[0]["plate"] == viol_off[0]["plate"] == PLATE_TEXT
 
