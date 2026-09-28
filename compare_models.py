@@ -55,7 +55,8 @@ def model_label(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def measure_latency(model, images: list[str], warmup: int = 2) -> dict:
+def measure_latency(model, images: list[str], warmup: int = 2,
+                    device: str | None = None) -> dict:
     """Mean/p90 single-image inference latency in ms over ``images``.
 
     The warm-up matters: the first forward pass pays lazy device/graph
@@ -64,12 +65,13 @@ def measure_latency(model, images: list[str], warmup: int = 2) -> dict:
     """
     if not images:
         return {}
+    kw = {"verbose": False, **({"device": device} if device else {})}
     for path in images[:warmup]:
-        model.predict(source=path, verbose=False)
+        model.predict(source=path, **kw)
     times = []
     for path in images:
         t0 = time.perf_counter()
-        model.predict(source=path, verbose=False)
+        model.predict(source=path, **kw)
         times.append((time.perf_counter() - t0) * 1000.0)
     times.sort()
     mean = sum(times) / len(times)
@@ -78,6 +80,7 @@ def measure_latency(model, images: list[str], warmup: int = 2) -> dict:
         "mean_ms": round(mean, 2),
         "p90_ms": round(times[int(len(times) * 0.9)], 2),
         "fps": round(1000.0 / mean, 1) if mean else 0.0,
+        "device": device or "library default",
     }
 
 
@@ -126,7 +129,7 @@ def evaluate_one(
     if latency_images:
         # val() leaves fused inference tensors behind; a fresh load gives the
         # predict pass clean weights (same reason evaluate_model.py reloads).
-        row["latency"] = measure_latency(YOLO(weights), latency_images)
+        row["latency"] = measure_latency(YOLO(weights), latency_images, device=device)
     return row
 
 
