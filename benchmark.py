@@ -26,6 +26,7 @@ import time
 from datetime import datetime, timezone
 
 from modules.logging_setup import configure_logging, get_logger
+from modules.yolo_io import resolve_device
 
 log = get_logger("benchmark")
 
@@ -58,21 +59,6 @@ def _peak_rss_mb() -> float | None:
         return round(rss / divisor, 1)
     except Exception:  # noqa: BLE001
         return None
-
-
-def resolve_device(name: str) -> str:
-    if name != "auto":
-        return name
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            return "cuda"
-        if torch.backends.mps.is_available():
-            return "mps"
-    except Exception:  # noqa: BLE001
-        pass
-    return "cpu"
 
 
 def benchmark_image(model, reader, image_path, iterations) -> dict:

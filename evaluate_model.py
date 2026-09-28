@@ -34,6 +34,7 @@ import sys
 import time
 from datetime import datetime, timezone
 
+from modules import yolo_io as _yolo_io
 from modules.confidence_analysis import (
     ScoredPrediction,
     analyse,
@@ -51,88 +52,16 @@ from modules.logging_setup import configure_logging, get_logger
 log = get_logger("evaluate")
 
 
-def resolve_device(name: str) -> str:
-    """Map ``auto`` to the best available backend; pass anything else through."""
-    if name != "auto":
-        return name
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            return "cuda"
-        if torch.backends.mps.is_available():
-            return "mps"
-    except Exception:  # noqa: BLE001 - torch absent or probing failed
-        pass
-    return "cpu"
-
-
-def load_data_yaml(path: str) -> dict:
-    """Read a YOLO ``data.yaml`` into ``{names, root, splits}``."""
-    import yaml  # pyyaml ships with ultralytics
-
-    with open(path) as fh:
-        cfg = yaml.safe_load(fh)
-
-    names = cfg.get("names")
-    if isinstance(names, dict):  # {0: 'Plate', ...}
-        names = [names[k] for k in sorted(names)]
-    root = cfg.get("path", os.path.dirname(os.path.abspath(path)))
-    if not os.path.isabs(root):
-        root = os.path.join(os.path.dirname(os.path.abspath(path)), root)
-    return {"names": list(names or []), "root": root, "cfg": cfg}
+# Shared with the other evaluation CLIs (one copy, sorted split order); the old
+# names stay importable from here.
+resolve_device = _yolo_io.resolve_device
+load_data_yaml = _yolo_io.load_data_yaml
+_iter_image_label_pairs = _yolo_io.iter_image_label_pairs
+_read_gt = _yolo_io.read_gt
 
 
 def _split_dir(data: dict, split: str) -> str | None:
-    entry = data["cfg"].get(split)
-    if not entry:
-        return None
-    path = entry if os.path.isabs(entry) else os.path.join(data["root"], entry)
-    return path
-
-
-def _iter_image_label_pairs(split_dir: str):
-    """Yield ``(image_path, label_path)`` for a YOLO split directory.
-
-    Handles the standard layout where a ``.../images/...`` tree mirrors a
-    ``.../labels/...`` tree with matching stems.
-    """
-    exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-    img_root = split_dir
-    if not os.path.isdir(img_root):
-        # data.yaml may point at a text file listing images; skip in that case.
-        return
-    for dirpath, _dirs, files in os.walk(img_root):
-        for name in files:
-            if os.path.splitext(name)[1].lower() not in exts:
-                continue
-            image_path = os.path.join(dirpath, name)
-            label_path = (
-                image_path.replace(os.sep + "images" + os.sep,
-                                   os.sep + "labels" + os.sep)
-            )
-            label_path = os.path.splitext(label_path)[0] + ".txt"
-            yield image_path, label_path
-
-
-def _read_gt(label_path: str, w: int, h: int) -> list:
-    """Parse a YOLO label file into ``[(cls, (x1,y1,x2,y2)), ...]`` pixels."""
-    gt = []
-    if not os.path.exists(label_path):
-        return gt
-    with open(label_path) as fh:
-        for line in fh:
-            parts = line.split()
-            if len(parts) < 5:
-                continue
-            cls = int(float(parts[0]))
-            cx, cy, bw, bh = (float(p) for p in parts[1:5])
-            x1 = (cx - bw / 2) * w
-            y1 = (cy - bh / 2) * h
-            x2 = (cx + bw / 2) * w
-            y2 = (cy + bh / 2) * h
-            gt.append((cls, (x1, y1, x2, y2)))
-    return gt
+    return _yolo_io.split_dir(data, split)
 
 
 def run_official_val(model, data_path, split, imgsz, conf, iou, device) -> dict:
@@ -457,9 +386,15 @@ def parse_args(argv=None):
                     help="dataset split to evaluate (default: val)")
     ap.add_argument("--imgsz", type=int, default=640)
     ap.add_argument("--conf", type=float, default=0.25,
-                    help="confidence threshold for the error-analysis pass")
+                    help="OPERATING confidence threshold for the error-analysis "
+                         "pass (confusions, FP/FN) — what the pipeline runs at")
     ap.add_argument("--iou", type=float, default=0.5,
-                    help="IoU threshold for matching / NMS")
+                    help="IoU threshold for matching in the error-analysis pass")
+    ap.add_argument("--ap-conf", type=float, default=0.001,
+                    help="confidence floor for mAP (standard protocol: 0.001). A "
+                         "high floor truncates the PR curve and understates AP")
+    ap.add_argument("--ap-iou", type=float, default=0.7,
+                    help="NMS IoU for the mAP pass (Ultralytics standard: 0.7)")
     ap.add_argument("--device", default="auto", help="cuda | mps | cpu | auto")
     ap.add_argument("--out", default="reports", help="output directory for reports")
     ap.add_argument("--name", default=None, help="report name (default: eval_<timestamp>)")
@@ -517,7 +452,17 @@ def main(argv=None) -> int:
     except Exception:  # noqa: BLE001 - a missing manifest must not fail evaluation
         model_version = None
 
+    from modules.provenance import run_provenance
+
     payload = {
+        # Which weights (by hash), which data (by content fingerprint), which
+        # code (commit + dirty flag), on which hardware/software.
+        "provenance": run_provenance(
+            model_paths=[args.model], data_yaml=args.data, split=args.split,
+            config={"operating_conf": args.conf, "match_iou": args.iou,
+                    "ap_conf": args.ap_conf, "ap_nms_iou": args.ap_iou,
+                    "imgsz": args.imgsz},
+        ),
         "model_version": model_version,
         "name": args.name or f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -535,9 +480,17 @@ def main(argv=None) -> int:
     if not args.no_official:
         val_attempted = True
         try:
+            # Standard AP protocol, NOT the operating threshold: mAP computed
+            # at conf 0.25 (what this used to do) truncates the PR curve and
+            # reported ~0.06 lower mAP@50 than the same weights actually earn.
             payload["official"] = run_official_val(
-                model, args.data, args.split, args.imgsz, args.conf, args.iou, device
+                model, args.data, args.split, args.imgsz, args.ap_conf, args.ap_iou,
+                device,
             )
+            payload["official"]["protocol"] = {
+                "conf": args.ap_conf, "nms_iou": args.ap_iou,
+                "note": "Ultralytics val(): multi-label NMS, rect batches",
+            }
         except Exception as exc:  # noqa: BLE001
             log.exception("official val() failed: %s", exc)
 

@@ -29,23 +29,11 @@ import sys
 
 from modules.config import CLASS_NAMES
 from modules.logging_setup import configure_logging, get_logger
+from modules.yolo_io import resolve_device
 
 log = get_logger("train")
 
 DEFAULT_DATA = "master_traffic_violation_dataset/data.yaml"
-
-
-def resolve_device(name: str) -> str:
-    """Map ``auto`` to cuda/mps/cpu; pass an explicit device straight through."""
-    if name != "auto":
-        return name
-    import torch
-
-    if torch.cuda.is_available():
-        return "cuda"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
 
 
 def parse_args(argv=None):

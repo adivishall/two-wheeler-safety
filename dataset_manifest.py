@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import hashlib
 import json
 import os
 import sys
@@ -108,17 +107,14 @@ def describe_split(images_dir: str, classes: list[str]) -> dict:
     }
 
 
-def content_hash(data_yaml: str, splits: dict) -> str:
-    """Hash the data.yaml bytes plus every split's counts.
+def content_hash(data_yaml: str) -> str:
+    """The dataset version: the shared content fingerprint
+    (:func:`modules.provenance.dataset_fingerprint`) — label contents plus image
+    names/sizes, independent of where the dataset lives on disk. The same id the
+    model manifest records for the data a checkpoint was trained on."""
+    from modules.provenance import dataset_fingerprint
 
-    Any change to the classes, the split sizes or the label contents changes the
-    version, so two manifests with the same version describe the same data.
-    """
-    h = hashlib.sha256()
-    with open(data_yaml, "rb") as fh:
-        h.update(fh.read())
-    h.update(json.dumps(splits, sort_keys=True).encode())
-    return "sha256:" + h.hexdigest()[:16]
+    return dataset_fingerprint(data_yaml)["version"]
 
 
 def build(data_yaml: str, *, leakage_report: str | None = None) -> dict:
@@ -145,7 +141,7 @@ def build(data_yaml: str, *, leakage_report: str | None = None) -> dict:
     manifest = {
         "name": os.path.basename(os.path.dirname(os.path.abspath(data_yaml))),
         "data_yaml": data_yaml,
-        "version": content_hash(data_yaml, splits),
+        "version": content_hash(data_yaml),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "classes": classes,
         "annotation_format": (

@@ -178,8 +178,13 @@ def render_markdown(payload: dict) -> str:
              f"imgsz={payload['imgsz']}, device={payload['device']}",
              f"- Ranked by: **{payload['rank_by']}**", ""]
     if payload.get("winner"):
-        lines += [f"**Winner: `{payload['winner']}`** "
-                  f"(every model saw the identical split and settings).", ""]
+        role = ("selection split" if payload["split"] == "val" else
+                "REPORTING split — not a selection result")
+        lines += [f"**Highest point estimate: `{payload['winner']}`** on the "
+                  f"{role} (every model saw the identical split and settings).", "",
+                  "> A point-estimate ranking is not a significance test. Whether "
+                  "a gap is real is answered by `evaluate_uncertainty.py` (paired "
+                  "image bootstrap).", ""]
 
     lines += ["| Model | version | mAP@50 | mAP@50-95 | precision | recall | "
               "latency (ms) | size (MB) |", "|---|---|---:|---:|---:|---:|---:|---:|"]
@@ -222,10 +227,14 @@ def parse_args(argv=None):
     ap.add_argument("--runs-root", default="runs/detect",
                     help="where to auto-discover checkpoints (default: runs/detect)")
     ap.add_argument("--data", required=True, help="dataset data.yaml")
-    ap.add_argument("--split", default="test", choices=["val", "test", "train"])
+    ap.add_argument("--split", default="val", choices=["val", "test", "train"],
+                    help="choose models on val (default). A test run is for "
+                         "reporting a model already chosen, never for choosing")
     ap.add_argument("--imgsz", type=int, default=640)
-    ap.add_argument("--conf", type=float, default=0.25)
-    ap.add_argument("--iou", type=float, default=0.5)
+    ap.add_argument("--conf", type=float, default=0.001,
+                    help="confidence floor for mAP (standard protocol: 0.001)")
+    ap.add_argument("--iou", type=float, default=0.7,
+                    help="NMS IoU for the mAP pass (Ultralytics standard: 0.7)")
     ap.add_argument("--device", default="auto", help="cuda | mps | cpu | auto")
     ap.add_argument("--rank-by", default="map50",
                     help="metric to rank by: map50 | map50_95 | mean_precision | "
@@ -250,9 +259,12 @@ def main(argv=None) -> int:
         log.error("no checkpoints found (looked in %s)", args.runs_root)
         return 2
 
-    from evaluate_model import resolve_device
+    from modules.yolo_io import resolve_device
 
     device = resolve_device(args.device)
+    if args.split == "test":
+        log.warning("comparing on TEST: fine for reporting a model already chosen "
+                    "on val, not for choosing one (that would tune on test)")
     latency_images = (
         _split_images(args.data, args.split, args.latency_images)
         if args.latency_images else []
@@ -275,8 +287,12 @@ def main(argv=None) -> int:
 
     ranked = rank(rows, args.rank_by)
     winner = next((r["label"] for r in ranked if not r.get("error")), None)
+    from modules.provenance import run_provenance
+
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "provenance": run_provenance(model_paths=models, data_yaml=args.data,
+                                     split=args.split),
         "data": args.data, "split": args.split, "imgsz": args.imgsz,
         "conf": args.conf, "iou": args.iou, "device": device,
         "rank_by": args.rank_by, "winner": winner, "models": ranked,

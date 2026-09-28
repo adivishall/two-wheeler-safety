@@ -60,10 +60,6 @@ def sha256_file(path: str, *, chunk: int = 1 << 20) -> str:
     return f"sha256:{h.hexdigest()}"
 
 
-def _sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
 def git_commit(short: bool = True) -> str | None:
     """Current repo HEAD, or None if git isn't available / not a repo."""
     try:
@@ -94,12 +90,12 @@ def _class_names(cfg: dict) -> list[str]:
 
 
 def dataset_version(data_yaml: str) -> dict:
-    """Describe a dataset for provenance: a content hash + per-class counts.
+    """Describe a dataset for provenance: a content fingerprint + per-class counts.
 
-    The ``version`` hash covers the ``data.yaml`` contents *and* the per-class
-    label instance counts, so any change to the classes or the label files
-    changes the version. Returns ``{path, version, classes, class_counts,
-    images, instances}``. Counting walks the label files (cheap, no image I/O).
+    ``version`` is :func:`modules.provenance.dataset_fingerprint` — any change
+    to the classes, the file set, or any label file's contents changes it.
+    Returns ``{path, version, classes, class_counts, label_files, instances}``.
+    Counting walks the label files (cheap, no image I/O).
     """
     cfg = _load_yaml(data_yaml)
     classes = _class_names(cfg)
@@ -133,12 +129,14 @@ def dataset_version(data_yaml: str) -> dict:
                     if 0 <= idx < len(classes):
                         counts[classes[idx]] += 1
 
-    with open(data_yaml, "rb") as fh:
-        yaml_bytes = fh.read()
-    version_src = yaml_bytes + json.dumps(counts, sort_keys=True).encode()
+    # The version is the shared content fingerprint (label contents + image
+    # names/sizes), not a hash of these counts: counts can stay identical while
+    # the annotations change. See modules/provenance.py.
+    from modules.provenance import dataset_fingerprint
+
     return {
         "path": data_yaml,
-        "version": f"sha256:{_sha256_bytes(version_src)[:16]}",
+        "version": dataset_fingerprint(data_yaml)["version"],
         "classes": classes,
         "class_counts": counts,
         "label_files": total_images,
