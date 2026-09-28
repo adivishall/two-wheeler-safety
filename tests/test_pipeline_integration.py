@@ -14,7 +14,7 @@ import pytest
 from modules.video_detector import process_video
 
 FRAME_W, FRAME_H = 320, 400
-N_FRAMES = 10
+N_FRAMES = 20  # >= the shipped 12-observed-frame helmet gate
 
 # A no-helmet rider (body) with a plate sitting under it. Same boxes every frame
 # so the track is stable and the violation persists to confirmation.
@@ -40,7 +40,7 @@ class _FakeModel:
 
     names = {0: "Plate", 1: "WithHelmet", 2: "WithoutHelmet", 3: "TripleRiding"}
 
-    def __call__(self, frame, verbose=False):
+    def __call__(self, frame, verbose=False, **_kwargs):
         return [_FakeResult([
             _FakeBox(0, PLATE_BOX, 0.9),
             _FakeBox(2, BODY_BOX, 0.8),
@@ -140,7 +140,7 @@ def test_contradiction_is_not_recorded(stub_video_io, tmp_path):
     not produce a fine (the contradiction safeguard, at pipeline scope)."""
 
     class _ContradictingModel(_FakeModel):
-        def __call__(self, frame, verbose=False):
+        def __call__(self, frame, verbose=False, **_kwargs):
             return [_FakeResult([
                 _FakeBox(0, PLATE_BOX, 0.9),
                 _FakeBox(2, BODY_BOX, 0.8),           # WithoutHelmet

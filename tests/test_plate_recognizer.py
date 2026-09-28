@@ -91,11 +91,11 @@ def test_only_invalid_readings_elect_nothing():
 
 def test_result_exposes_full_state():
     stab = PlateStabilizer()
-    stab.add("MH02DL4596", conf=0.9)
-    stab.add("MH02DL4596", conf=0.9)
+    for _ in range(3):  # the selected rule needs >= 3 observations
+        stab.add("MH02DL4596", conf=0.9)
     r = stab.result()
     assert r.stable == "MH02DL4596"
-    assert r.num_observations == 2
+    assert r.num_observations == 3
     assert r.disagreement_count == 0
     assert r.valid is True
     assert r.confidence > 0

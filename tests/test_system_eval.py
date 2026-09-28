@@ -86,7 +86,7 @@ def test_tracking_clean_scenario_has_no_switches():
     assert t.coverage == 1.0
 
 
-def test_crossing_no_longer_causes_id_switches():
+def test_crossing_keeps_identity():
     """The crossing scenario used to be the documented tracker weakness: 4 ID
     switches and association accuracy 0.85.
 
@@ -102,7 +102,9 @@ def test_crossing_no_longer_causes_id_switches():
     t = evaluate_tracking(sc)
     assert t.id_switches == 0
     assert t.coverage == 1.0
-    assert evaluate_association(sc).accuracy == 1.0
+    # The two frames of full overlap merge the riders into one body, so one
+    # plate pairing is lost there; identity (above) survives it.
+    assert evaluate_association(sc).accuracy >= 0.9
 
 
 def test_occlusion_is_survived_without_an_id_switch():
@@ -137,7 +139,7 @@ def test_wrong_plate_is_detected_as_false_positive():
     # plate won't match GT, so it must score as wrong_plate + false_positive,
     # never as a true positive.
     frames = []
-    for f in range(8):
+    for f in range(30):  # long enough for the shipped >=12-frame helmet gate
         body = (100 + 5 * f, 100, 150 + 5 * f, 200)
         plate = (105 + 5 * f, 205, 140 + 5 * f, 235)
         frames.append([VehicleFrame(1, [DetBox("WithoutHelmet", body, 0.9),
@@ -160,3 +162,62 @@ def test_evaluate_all_totals_are_consistent():
     assert tp == tot["true_positives"]
     assert tot["true_positives"] >= 8  # every violation scenario fined correctly
     assert tot["false_positives"] == 0
+
+
+def test_brief_pass_is_a_miss_by_design():
+    """A rider seen for 8 frames can't meet the shipped >=12-observed-frame
+    helmet gate. The miss is the documented price of false-flag protection and
+    must stay visible in the headline recall rather than be tuned away."""
+    m = evaluate_system(_by_name()["brief_pass"])
+    assert m.true_positives == 0 and m.false_negatives == 1 and m.false_positives == 0
+
+
+def _reappearing_rider(gap=(30, 50), n=80):
+    """A no-helmet rider in view, gone for longer than the tracker's max_age
+    (15 frames), then back — so it returns under a NEW track id."""
+    frames = []
+    for f in range(n):
+        if gap[0] <= f < gap[1]:
+            frames.append([])
+            continue
+        x = 100 + 3 * (f % 50)
+        frames.append([VehicleFrame(1, [
+            DetBox("WithoutHelmet", (x, 100, x + 50, 200), 0.9),
+            DetBox("Plate", (x + 5, 205, x + 40, 235), 0.9)], "MH12AB1234")])
+    return Scenario("reappears", [GTVehicle(1, "MH12AB1234", frozenset({"no_helmet"}))],
+                    frames)
+
+
+def test_rider_who_returns_under_a_new_track_is_fined_once():
+    """Regression: the pipeline de-duplicated per track id only, so this rider
+    was fined twice in one video (and the evaluator scored it as two true
+    positives, hiding it). Now: one fine, the second suppressed and reported."""
+    from modules.system_eval import run_scenario
+
+    sc = _reappearing_rider()
+    m = evaluate_system(sc)
+    assert m.emitted_fines == 1
+    assert m.true_positives == 1 and m.duplicates == 0 and m.false_positives == 0
+    pipe, _fines, votes = run_scenario(sc)
+    assert len(votes) == 2  # the tracker really did split the identity
+    assert [d["violation"] for d in pipe.suppressed_duplicates] == ["no_helmet"]
+
+
+def test_identity_split_is_scored_as_a_duplicate_not_a_second_true_positive():
+    """If a duplicate ever does get emitted, the scorer must call it one."""
+    from modules import system_eval
+
+    real = system_eval.run_scenario
+
+    def two_fines(scenario, config=system_eval.DEFAULT_PIPELINE_CONFIG):
+        pipe, fines, votes = real(scenario, config)
+        tids = sorted(votes)
+        return pipe, [(tids[0], "no_helmet", "MH12AB1234"),
+                      (tids[1], "no_helmet", "MH12AB1234")], votes
+
+    system_eval.run_scenario = two_fines
+    try:
+        m = evaluate_system(_reappearing_rider())
+    finally:
+        system_eval.run_scenario = real
+    assert m.true_positives == 1 and m.duplicates == 1 and m.false_positives == 1

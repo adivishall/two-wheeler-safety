@@ -107,21 +107,26 @@ def test_policy_temporal_abstains_on_structurally_invalid_readings():
     assert abstained is True
 
 
-def test_two_way_tie_elects_at_half_agreement():
-    """Documents a real, measured characteristic rather than an aspiration.
+def test_two_way_tie_abstains():
+    """An exact two-way split between structurally valid plates is no evidence
+    for either. It used to elect one by string order (agreement 0.5 cleared the
+    old 0.35 threshold) — a coin flip with a fine on it. It now abstains, both
+    because 0.5 no longer clears the selected majority threshold and because a
+    tie is refused outright (reason "contested")."""
+    from modules.plate_recognizer import PlateConfig, PlateStabilizer
 
-    With exactly two conflicting *structurally valid* readings the agreement
-    score is 0.5, which clears PlateConfig.min_confidence (0.35), so the
-    stabilizer elects one rather than abstaining. That is the shipped behaviour
-    and the weakest point of the voting rule; it is listed in
-    docs/END_TO_END_EVALUATION.md under limitations. This test exists so the
-    behaviour cannot change silently in either direction.
-    """
-    reads = [FrameRead("AB12CD3456", 0.4), FrameRead("ZZ99YY8888", 0.4)]
+    reads = [FrameRead("AB12CD3456", 0.4), FrameRead("ZZ99YY8888", 0.4)] * 2
     text, conf, abstained = apply_policy("temporal", reads)
-    assert abstained is False
+    assert abstained is True and text == ""
     assert conf == pytest.approx(0.5)
-    assert text in {"AB12CD3456", "ZZ99YY8888"}
+    # The tie rule holds on its own, even with the old permissive thresholds.
+    stab = PlateStabilizer(PlateConfig(min_confidence=0.35, min_observations=2,
+                                       min_margin=0.0))
+    for r in reads:
+        stab.add(r.text, r.confidence)
+    res = stab.result()
+    assert res.stable is None and res.abstain_reason == "contested"
+    assert res.runner_up is not None and res.margin == 0.0
 
 
 def test_a_clear_majority_beats_a_single_dissenter():
@@ -192,9 +197,15 @@ def test_temporal_is_more_precise_than_single_frame_under_noise():
     assert last["coverage"] == 1.0
 
 
-def test_temporal_produces_fewer_structurally_invalid_plates():
+def test_temporal_never_answers_with_a_structurally_invalid_plate():
+    """``invalid_rate`` counts an abstention ("") as an invalid output, so a
+    more cautious stabilizer raises it. The property that matters is that
+    every temporal non-answer is an abstention — it never NAMES an invalid
+    plate — while single-frame policies do."""
     d = run_simulation(frames=10, repeats=5, seed=1234).as_dict()
-    assert d["policies"]["temporal"]["invalid_rate"] <= d["policies"]["last"]["invalid_rate"]
+    t = d["policies"]["temporal"]
+    assert t["invalid_rate"] == pytest.approx(t["abstain_rate"])
+    assert d["policies"]["last"]["invalid_rate"] > 0.0
 
 
 def test_noise_sweep_covers_every_rate_and_stays_honest():
@@ -212,3 +223,46 @@ def test_empty_sequence_set_does_not_divide_by_zero():
     assert report.n_sequences == 0
     for policy in POLICIES:
         assert report.policies[policy]["abstain_rate"] == 0.0
+
+
+# -- stabilizer threshold selection -------------------------------------------
+
+def test_systematic_misread_creates_a_consistent_competitor():
+    import random
+
+    from modules.ocr_temporal_eval import NoiseModel, simulate_sequence
+
+    model = NoiseModel(substitute_rate=0.0, drop_char_rate=0.0, insert_char_rate=0.0,
+                       miss_frame_rate=0.0, systematic_rate=1.0, systematic_strength=1.0)
+    reads = simulate_sequence("MH12AB1234", 6, model, random.Random(0))
+    texts = {r.text for r in reads}
+    assert len(texts) == 1 and texts != {"MH12AB1234"}  # the SAME wrong read
+
+
+def test_independent_noise_model_is_unchanged_when_systematic_is_off():
+    import random
+
+    from modules.ocr_temporal_eval import NoiseModel, simulate_sequence
+
+    a = simulate_sequence("MH12AB1234", 8, NoiseModel(), random.Random(3))
+    b = simulate_sequence("MH12AB1234", 8, NoiseModel(systematic_rate=0.0), random.Random(3))
+    assert [(r.text, r.confidence) for r in a] == [(r.text, r.confidence) for r in b]
+
+
+def test_stabilizer_selection_protocol():
+    from modules.ocr_temporal_eval import select_stabilizer, stabilizer_experiment
+
+    exp = stabilizer_experiment(repeats=1, frames=6)
+    assert exp["dev_seed"] != exp["test_seed"]
+    sel = exp["selection"]
+    assert sel["selected"] in {t["config"] for t in sel["table"]}
+    # Every reported test-seed row is the selected or the previous default.
+    for rows in exp["test"].values():
+        assert set(rows) <= {sel["selected"], exp["previous_default"]}
+    # Exact ties go to the more conservative config.
+    res = {c: {n: {"coverage": 0.5, "wrong_plate_rate": 0.0}
+               for n in ("obs>=2, agreement>=0.5, margin>=0.0",
+                         "obs>=3, agreement>=0.5, margin>=0.2")}
+           for c in ("sub=0.04,sys=0.0",)}
+    sel = select_stabilizer(res, design_rates=(0.04,), design_systematic=(0.0,))
+    assert sel["selected"] == "obs>=3, agreement>=0.5, margin>=0.2"

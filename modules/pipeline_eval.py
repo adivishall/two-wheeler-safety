@@ -32,23 +32,18 @@ import random
 from dataclasses import dataclass, field
 
 from modules.association import DetBox
+from modules.pipeline import DEFAULT_PIPELINE_CONFIG, PipelineConfig
 from modules.system_eval import (
+    DWELL,
     GTVehicle,
     Scenario,
     VehicleFrame,
-    _flatten,
-    _gt_boxes,
-    _owner_by_overlap,
-    _violation_signals,
     evaluate_system,
+    majority_gt,
+    run_scenario,
 )
-from modules.vehicle_tracker import VehicleTracker
-from modules.violation_state import (
-    HelmetConfig,
-    HelmetStateMachine,
-    TripleConfig,
-    TripleRidingStateMachine,
-)
+
+SHIPPED_WINDOW = DEFAULT_PIPELINE_CONFIG.confirm_window
 
 VIOLATIONS = ("no_helmet", "triple_riding")
 
@@ -62,7 +57,7 @@ class DecisionMetrics:
     """Binary classification metrics for one violation type over one suite."""
 
     violation: str
-    confirm_window: int = 3
+    confirm_window: int = SHIPPED_WINDOW
     true_positives: int = 0
     false_positives: int = 0
     false_negatives: int = 0
@@ -94,65 +89,39 @@ class DecisionMetrics:
 
 
 def run_pipeline_decisions(
-    scenario: Scenario, *, confirm_window: int = 3,
+    scenario: Scenario, *, confirm_window: int = SHIPPED_WINDOW,
+    config: PipelineConfig | None = None,
 ) -> dict[int, set]:
-    """Drive the real pipeline and return ``{gt_id: {confirmed violations}}``.
+    """Drive the shipped pipeline and return ``{gt_id: {confirmed violations}}``.
 
-    Tracks are mapped back to ground-truth vehicles by majority overlap vote
-    across the clip (the same attribution ``system_eval`` uses), so an ID switch
-    mid-clip does not by itself corrupt the decision being scored — which is the
-    point: the pipeline is allowed to lose a track id and still be right about
-    the vehicle.
+    This scores the *violation decision* (did the state machine confirm), not
+    the fine, so a vehicle whose plate never stabilised still counts as a
+    correct helmet call. Tracks are mapped back to ground-truth vehicles by
+    majority overlap vote across the clip (the same attribution ``system_eval``
+    uses), so an ID switch mid-clip does not by itself corrupt the decision
+    being scored — which is the point: the pipeline is allowed to lose a track
+    id and still be right about the vehicle.
     """
-    tracker = VehicleTracker()
-    helmet_sms: dict = {}
-    triple_sms: dict = {}
-    track_gt_votes: dict = {}
-
-    for frame_idx, frame in enumerate(scenario.frames):
-        dets, _ = _flatten(frame)
-        gt_boxes = _gt_boxes(frame)
-        for tr in tracker.update(dets, frame_idx):
-            tid = tr.track_id
-            gt = _owner_by_overlap(tr.box, gt_boxes)
-            track_gt_votes.setdefault(tid, {})
-            track_gt_votes[tid][gt] = track_gt_votes[tid].get(gt, 0) + 1
-
-            hsm = helmet_sms.setdefault(
-                tid, HelmetStateMachine(HelmetConfig(confirm_window=confirm_window)))
-            tsm = triple_sms.setdefault(
-                tid, TripleRidingStateMachine(TripleConfig(confirm_window=confirm_window)))
-            if tr.body is not None:
-                sig = _violation_signals(tr.body)
-                hsm.update(
-                    has_helmet=sig["has_helmet"], has_no_helmet=sig["has_no_helmet"],
-                    no_helmet_conf=sig["no_helmet_conf"], ambiguous=sig["ambiguous"],
-                    frame_idx=frame_idx,
-                )
-                tsm.update(
-                    has_triple=sig["has_triple"], conf=sig["triple_conf"],
-                    frame_idx=frame_idx,
-                )
-
+    pipe, _fines, track_gt_votes = run_scenario(
+        scenario, config or PipelineConfig(confirm_window=confirm_window))
     decisions: dict[int, set] = {v.gt_id: set() for v in scenario.vehicles}
     for tid, votes in track_gt_votes.items():
-        gt_id = max(votes, key=lambda g: (votes[g], g if g is not None else -1))
+        gt_id = majority_gt(votes)
         if gt_id is None or gt_id not in decisions:
             continue
-        if helmet_sms.get(tid) and helmet_sms[tid].confirmed:
-            decisions[gt_id].add("no_helmet")
-        if triple_sms.get(tid) and triple_sms[tid].confirmed:
-            decisions[gt_id].add("triple_riding")
+        decisions[gt_id] |= pipe.confirmed_violations(tid)
     return decisions
 
 
 def evaluate_violation(
-    scenarios: list, violation: str, *, confirm_window: int = 3,
+    scenarios: list, violation: str, *, confirm_window: int = SHIPPED_WINDOW,
+    config: PipelineConfig | None = None,
 ) -> DecisionMetrics:
     """Score the pipeline's final decision for one violation across scenarios."""
     m = DecisionMetrics(violation=violation, confirm_window=confirm_window)
     for sc in scenarios:
-        decisions = run_pipeline_decisions(sc, confirm_window=confirm_window)
+        decisions = run_pipeline_decisions(sc, confirm_window=confirm_window,
+                                           config=config)
         for v in sc.vehicles:
             expected = violation in v.violations
             got = violation in decisions.get(v.gt_id, set())
@@ -170,22 +139,31 @@ def evaluate_violation(
 def sweep_confirm_window(
     scenarios: list, violation: str, windows=(1, 2, 3, 5, 8),
 ) -> dict:
-    """Measure precision/recall against the temporal confirmation window.
+    """Precision/recall against the streak length ALONE (helmet dwell gate off).
 
     A window of 1 is "fine on a single frame" — the behaviour the temporal layer
-    exists to replace. The sweep shows what each extra required frame costs in
-    recall and buys in precision, so the shipped default is defensible.
+    exists to replace. This isolates what the streak buys on the hand-built
+    scenarios. It is a sanity check, not how the shipped rule was chosen: the
+    scenarios' flickers are one frame long by construction, so "window 2 is
+    enough" is built in. The rule was selected by ``evaluate_temporal.py``
+    against measured detector error rates.
     """
     rows = {
-        str(w): evaluate_violation(scenarios, violation, confirm_window=w).as_dict()
+        str(w): evaluate_violation(
+            scenarios, violation, confirm_window=w,
+            config=PipelineConfig(confirm_window=w, helmet_min_observed=0,
+                                  helmet_min_fraction=0.0),
+        ).as_dict()
         for w in windows
     }
     return {
         "violation": violation,
         "windows": rows,
         "note": (
-            "confirm_window=1 is single-frame fining (no temporal layer); higher "
-            "windows require the violation to persist that many frames."
+            "Streak length alone (helmet dwell gate off). confirm_window=1 is "
+            "single-frame fining. The scenarios contain one-frame flickers by "
+            "construction; the shipped rule is chosen in "
+            "eval/results/temporal_confirmation.md, not here."
         ),
     }
 
@@ -195,7 +173,7 @@ def sweep_confirm_window(
 # ---------------------------------------------------------------------------
 
 def _rider_scenario(
-    name: str, label: str, violations: set, *, n_frames: int = 10,
+    name: str, label: str, violations: set, *, n_frames: int = DWELL,
     plate: str = "MH12AB1234", drop_frames: tuple = (), occlude_frames: tuple = (),
 ) -> Scenario:
     """One bike carrying ``label`` for ``n_frames``, with optional detection loss.
@@ -240,16 +218,16 @@ def triple_riding_scenarios() -> list:
         _rider_scenario("four_or_more", "TripleRiding", {"triple_riding"}),
         # Partial occlusion: plate hidden for 3 frames, rider still visible.
         _rider_scenario("triple_plate_occluded", "TripleRiding", {"triple_riding"},
-                        occlude_frames=(3, 4, 5)),
+                        occlude_frames=(10, 11, 12)),
         # Temporary total detection loss (the bike passes behind a bus).
         _rider_scenario("triple_detection_loss", "TripleRiding", {"triple_riding"},
-                        drop_frames=(4, 5)),
+                        drop_frames=(12, 13)),
         # A brief, non-persistent TripleRiding flicker must NOT confirm.
         _flicker_scenario("triple_flicker_only"),
     ]
 
 
-def _flicker_scenario(name: str, *, n_frames: int = 10, flicker=(4,)) -> Scenario:
+def _flicker_scenario(name: str, *, n_frames: int = DWELL, flicker=(12,)) -> Scenario:
     """A clean two-up bike the detector briefly mislabels as TripleRiding.
 
     This is the single-frame false positive the temporal layer exists to absorb;
@@ -272,13 +250,13 @@ def helmet_scenarios() -> list:
         _rider_scenario("no_helmet_clean", "WithoutHelmet", {"no_helmet"}),
         _rider_scenario("helmet_clean", "WithHelmet", set()),
         _rider_scenario("no_helmet_detection_loss", "WithoutHelmet", {"no_helmet"},
-                        drop_frames=(4, 5)),
+                        drop_frames=(12, 13)),
         _helmet_flicker_scenario("helmet_flicker_only"),
         _contradiction_scenario("helmet_contradiction"),
     ]
 
 
-def _helmet_flicker_scenario(name: str, *, n_frames: int = 10, flicker=(4,)) -> Scenario:
+def _helmet_flicker_scenario(name: str, *, n_frames: int = DWELL, flicker=(12,)) -> Scenario:
     """A helmeted rider the detector briefly calls bare-headed: must not fine."""
     frames = []
     for f in range(n_frames):
@@ -291,7 +269,7 @@ def _helmet_flicker_scenario(name: str, *, n_frames: int = 10, flicker=(4,)) -> 
     return Scenario(name, [GTVehicle(1, "MH12AB1234", frozenset())], frames)
 
 
-def _contradiction_scenario(name: str, *, n_frames: int = 10) -> Scenario:
+def _contradiction_scenario(name: str, *, n_frames: int = DWELL) -> Scenario:
     """Every frame asserts helmet AND no-helmet on one rider.
 
     The measured, reproduced model bug. The pipeline must treat it as ambiguous

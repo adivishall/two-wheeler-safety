@@ -137,7 +137,7 @@ def test_sweep_covers_every_requested_window():
 
 def _clean_scenario() -> Scenario:
     frames = []
-    for f in range(10):
+    for f in range(30):  # long enough for the shipped >=12-frame helmet gate
         body = (100 + 5 * f, 100, 160 + 5 * f, 200)
         frames.append([VehicleFrame(1, [
             DetBox("WithoutHelmet", body, 0.9),
@@ -258,14 +258,27 @@ def test_naive_policy_ignores_the_contradiction_safeguard():
     assert "no_helmet" not in run_pipeline_decisions(sc)[1]
 
 
-def test_pipeline_beats_single_frame_at_every_noise_level():
-    """The project's central claim, as a regression test."""
+def test_pipeline_is_more_precise_at_every_noise_level():
+    """The project's central claim, stated as precisely as it holds: the
+    pipeline is more PRECISE than single-frame fining at every noise level."""
     from modules.pipeline_eval import pipeline_vs_single_frame
 
     out = pipeline_vs_single_frame(trials=5)
     for rate, block in out["rates"].items():
-        assert block["pipeline_f1_advantage"] > 0, f"no advantage at noise {rate}"
-        assert block["pipeline"]["precision"] > block["naive"]["precision"]
+        assert block["pipeline"]["precision"] > block["naive"]["precision"], rate
+
+
+def test_pipeline_wins_f1_in_the_measured_noise_range_only():
+    """F1 advantage holds where the detector actually operates (val-measured
+    helmet flip rates are 8-15% per frame) — and is NOT claimed at extreme
+    noise, where the pipeline trades recall for precision so hard that F1 falls
+    below the naive policy. If that ever flips, the docs are out of date."""
+    from modules.pipeline_eval import pipeline_vs_single_frame
+
+    out = pipeline_vs_single_frame(rates=(0.0, 0.1, 0.2, 0.4), trials=5)
+    for rate in ("0.00", "0.10", "0.20"):
+        assert out["rates"][rate]["pipeline_f1_advantage"] > 0, rate
+    assert out["rates"]["0.40"]["pipeline_f1_advantage"] < 0
 
 
 def test_advantage_is_precision_not_recall():

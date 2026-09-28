@@ -153,6 +153,7 @@ def main(argv=None) -> int:
     import cv2  # noqa: F401  (imported to fail fast with a clear message if absent)
 
     from modules.detector import load_models
+    from modules.pipeline import pipeline_config_from_detection
     from modules.video_detector import process_video
 
     model_path = args.model or config.model_path
@@ -182,10 +183,10 @@ def main(argv=None) -> int:
         summary = process_video(
             source, model, reader, output, record_fn=record_fn,
             progress_cb=progress, pixels_per_meter=args.pixels_per_meter,
-            speed_limit_kmh=config.detection.speed_limit_kmh,
-            streak_threshold=config.detection.streak_threshold,
             max_frames=args.max_frames,
             max_width=config.detection.max_video_width,
+            conf_threshold=config.detection.conf_threshold,
+            pipeline_config=pipeline_config_from_detection(config.detection),
         )
     except ValueError as exc:
         log.error("%s", exc)
@@ -196,6 +197,10 @@ def main(argv=None) -> int:
         f"{summary['plates_tracked']} vehicle(s) confirmed, "
         f"{len(summary['violations'])} violation(s) recorded."
     )
+    held = summary.get("unfined_confirmations") or []
+    if held:
+        print(f"{len(held)} confirmed violation(s) NOT fined — no stable plate "
+              "(the pipeline abstains rather than guess a plate).")
     print(f"Annotated video: {output}")
     return 0
 

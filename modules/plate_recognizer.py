@@ -41,13 +41,26 @@ _TO_LETTER = {"0": "O", "1": "I", "2": "Z", "4": "A", "5": "S", "6": "G", "8": "
 
 @dataclass(frozen=True)
 class PlateConfig:
-    min_observations: int = 2  # never elect a plate from a single frame
-    min_confidence: float = 0.35  # agreement score the winner must clear
+    min_observations: int = 3  # never elect a plate from one or two frames
+    # Share of all vote weight the winner must hold. 0.5 = an outright majority.
+    # Was 0.35 (with 2 observations, no margin); evaluate_ocr.py --simulate
+    # --policy-sweep found that when some plates are misread CONSISTENTLY (same
+    # glyph, same wrong way, on many frames) the old rule named the wrong plate
+    # for up to ~3.5% of vehicles; this one ~1.5%, at roughly half the
+    # coverage — a fine withheld rather than a fine issued to the wrong owner
+    # (eval/results/ocr_stabilizer_selection.md).
+    min_confidence: float = 0.5
     max_edits: int = 2  # cap on look-alike substitutions per correction (conservative:
     #                     an all-digit junk string needs >=3 to look like a plate)
     enable_correction: bool = True
     invalid_weight: float = 0.25  # weight multiplier for a structurally-invalid reading
     require_known_state: bool = False  # if True, the stable plate must decode()
+    # The winner's vote share must beat the best *competing valid plate* by at
+    # least this much (as a fraction of all vote weight), so a plate read as two
+    # strings in alternation (7 reads vs 6) abstains instead of being decided by
+    # one frame. Same measured cost as no margin in the sweep, chosen on the
+    # stated conservative tie-break.
+    min_margin: float = 0.2
 
 
 DEFAULT_PLATE_CONFIG = PlateConfig()
@@ -179,6 +192,21 @@ class PlateResult:
     num_observations: int
     disagreement_count: int
     valid: bool
+    # Vote detail, so an abstention (or a narrow win) is explainable.
+    runner_up: str | None = None
+    margin: float = 0.0
+    abstain_reason: str | None = None
+
+    def votes_dict(self) -> dict:
+        """Compact vote summary for an evidence sidecar."""
+        return {
+            "stable": self.stable,
+            "agreement": self.confidence,
+            "margin": self.margin,
+            "runner_up": self.runner_up,
+            "observations": self.num_observations,
+            "disagreeing": self.disagreement_count,
+        }
 
 
 class PlateStabilizer:
@@ -220,21 +248,43 @@ class PlateStabilizer:
 
         stable: str | None = None
         confidence = 0.0
+        runner_up: str | None = None
+        margin = 0.0
+        reason: str | None = None
 
         valid_obs = [o for o in self.observations if o.valid]
-        if valid_obs and num >= self.config.min_observations:
+        if not valid_obs:
+            reason = "no_valid_reading" if num else "no_reading"
+        elif num < self.config.min_observations:
+            reason = "too_few_observations"
+        else:
             weights, total = self._tally()
             # Only structurally-valid readings are eligible to win.
-            candidates = {o.used for o in valid_obs}
-            winner = max(
-                candidates, key=lambda p: (weights.get(p, 0.0), p)
+            candidates = sorted(
+                {o.used for o in valid_obs},
+                key=lambda p: (weights.get(p, 0.0), p),
+                reverse=True,
             )
+            winner = candidates[0]
             confidence = weights.get(winner, 0.0) / total if total else 0.0
+            if len(candidates) > 1:
+                runner_up = candidates[1]
+                margin = confidence - (weights.get(runner_up, 0.0) / total)
+            else:
+                margin = confidence
             known_ok = (
                 not self.config.require_known_state
                 or decode_plate(winner).get("recognized", False)
             )
-            if confidence >= self.config.min_confidence and known_ok:
+            if confidence < self.config.min_confidence:
+                reason = "low_agreement"
+            elif margin < self.config.min_margin or (runner_up is not None and margin <= 0.0):
+                # An exact tie is never evidence for either plate; electing one
+                # by string order would be a coin flip with someone's fine on it.
+                reason = "contested"
+            elif not known_ok:
+                reason = "unknown_state"
+            else:
                 stable = winner
 
         disagreement = (
@@ -249,6 +299,9 @@ class PlateStabilizer:
             num_observations=num,
             disagreement_count=disagreement,
             valid=stable is not None,
+            runner_up=runner_up,
+            margin=round(margin, 4),
+            abstain_reason=reason,
         )
 
     # convenience passthroughs

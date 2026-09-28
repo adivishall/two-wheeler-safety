@@ -48,9 +48,16 @@ class VehicleTrack:
     time_since_update: int = 0  # frames since last match
     state: TrackState = TrackState.TENTATIVE
 
-    # Association outputs for the current frame.
+    # Association outputs. ``plate_box`` is the LAST plate box seen for this
+    # vehicle and is kept when a frame misses the plate, so it can be stale:
+    # anything that reads pixels or measures motion at that box must first
+    # check ``plate_visible`` (the plate was detected in the current frame).
     plate_box: Box | None = None
+    plate_last_seen_frame: int | None = None
     body: VehicleBody | None = None
+    # Plate-under-rider overlap from the last frame where BOTH were detected,
+    # so a frame that misses one of them doesn't reset the association score.
+    association_score: float | None = None
 
     # --- filled by later phases (kept here so the shape is stable) ---
     plate_observations: list = field(default_factory=list)  # Phase 2
@@ -69,3 +76,12 @@ class VehicleTrack:
     @property
     def confirmed(self) -> bool:
         return self.state is TrackState.CONFIRMED
+
+    @property
+    def plate_visible(self) -> bool:
+        """True only if the plate was detected in the frame this track was last
+        matched on — i.e. ``plate_box`` describes pixels in the current frame."""
+        return (
+            self.plate_box is not None
+            and self.plate_last_seen_frame == self.last_seen_frame
+        )

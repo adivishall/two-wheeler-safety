@@ -172,10 +172,16 @@ class DetectionConfig:
     conf_threshold: float = 0.25  # YOLO min box confidence
     streak_threshold: int = 5  # consecutive frames to confirm a violation
     helmet_min_conf: float = 0.3  # no-helmet frame must clear this to count
+    # Helmet track-level gate (modules/temporal_eval.py): a no-helmet decision
+    # also needs >= this many frames with a rider box, this share no-helmet.
+    helmet_min_observed: int = 12
+    helmet_min_fraction: float = 0.7
     triple_min_conf: float = 0.3  # triple-riding frame must clear this
     speed_limit_kmh: float = 40.0
     max_video_width: int = 1280  # frames wider than this are downscaled
-    contradiction_iou: float = 0.1  # helmet/no-helmet overlap = same rider
+    # Photo path only (no temporal evidence): a no-helmet box overlapping ANY
+    # helmet box above this IoU abstains as a model contradiction.
+    contradiction_iou: float = 0.1
     # Detection-trace retention (Phase 12): persist the last N supporting frames
     # for each confirmed violation so a decision is reconstructable. Bounded so a
     # long video never stores every detection forever; set enabled False to skip.
@@ -196,6 +202,8 @@ class DetectionConfig:
             conf_threshold=_env_float("DETECT_CONF_THRESHOLD", 0.25),
             streak_threshold=_env_int("STREAK_THRESHOLD", 5),
             helmet_min_conf=_env_float("HELMET_MIN_CONF", 0.3),
+            helmet_min_observed=_env_int("HELMET_MIN_OBSERVED", 12),
+            helmet_min_fraction=_env_float("HELMET_MIN_FRACTION", 0.7),
             triple_min_conf=_env_float("TRIPLE_MIN_CONF", 0.3),
             speed_limit_kmh=_env_float("SPEED_LIMIT_KMH", 40.0),
             max_video_width=_env_int("MAX_VIDEO_WIDTH", 1280),

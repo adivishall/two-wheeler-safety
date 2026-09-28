@@ -85,6 +85,13 @@ class NoiseModel:
     conf_correct: float = 0.82  # mean confidence of an uncorrupted read
     conf_wrong: float = 0.62  # mean confidence of a corrupted read
     conf_jitter: float = 0.08
+    # Systematic (correlated) misreads: in this fraction of sequences one glyph
+    # is consistently read as the same look-alike on `systematic_strength` of
+    # frames — the same plate image misread the same way — which creates a
+    # persistent COMPETING plate instead of scattered junk. 0 = independent
+    # noise only (the original model).
+    systematic_rate: float = 0.0
+    systematic_strength: float = 0.5
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
@@ -130,11 +137,23 @@ def simulate_sequence(
     measurement would say so.
     """
     reads: list[FrameRead] = []
+    sys_pos, sys_alt = None, None
+    if model.systematic_rate > 0 and rng.random() < model.systematic_rate:
+        positions = [i for i, ch in enumerate(plate) if ch in CONFUSIONS]
+        if positions:
+            sys_pos = rng.choice(positions)
+            sys_alt = rng.choice(CONFUSIONS[plate[sys_pos]])
     for _ in range(n_frames):
         if rng.random() < model.miss_frame_rate:
             reads.append(FrameRead(None, 0.0))
             continue
-        text, corrupted = corrupt(plate, model, rng)
+        base_plate = plate
+        systematic = False
+        if sys_pos is not None and rng.random() < model.systematic_strength:
+            base_plate = plate[:sys_pos] + sys_alt + plate[sys_pos + 1:]
+            systematic = True
+        text, corrupted = corrupt(base_plate, model, rng)
+        corrupted = corrupted or systematic
         base = model.conf_wrong if corrupted else model.conf_correct
         conf = min(0.99, max(0.05, rng.gauss(base, model.conf_jitter)))
         reads.append(FrameRead(text, conf))
@@ -328,4 +347,131 @@ def noise_sweep(
             "EasyOCR's accuracy on real plates."
         ),
         "sweep": out,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Which stabilizer thresholds? (abstention vs wrong plates, measured)
+# ---------------------------------------------------------------------------
+
+def _stabilizer_outcomes(pairs, config) -> dict:
+    """Coverage and wrong-plate rate of one PlateConfig over ``pairs``."""
+    right = wrong = abstain = 0
+    for truth, reads in pairs:
+        stab = PlateStabilizer(config)
+        for r in reads:
+            stab.add(r.text, conf=r.confidence)
+        res = stab.result()
+        if res.stable is None:
+            abstain += 1
+        elif res.stable == truth:
+            right += 1
+        else:
+            wrong += 1
+    n = len(pairs) or 1
+    return {"coverage": round((right + wrong) / n, 4),
+            "correct_rate": round(right / n, 4),
+            # Share of ALL vehicles that would be fined against the wrong plate:
+            # the error that lands on an innocent owner.
+            "wrong_plate_rate": round(wrong / n, 4),
+            "abstain_rate": round(abstain / n, 4)}
+
+
+def stabilizer_candidates() -> list:
+    from modules.plate_recognizer import PlateConfig
+
+    out = []
+    for obs in (2, 3):
+        for agree in (0.35, 0.5):
+            for margin in (0.0, 0.1, 0.2, 0.3):
+                out.append((f"obs>={obs}, agreement>={agree}, margin>={margin}",
+                            PlateConfig(min_observations=obs, min_confidence=agree,
+                                        min_margin=margin)))
+    return out
+
+
+DESIGN_RATES = (0.04, 0.08, 0.12)  # up to the default "moderate" noise model
+SYSTEMATIC_RATES = (0.0, 0.3)  # independent noise only / 30% of plates misread consistently
+MAX_WRONG_PLATE = 0.01
+
+
+def _cond(rate: float, systematic: float) -> str:
+    return f"sub={rate:.2f},sys={systematic:.1f}"
+
+
+def stabilizer_sweep(*, rates=DEFAULT_NOISE_SWEEP, systematic=SYSTEMATIC_RATES,
+                     frames: int = 10, repeats: int = 10, seed: int = 1234) -> dict:
+    """Every candidate config at every noise condition, on identical sequences."""
+    cands = stabilizer_candidates()
+    out: dict = {}
+    for sysr in systematic:
+        for rate in rates:
+            model = NoiseModel(substitute_rate=rate, systematic_rate=sysr)
+            rng = random.Random(seed + int(rate * 1000) + int(sysr * 10))
+            pairs = [(p, simulate_sequence(p, frames, model, rng))
+                     for _ in range(repeats) for p in SAMPLE_PLATES]
+            out[_cond(rate, sysr)] = {name: _stabilizer_outcomes(pairs, cfg)
+                                      for name, cfg in cands}
+    return out
+
+
+def select_stabilizer(results: dict, *, design_rates=DESIGN_RATES,
+                      design_systematic=SYSTEMATIC_RATES,
+                      max_wrong: float = MAX_WRONG_PLATE) -> dict:
+    """Max mean coverage over the design conditions s.t. wrong-plate rate <=
+    max_wrong in every one; if none qualifies, minimum worst-case wrong rate."""
+    keys = [_cond(r, s) for s in design_systematic for r in design_rates]
+    cfgs = dict(stabilizer_candidates())
+    names = list(next(iter(results.values())))
+    table = []
+    for n in names:
+        rows = [results[k][n] for k in keys]
+        table.append({"config": n,
+                      "mean_coverage": round(sum(r["coverage"] for r in rows) / len(rows), 4),
+                      "worst_wrong_plate_rate": max(r["wrong_plate_rate"] for r in rows)})
+    for t in table:
+        t["feasible"] = t["worst_wrong_plate_rate"] <= max_wrong
+
+    def caution(t):
+        # Exact ties on the measured objectives go to the MORE conservative
+        # config (larger margin, then more observations): same measured cost,
+        # plus protection in cases the noise model does not generate (e.g. a
+        # plate read as two strings in strict alternation). Specified after the
+        # first run produced exact ties between margins 0.0 / 0.1 / 0.2.
+        c = cfgs[t["config"]]
+        return (c.min_margin, c.min_observations)
+
+    feasible = [t for t in table if t["feasible"]]
+    if feasible:
+        best = max(feasible, key=lambda t: (t["mean_coverage"], caution(t)))
+        how = "primary objective"
+    else:
+        best = min(table, key=lambda t: (t["worst_wrong_plate_rate"], -t["mean_coverage"],
+                                         tuple(-x for x in caution(t))))
+        how = "fallback: minimum worst-case wrong-plate rate; exact ties -> more conservative"
+    return {"objective": (f"max mean coverage s.t. wrong-plate rate <= {max_wrong:.0%} "
+                          f"in every design condition ({', '.join(keys)})"),
+            "table": table, "selected": best["config"], "selected_by": how}
+
+
+def stabilizer_experiment(*, dev_seed: int = 1234, test_seed: int = 5678,
+                          repeats: int = 10, frames: int = 10) -> dict:
+    """Select on one seed, report on another (the reported numbers are not the
+    ones the choice was made on)."""
+    dev = stabilizer_sweep(seed=dev_seed, repeats=repeats, frames=frames)
+    choice = select_stabilizer(dev)
+    test = stabilizer_sweep(seed=test_seed, repeats=repeats, frames=frames)
+    previous = "obs>=2, agreement>=0.35, margin>=0.0"
+    return {
+        "frames_per_sequence": frames,
+        "sequences_per_rate": repeats * len(SAMPLE_PLATES),
+        "dev_seed": dev_seed, "test_seed": test_seed,
+        "selection": choice,
+        "previous_default": previous,
+        "test": {rate: {k: v for k, v in rows.items()
+                        if k in (choice["selected"], previous)}
+                 for rate, rows in test.items()},
+        "caveat": ("Simulated character-level OCR noise (look-alike substitutions, "
+                   "drops, insertions, missed frames). Measures the decision rule, "
+                   "not EasyOCR's field accuracy."),
     }

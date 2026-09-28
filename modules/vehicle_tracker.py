@@ -51,7 +51,9 @@ DEFAULT_TRACKER_CONFIG = TrackerConfig()
 def _anchor_box(body_box: Box | None, plate_box: Box | None) -> Box:
     if body_box is not None and plate_box is not None:
         return union_box(body_box, plate_box)
-    return body_box if body_box is not None else plate_box  # one is non-None
+    anchor = body_box if body_box is not None else plate_box
+    assert anchor is not None  # association never emits an empty instance
+    return anchor
 
 
 class VehicleTracker:
@@ -161,6 +163,7 @@ class VehicleTracker:
             first_seen_frame=frame_idx,
             last_seen_frame=frame_idx,
             plate_box=plate_box,
+            plate_last_seen_frame=frame_idx if plate_box is not None else None,
             body=body,
             state=TrackState.TENTATIVE,
         )
@@ -178,6 +181,7 @@ class VehicleTracker:
         track.body = body
         if plate_box is not None:
             track.plate_box = plate_box
+            track.plate_last_seen_frame = frame_idx
         track.hits += 1
         track.age += 1
         track.time_since_update = 0

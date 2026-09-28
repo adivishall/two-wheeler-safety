@@ -332,12 +332,21 @@ def compare_configs(
         for k in ("old", "new")
     }
 
+    from modules.pipeline import PipelineConfig
+
     for sc in scenario_list:
         row: dict = {}
         for key, cfg in (("old", old), ("new", new)):
             tq = measure_tracking(sc, cfg)
             assoc = evaluate_association(sc, cfg)
-            sysm = evaluate_system(sc, config=cfg)
+            # Isolate the variable under test: the decision rule is held at a
+            # plain 3-frame streak (no helmet dwell gate) because these clips
+            # are 10-14 frames — short enough that the shipped >=12-frame gate
+            # would turn every no-helmet vehicle into a miss for BOTH configs
+            # and hide the association difference this A/B exists to measure.
+            sysm = evaluate_system(sc, pipeline_config=PipelineConfig(
+                association=cfg, confirm_window=3,
+                helmet_min_observed=0, helmet_min_fraction=0.0))
             row[key] = {
                 "tracking": tq.as_dict(),
                 "association": assoc.as_dict(),

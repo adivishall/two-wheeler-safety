@@ -1,41 +1,30 @@
-"""Video violation pipeline for the web app's video-upload route.
+"""Video violation pipeline: the I/O shell around :class:`ViolationPipeline`.
 
-Detect + track vehicles across frames, then confirm a violation over a short
-streak of frames before recording it. Packaged as a single reusable
-``process_video()`` with **per-call state** (its own tracker, streak counters,
-reported set) so it's safe to call from a web request, records fines through a
-callback instead of POSTing to itself over HTTP, and reports progress so the
-browser can show a bar.
+``process_video`` reads frames, runs the detector, and hands the raw boxes to
+:class:`modules.pipeline.ViolationPipeline`, which owns every decision
+(association, identity, temporal OCR voting, temporal confirmation, speed,
+confidence, de-duplication). This module only does the things that need pixels
+or disk: resizing, cropping plates for OCR, drawing, writing the annotated
+video, building evidence packages, and calling ``record_fn``.
 
-Association is done by :class:`~modules.vehicle_tracker.VehicleTracker`, which
-groups each frame's raw boxes into per-vehicle instances (a rider/body region
-plus its plate, matched one-to-one) and follows them across frames with stable
-IDs. This replaces the old "attribute each violation box to the nearest tracked
-plate" heuristic, which mis-assigns when bikes are close together.
+Keeping the decisions out of this file is deliberate: the model-free evaluators
+drive the *same* ``ViolationPipeline`` with synthetic detections, so the
+pipeline metrics describe the code that actually runs here.
 
-``main.py`` remains the standalone CLI; this is the library the server uses.
+State is per call (a fresh pipeline per video), so it is safe to call from a
+web request; fines are recorded through a callback, and progress is reported
+so the browser can show a bar. ``main.py`` is the standalone CLI around it.
 """
 
 import os
 import time
-from collections import deque
 
 import cv2
 
 from modules.association import DetBox
-from modules.confidence import compute_confidence, temporal_confidence
 from modules.evidence import build_evidence
-from modules.geometry import horizontal_overlap_ratio
 from modules.logging_setup import get_logger
-from modules.plate_recognizer import PlateStabilizer
-from modules.vehicle import TrackState
-from modules.vehicle_tracker import VehicleTracker
-from modules.violation_state import (
-    HelmetConfig,
-    HelmetStateMachine,
-    TripleConfig,
-    TripleRidingStateMachine,
-)
+from modules.pipeline import PipelineConfig, ViolationPipeline
 
 # Draw colors (BGR) — green for plates/helmet-on, red for violations.
 _GREEN = (0, 200, 0)
@@ -58,6 +47,21 @@ def _put_label(frame, text, org, color):
         frame, text, (int(x), int(max(0, y))),
         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA,
     )
+
+
+def _read_plate_text(reader, crop):
+    """EasyOCR a plate crop -> (joined text, weakest box confidence) or None.
+
+    detail=1 gives per-box confidence; the weakest group gates the reading, so
+    one confidently-read half of a plate can't vouch for an unreadable half."""
+    if crop is None or crop.size == 0:
+        return None
+    ocr = reader.readtext(crop, detail=1)
+    if not ocr:
+        return None
+    joined = "".join(text for _, text, _ in ocr)
+    conf = min(float(c) for _, _, c in ocr)
+    return joined, conf
 
 
 def process_video(
@@ -84,6 +88,10 @@ def process_video(
     profiler=None,
     ocr_lock_confidence=0.90,
     ocr_lock_min_observations=5,
+    conf_threshold=None,
+    helmet_min_conf=0.3,
+    triple_min_conf=0.3,
+    pipeline_config=None,
 ):
     """Detect two-wheeler violations across a video.
 
@@ -95,37 +103,43 @@ def process_video(
                       Called once per confirmed (vehicle, violation); this is how
                       a fine gets persisted. ``extra`` carries keyword-only
                       metadata (confidence, track_id, session_id,
-                      detection_trace); a recorder may ignore any it doesn't use.
+                      detection_trace, evidence); a recorder may ignore any it
+                      doesn't use.
         progress_cb:  callable(frames_done, total_frames) for a progress bar.
-        pixels_per_meter: speed calibration; speed/overspeed is skipped if None.
+        pixels_per_meter: speed calibration **in source-video pixels** (measured
+                      on an original frame). Frames wider than ``max_width`` are
+                      downscaled before processing, so the calibration is scaled
+                      by the same factor. Speed/overspeed is skipped if None.
         max_width:    frames wider than this are downscaled before processing.
-        streak_threshold: consecutive frames a violation must hold before it's
-                      recorded (filters single-frame model flicker).
+        streak_threshold: frames a violation must persist before it's recorded
+                      (filters single-frame model flicker).
+        conf_threshold: detector box-confidence floor passed to YOLO (None =
+                      the library default, 0.25).
+        helmet_min_conf / triple_min_conf: per-frame confidence a violation box
+                      must clear to count toward confirmation.
+        pipeline_config: a full :class:`PipelineConfig`; overrides the
+                      individual threshold arguments above when given.
         max_frames:   optional cap for a quick run.
 
-    Returns a summary dict: frames processed, vehicle count, output path, fps,
-    and the list of recorded violations (plate, violation, amount, evidence).
+    Returns a summary dict: frames processed, vehicles confirmed, output path,
+    source fps, *processing* fps, why processing stopped, and the list of
+    recorded violations.
     """
     from modules.profiling import NULL
     from modules.speed import SpeedEstimator
 
     prof = profiler or NULL
-    tracker = VehicleTracker()
-    speed_estimator = (
-        SpeedEstimator(pixels_per_meter=pixels_per_meter) if pixels_per_meter else None
+    cfg = pipeline_config or PipelineConfig(
+        confirm_window=streak_threshold,
+        helmet_min_conf=helmet_min_conf,
+        triple_min_conf=triple_min_conf,
+        speed_limit_kmh=speed_limit_kmh,
+        ocr_lock_confidence=ocr_lock_confidence,
+        ocr_lock_min_observations=ocr_lock_min_observations,
+        trace_max_frames=trace_max_frames,
     )
-
-    helmet_cfg = HelmetConfig(confirm_window=streak_threshold)
-    triple_cfg = TripleConfig(confirm_window=streak_threshold)
-
-    reported = set()  # (track_id, violation) already fined this run
-    streak = {}  # (track_id, violation) -> consecutive-frame count (overspeed only)
-    recorded = []  # summaries of the fines we recorded
-    stabilizers = {}  # track_id -> PlateStabilizer (temporal OCR voting)
-    helmet_sms = {}  # track_id -> HelmetStateMachine (Phase 4)
-    triple_sms = {}  # track_id -> TripleRidingStateMachine (Phase 5)
-    confirmed_ids = set()  # distinct vehicles that reached CONFIRMED
-    traces = {}  # track_id -> deque of supporting detections (Phase 12)
+    pipeline = ViolationPipeline(cfg, trace=trace_enabled)
+    recorded = []
 
     evidence_dir = os.path.dirname(output_path) or "evidence"
     os.makedirs(evidence_dir, exist_ok=True)
@@ -140,79 +154,77 @@ def process_video(
         total_frames = min(total_frames, max_frames) if total_frames else max_frames
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
 
+    # What was actually applied — stamped into every evidence package. Built
+    # from the live arguments, so evidence can never claim a threshold the run
+    # did not use (the old snapshot echoed env config the web job ignored).
+    applied = {
+        **(config_snapshot or {}),
+        **cfg.snapshot(),
+        "conf_threshold": conf_threshold if conf_threshold is not None else 0.25,
+        "max_width": max_width,
+        "pixels_per_meter_source": pixels_per_meter,
+        "source_fps": round(src_fps, 3),
+    }
+    model_kwargs = {"verbose": False}
+    if conf_threshold is not None:
+        model_kwargs["conf"] = conf_threshold
+
     writer = None
     frame_idx = 0
+    stopped = "end_of_video"
     start_wall = time.monotonic()
 
-    def confirm(track_id, violation, seen):
-        """Bump the streak for (track, violation); True once it's held for
-        streak_threshold consecutive frames."""
-        key = (track_id, violation)
-        seen.add(key)
-        streak[key] = streak.get(key, 0) + 1
-        return streak[key] >= streak_threshold
-
-    def maybe_record(track, violation, plate, original, annotated, violation_box,
-                     *, detection, association, supporting_frames, speed=None):
-        """Record a confirmed (vehicle, violation) once, with a full confidence
-        breakdown and a structured evidence package."""
-        tid = track.track_id
-        key = (tid, violation)
-        if key in reported or not plate:
-            return
-        reported.add(key)
-
-        conf = compute_confidence(
-            violation,
-            detection=detection,
-            temporal=temporal_confidence(supporting_frames, streak_threshold),
-            association=association,
-            ocr=track.plate_confidence,
-            supporting_frames=supporting_frames,
-        )
-        track.violation_history.append(conf)
-
+    def record(decision, original, annotated):
+        """Persist one decision: evidence package, then ``record_fn``."""
+        track = decision.track
         with prof.stage("evidence"):
             pkg = build_evidence(
                 evidence_dir,
-                plate=plate,
-                violation=violation,
+                plate=decision.plate,
+                violation=decision.violation,
                 original=original,
                 annotated=annotated,
-                plate_box=track.plate_box,
-                violation_box=violation_box,
-                frame_index=frame_idx,
-                track_id=tid,
-                confidence=conf.as_dict(),
-                speed=speed,
+                # A plate crop only when the plate is in THIS frame; otherwise
+                # the crop would show whatever now sits at the old location.
+                plate_box=track.plate_box if decision.plate_visible else None,
+                violation_box=decision.violation_box,
+                frame_index=decision.frame_index,
+                track_id=track.track_id,
+                confidence=decision.confidence.as_dict(),
+                speed=decision.speed,
                 model_version=model_version,
                 pipeline_version=pipeline_version,
                 source_id=source_id,
-                config_snapshot=config_snapshot,
+                config_snapshot=applied,
+                plate_votes=decision.plate_votes,
+                video_time_s=round(decision.timestamp, 3),
             )
         primary = os.path.join(evidence_dir, pkg.primary_path) if pkg.primary_path else ""
-        trace = list(traces.get(tid, [])) if trace_enabled else None
         with prof.stage("db"):
             amount = record_fn(
-                plate, violation, primary,
-                confidence=conf.final, track_id=tid,
-                session_id=session_id, detection_trace=trace,
+                decision.plate, decision.violation, primary,
+                confidence=decision.confidence.final, track_id=track.track_id,
+                session_id=session_id, detection_trace=decision.trace,
+                evidence=pkg.db_paths(),
             )
-        track.evidence_frames[violation] = pkg.metadata_path
+        track.evidence_frames[decision.violation] = pkg.metadata_path
         log.info(
             "confirmed %s for track %s (plate=%s, conf=%.2f)",
-            violation, tid, plate, conf.final,
+            decision.violation, track.track_id, decision.plate, decision.confidence.final,
         )
         recorded.append({
-            "plate": plate,
-            "violation": violation,
+            "plate": decision.plate,
+            "violation": decision.violation,
             "amount": amount,
+            "track_id": track.track_id,
+            "frame_index": decision.frame_index,
             "evidence": "/evidence/" + os.path.basename(primary) if primary else None,
             "evidence_id": pkg.evidence_id,
             "metadata": "/evidence/" + pkg.metadata_path,
-            "confidence": conf.final,
-            "confidence_breakdown": conf.as_dict(),
+            "confidence": decision.confidence.final,
+            "confidence_breakdown": decision.confidence.as_dict(),
             "plate_observations": len(track.plate_observations),
+            "plate_votes": decision.plate_votes,
         })
 
     while True:
@@ -223,15 +235,21 @@ def process_video(
         frame_idx += 1
         if max_frames and frame_idx > max_frames:
             frame_idx -= 1
+            stopped = "max_frames"
             break
 
         # Cooperative cancellation and a processing-time ceiling: stop cleanly
         # and return what was found so far rather than running unbounded.
         if cancel_check is not None and cancel_check():
+            frame_idx -= 1
+            stopped = "cancelled"
             break
         if max_seconds is not None and (time.monotonic() - start_wall) > max_seconds:
+            frame_idx -= 1
+            stopped = "time_limit"
             break
 
+        scale = 1.0
         if frame.shape[1] > max_width:
             scale = max_width / frame.shape[1]
             frame = cv2.resize(
@@ -244,166 +262,72 @@ def process_video(
             writer = cv2.VideoWriter(
                 output_path, cv2.VideoWriter_fourcc(*"avc1"), src_fps, (w, h)
             )
+            if pixels_per_meter:
+                # Calibration is measured on source frames; the estimator sees
+                # resized ones. Without this a 1920-px video processed at 1280
+                # reports every speed at 2/3 of its true value.
+                pipeline.speed_estimator = SpeedEstimator(
+                    pixels_per_meter=pixels_per_meter * scale)
+                applied["pixels_per_meter_processed"] = round(pixels_per_meter * scale, 4)
 
         # Keep the original frame untouched (clean OCR + real "original"
         # evidence); draw boxes/labels onto a copy that gets written out.
         annotated = frame.copy()
 
         with prof.stage("yolo"):
-            results = model(frame, verbose=False)[0]
+            results = model(frame, **model_kwargs)[0]
 
         dets = []
         for box in results.boxes:
             label = model.names[int(box.cls[0])]
             x1, y1, x2, y2 = map(int, box.xyxy[0])
-            conf = float(box.conf[0])
-            dets.append(DetBox(label, (x1, y1, x2, y2), conf))
+            dets.append(DetBox(label, (x1, y1, x2, y2), float(box.conf[0])))
             cv2.rectangle(annotated, (x1, y1), (x2, y2), _LABEL_COLORS.get(label, _GREEN), 2)
 
-        with prof.stage("track"):
-            tracks = tracker.update(dets, frame_idx)
-        seen = set()
+        ocr_seconds = 0.0
 
-        for track in tracks:
-            tid = track.track_id
-            if track.state is TrackState.CONFIRMED:
-                confirmed_ids.add(tid)
+        def read_plate(plate_box, _frame=frame):
+            nonlocal ocr_seconds
+            px1, py1, px2, py2 = plate_box
+            crop = _frame[max(0, py1):py2, max(0, px1):px2]
+            t0 = time.perf_counter()
+            try:
+                return _read_plate_text(reader, crop)
+            finally:
+                ocr_seconds += time.perf_counter() - t0
 
-            # ---- OCR the plate and feed the temporal stabilizer ----
-            # detail=1 gives per-box confidence; the weakest group gates the
-            # reading's confidence. The stabilizer votes across frames, so a
-            # single noisy frame can't set the plate we fine on.
-            # Skip OCR once this track's plate is locked: the temporal
-            # stabilizer already elected a high-confidence plate over enough
-            # readings, so another frame's OCR can't change the fined plate
-            # (measured ~63% of video time; this removes the redundant calls).
-            stab_existing = stabilizers.get(tid)
-            plate_locked = (
-                track.stable_plate is not None
-                and track.plate_confidence >= ocr_lock_confidence
-                and stab_existing is not None
-                and stab_existing.num_observations >= ocr_lock_min_observations
-            )
-            if track.plate_box is not None:
-                px1, py1, px2, py2 = track.plate_box
-                display = track.stable_plate  # last known, for locked frames
-                if not plate_locked:
-                    crop = frame[max(0, py1):py2, max(0, px1):px2]
-                    with prof.stage("ocr"):
-                        ocr = reader.readtext(crop, detail=1) if crop.size else []
-                    if ocr:
-                        joined = "".join(text for _, text, _ in ocr)
-                        conf = min(float(c) for _, _, c in ocr)
-                        stab = stabilizers.setdefault(tid, PlateStabilizer())
-                        stab.add(joined, conf)
-                        res = stab.result()
-                        track.stable_plate = res.stable
-                        track.plate_confidence = res.confidence
-                        track.plate_observations = stab.observations
-                        display = res.stable or res.normalized
-                # Draw the plate label every frame (locked or not) so a
-                # skipped-OCR frame is still annotated with the known plate.
-                if display:
-                    _put_label(annotated, display, (px1, py2 + 20), (255, 255, 0))
+        # Tracking + association + OCR voting + state machines, in one call.
+        # OCR time is carved out so the stages stay non-overlapping.
+        t0 = time.perf_counter()
+        step = pipeline.step(frame_idx, dets, timestamp=frame_idx / src_fps,
+                             read_plate=read_plate)
+        step_seconds = time.perf_counter() - t0
+        if profiler is not None:
+            if ocr_seconds:
+                profiler.add("ocr", ocr_seconds)
+            profiler.add("track", max(0.0, step_seconds - ocr_seconds))
 
-            # Fine only on the temporally-voted stable plate, never a raw frame.
-            plate = track.stable_plate
-
-            body = track.body
-
-            # ---- detection trace (Phase 12): record the frame's violation
-            # signal for this track so a confirmed fine is reconstructable.
-            if trace_enabled and body is not None:
-                if body.no_helmet_violation:
-                    tlabel, tconf = "WithoutHelmet", body.no_helmet_conf
-                elif body.has_triple:
-                    tlabel, tconf = "TripleRiding", body.triple_conf
-                elif body.has_helmet:
-                    tlabel, tconf = "WithHelmet", 0.0
-                else:
-                    tlabel, tconf = None, 0.0
-                if tlabel is not None:
-                    traces.setdefault(tid, deque(maxlen=trace_max_frames)).append({
-                        "track_id": tid,
-                        "label": tlabel,
-                        "confidence": round(float(tconf), 4),
-                        "box": list(track.box),
-                        "frame_index": frame_idx,
-                        "timestamp": round(frame_idx / src_fps, 3),
-                    })
-
-            # Association confidence: how well the plate sits under the rider.
-            assoc = (
-                horizontal_overlap_ratio(track.plate_box, body.box)
-                if body is not None and track.plate_box is not None
-                else 0.5
-            )
-
-            # ---- speed / overspeed (only when calibrated) ----
-            # Video time (frame_idx / fps), so a slow machine can't change the
-            # estimated speed. The estimate carries an uncertainty and is only
-            # valid after enough samples; overspeed is still temporally confirmed.
-            if speed_estimator is not None and track.plate_box is not None:
-                est = speed_estimator.estimate(tid, track.plate_box, frame_idx / src_fps)
-                if est.valid and est.kmh > speed_limit_kmh:
-                    _put_label(
-                        annotated, f"{est.kmh:.0f}+-{est.uncertainty:.0f} km/h",
-                        (track.plate_box[0], track.plate_box[1] - 10), _RED,
-                    )
-                    track.overspeed_state = "candidate"
-                    if confirm(tid, "overspeed", seen):
-                        track.overspeed_state = "confirmed"
-                        # margin over the limit as the detection score; speed is
-                        # measured on the plate itself, so association is 1.0.
-                        margin = (est.kmh - speed_limit_kmh) / max(1, speed_limit_kmh)
-                        maybe_record(track, "overspeed", plate, frame, annotated,
-                                     track.plate_box, detection=margin, association=1.0,
-                                     supporting_frames=streak.get((tid, "overspeed"), 0),
-                                     speed={"kmh": est.kmh, "uncertainty": est.uncertainty,
-                                            "limit": speed_limit_kmh})
-
-            # ---- helmet: temporal state machine (Phase 4) ----
-            hsm = helmet_sms.setdefault(tid, HelmetStateMachine(helmet_cfg))
-            hstate = hsm.update(
-                has_helmet=bool(body and body.has_helmet),
-                has_no_helmet=bool(body and body.no_helmet_violation),
-                no_helmet_conf=body.no_helmet_conf if body else 0.0,
-                ambiguous=bool(body and body.ambiguous_helmet),
-                frame_idx=frame_idx,
-            )
-            track.helmet_state = hstate.value
+        for tf in step.tracks:
+            track, body = tf.track, tf.track.body
+            if tf.plate_visible and tf.plate_label:
+                px1, _, _, py2 = track.plate_box
+                _put_label(annotated, tf.plate_label, (px1, py2 + 20), (255, 255, 0))
+            if tf.over_limit and tf.speed is not None:
+                _put_label(
+                    annotated, f"{tf.speed.kmh:.0f}+-{tf.speed.uncertainty:.0f} km/h",
+                    (track.plate_box[0], track.plate_box[1] - 10), _RED,
+                )
             if body is not None:
                 bx1, by1 = body.box[0], body.box[1]
                 if body.ambiguous_helmet:
                     _put_label(annotated, "Ambiguous helmet", (bx1, by1 - 10), _AMBER)
                 elif body.no_helmet_violation:
                     _put_label(annotated, "No Helmet!", (bx1, by1 - 10), _RED)
-            if hsm.confirmed and body is not None:
-                # Record once the state machine has confirmed; retries each frame
-                # until the plate is readable, then maybe_record dedups.
-                maybe_record(track, "no_helmet", plate, frame, annotated, body.box,
-                             detection=hsm.best_conf, association=assoc,
-                             supporting_frames=hsm.supporting_frames)
+                if body.has_triple:
+                    _put_label(annotated, "Triple Riding!", (bx1, by1 - 28), _RED)
 
-            # ---- triple riding: temporal state machine (Phase 5) ----
-            tsm = triple_sms.setdefault(tid, TripleRidingStateMachine(triple_cfg))
-            tstate = tsm.update(
-                has_triple=bool(body and body.has_triple),
-                conf=body.triple_conf if body else 0.0,
-                frame_idx=frame_idx,
-            )
-            track.triple_state = tstate.value
-            if body is not None and body.has_triple:
-                _put_label(annotated, "Triple Riding!", (body.box[0], body.box[1] - 28), _RED)
-            if tsm.confirmed and body is not None:
-                maybe_record(track, "triple_riding", plate, frame, annotated, body.box,
-                             detection=tsm.best_conf, association=assoc,
-                             supporting_frames=tsm.frames_observed)
-
-        # reset streaks for (track, violation) pairs not seen this frame
-        for key in list(streak):
-            if key not in seen:
-                streak[key] = 0
+        for decision in step.decisions:
+            record(decision, frame, annotated)
 
         with prof.stage("encode"):
             writer.write(annotated)
@@ -411,23 +335,35 @@ def process_video(
         if progress_cb and frame_idx % 5 == 0:
             progress_cb(frame_idx, total_frames)
 
-    prof.set_wall(time.monotonic() - start_wall)
+    wall = time.monotonic() - start_wall
+    prof.set_wall(wall)
     cap.release()
     if writer:
         writer.release()
     if progress_cb:
         progress_cb(frame_idx, total_frames or frame_idx)
 
+    held = pipeline.unfined_confirmations()
     log.info(
-        "video done: %d frames, %d vehicle(s) confirmed, %d violation(s) recorded",
-        frame_idx, len(confirmed_ids), len(recorded),
+        "video done (%s): %d frames, %d vehicle(s) confirmed, %d violation(s) "
+        "recorded, %d confirmed but not fined (no stable plate)",
+        stopped, frame_idx, len(pipeline.confirmed_track_ids), len(recorded), len(held),
     )
     summary = {
         "frames": frame_idx,
-        "plates_tracked": len(confirmed_ids),
+        "plates_tracked": len(pipeline.confirmed_track_ids),
+        # Source video frame rate (kept under the historical key). NOT how fast
+        # this run processed — that is processing_fps.
         "fps": round(src_fps, 1),
+        "source_fps": round(src_fps, 3),
+        "processing_fps": round(frame_idx / wall, 2) if wall > 0 else None,
+        "wall_seconds": round(wall, 3),
+        "stopped_reason": stopped,
         "output": "/evidence/" + os.path.basename(output_path),
         "violations": recorded,
+        "unfined_confirmations": held,
+        "suppressed_duplicates": pipeline.suppressed_duplicates,
+        "ocr_calls": pipeline.ocr_calls,
     }
     profile = prof.summary()
     if profile:  # only present when a real profiler was passed (benchmark)

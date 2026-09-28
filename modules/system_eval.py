@@ -10,10 +10,13 @@ different, harder question the spec insists on separating:
 To isolate *pipeline logic* from *detector quality*, the input is synthetic:
 each scenario is a list of frames, each frame a list of :class:`VehicleFrame`
 (the detections belonging to one ground-truth vehicle that frame, plus the OCR
-text of its plate). The detections are fed through the **real** runtime code —
-`VehicleTracker`, `associate`, `PlateStabilizer`, the helmet/triple state
-machines, and `compute_confidence` — so what is measured is exactly the logic
-that runs in production, not a re-implementation.
+text of its plate). The detections are fed through
+:class:`modules.pipeline.ViolationPipeline` — the *same object* the video job
+runs per frame, with the same defaults — so what is measured is the shipped
+decision logic, not a re-implementation of it. The only substitutions are the
+inputs: synthetic boxes instead of YOLO, and a plate-box -> text lookup
+instead of EasyOCR (called only for a plate box detected that frame, exactly
+as production crops only a fresh box).
 
 Three evaluations, deliberately distinct from YOLO metrics:
 
@@ -34,14 +37,13 @@ from dataclasses import dataclass
 
 from modules.association import DEFAULT_CONFIG, AssociationConfig, DetBox, associate
 from modules.geometry import Box, intersection_area, union_box
-from modules.plate_recognizer import PlateStabilizer
+from modules.pipeline import DEFAULT_PIPELINE_CONFIG, PipelineConfig, ViolationPipeline
 from modules.vehicle_tracker import VehicleTracker
-from modules.violation_state import (
-    HelmetConfig,
-    HelmetStateMachine,
-    TripleConfig,
-    TripleRidingStateMachine,
-)
+
+# Frame rate the synthetic scenarios are played at (only matters for speed).
+SCENARIO_FPS = 25.0
+# OCR confidence every synthetic reading carries.
+SCENARIO_OCR_CONF = 0.9
 
 BODY_LABELS = ("WithHelmet", "WithoutHelmet", "TripleRiding")
 
@@ -213,6 +215,26 @@ class TrackingMetrics:
         return d
 
 
+def _match_tracks_to_gt(tracks, gt_boxes: dict, min_iou: float = 0.1) -> dict:
+    """Hungarian assignment of this frame's tracks to GT vehicles on 1 - IoU;
+    pairs below ``min_iou`` stay unmatched. Returns ``{gt_id: track_id}``."""
+    from modules.association import gated_min_cost_matching
+    from modules.geometry import iou
+
+    gts = sorted(gt_boxes)
+    if not tracks or not gts:
+        return {}
+    big = 1e9
+    cost = []
+    for tr in tracks:
+        row = []
+        for g in gts:
+            v = iou(tr.box, gt_boxes[g])
+            row.append(1.0 - v if v >= min_iou else big)
+        cost.append(row)
+    return {gts[c]: tracks[r].track_id for r, c in gated_min_cost_matching(cost, gate=big)}
+
+
 def evaluate_tracking(
     scenario: Scenario, config: AssociationConfig = DEFAULT_CONFIG
 ) -> TrackingMetrics:
@@ -233,16 +255,16 @@ def evaluate_tracking(
 
         tracks = tracker.update(dets, frame_idx)
 
-        # Map each track seen this frame to a gt.
-        covered: dict = {}  # gt_id -> track_id
         for tr in tracks:
             gt = _owner_by_overlap(tr.box, gt_boxes)
             track_gt_votes.setdefault(tr.track_id, {})
             track_gt_votes[tr.track_id][gt] = (
                 track_gt_votes[tr.track_id].get(gt, 0) + 1
             )
-            if gt is not None:
-                covered[gt] = tr.track_id  # last writer wins; scenarios avoid ties
+        # One-to-one track<->gt matching per frame (CLEAR-MOT style), so two
+        # tracks overlapping one rider can't both "cover" it and a crossing
+        # isn't scored by whichever track happened to be written last.
+        covered = _match_tracks_to_gt(tracks, gt_boxes)
 
         for gt in present:
             if gt in covered:
@@ -299,8 +321,8 @@ class SystemMetrics:
         return d
 
 
-# body-label -> violation key mapping
 def _violation_signals(body) -> dict:
+    """Body-level violation flags (kept for callers that inspect a body)."""
     return {
         "has_helmet": body.has_helmet,
         "has_no_helmet": body.has_no_helmet,
@@ -311,68 +333,77 @@ def _violation_signals(body) -> dict:
     }
 
 
+def scenario_plate_reader(frame):
+    """A ``read_plate`` for one synthetic frame: the text of the vehicle whose
+    plate box this is, or None if that vehicle's plate was unreadable."""
+    texts = {
+        d.box: vf.plate_text
+        for vf in frame for d in vf.dets if d.label == "Plate"
+    }
+
+    def read(plate_box):
+        text = texts.get(tuple(plate_box))
+        return (text, SCENARIO_OCR_CONF) if text else None
+
+    return read
+
+
+def run_scenario(scenario: Scenario, config: PipelineConfig = DEFAULT_PIPELINE_CONFIG):
+    """Drive the shipped pipeline over a scenario.
+
+    Returns ``(pipeline, fines, track_gt_votes)`` where ``fines`` is the list of
+    ``(track_id, violation, plate)`` the pipeline decided to record and
+    ``track_gt_votes`` maps each track to the GT vehicles it overlapped.
+    """
+    pipe = ViolationPipeline(config)
+    track_gt_votes: dict = {}
+    fines: list = []
+    for frame_idx, frame in enumerate(scenario.frames):
+        dets, _ = _flatten(frame)
+        gt_boxes = _gt_boxes(frame)
+        res = pipe.step(
+            frame_idx, dets, timestamp=frame_idx / SCENARIO_FPS,
+            read_plate=scenario_plate_reader(frame),
+        )
+        for tf in res.tracks:
+            gt = _owner_by_overlap(tf.track.box, gt_boxes)
+            votes = track_gt_votes.setdefault(tf.track.track_id, {})
+            votes[gt] = votes.get(gt, 0) + 1
+        for d in res.decisions:
+            fines.append((d.track.track_id, d.violation, d.plate))
+    return pipe, fines, track_gt_votes
+
+
+def majority_gt(votes: dict):
+    """The GT vehicle a track spent most frames on (ties -> higher id)."""
+    if not votes:
+        return None
+    return max(votes, key=lambda g: (votes[g], g if g is not None else -1))
+
+
 def evaluate_system(
     scenario: Scenario,
     *,
-    confirm_window: int = 3,
+    confirm_window: int | None = None,
     config: AssociationConfig = DEFAULT_CONFIG,
+    pipeline_config: PipelineConfig | None = None,
 ) -> SystemMetrics:
-    """Drive the full pipeline logic and score emitted fines against GT."""
+    """Drive the shipped pipeline and score the fines it emits against GT.
+
+    ``confirm_window`` defaults to the shipped value (``PipelineConfig``), so
+    the headline numbers describe what production does.
+    """
     m = SystemMetrics(scenario=scenario.name)
     gt_by_id = scenario.gt_by_id
     for v in scenario.vehicles:
         m.expected_fines += len(v.violations)
 
-    tracker = VehicleTracker(config=config)
-    helmet_sms: dict = {}
-    triple_sms: dict = {}
-    stabilizers: dict = {}
-    track_gt_votes: dict = {}
-    emitted: set = set()  # (track_id, violation) already fined
-    fines: list = []  # (track_id, violation, plate_string)
+    cfg = pipeline_config or PipelineConfig(association=config)
+    if confirm_window is not None:
+        from dataclasses import replace
 
-    for frame_idx, frame in enumerate(scenario.frames):
-        dets, _ = _flatten(frame)
-        gt_boxes = _gt_boxes(frame)
-        # gt_id -> its plate OCR text this frame
-        plate_texts = {vf.gt_id: vf.plate_text for vf in frame}
-
-        tracks = tracker.update(dets, frame_idx)
-        for tr in tracks:
-            tid = tr.track_id
-            gt = _owner_by_overlap(tr.box, gt_boxes)
-            track_gt_votes.setdefault(tid, {})
-            track_gt_votes[tid][gt] = track_gt_votes[tid].get(gt, 0) + 1
-
-            hsm = helmet_sms.setdefault(
-                tid, HelmetStateMachine(HelmetConfig(confirm_window=confirm_window)))
-            tsm = triple_sms.setdefault(
-                tid, TripleRidingStateMachine(TripleConfig(confirm_window=confirm_window)))
-            stab = stabilizers.setdefault(tid, PlateStabilizer())
-
-            if gt is not None and plate_texts.get(gt):
-                stab.add(plate_texts[gt], conf=0.9)
-
-            if tr.body is not None:
-                sig = _violation_signals(tr.body)
-                hsm.update(
-                    has_helmet=sig["has_helmet"], has_no_helmet=sig["has_no_helmet"],
-                    no_helmet_conf=sig["no_helmet_conf"], ambiguous=sig["ambiguous"],
-                    frame_idx=frame_idx,
-                )
-                tsm.update(
-                    has_triple=sig["has_triple"], conf=sig["triple_conf"],
-                    frame_idx=frame_idx,
-                )
-
-            stable = stab.result().stable
-            if stable:
-                if hsm.confirmed and (tid, "no_helmet") not in emitted:
-                    emitted.add((tid, "no_helmet"))
-                    fines.append((tid, "no_helmet", stable))
-                if tsm.confirmed and (tid, "triple_riding") not in emitted:
-                    emitted.add((tid, "triple_riding"))
-                    fines.append((tid, "triple_riding", stable))
+        cfg = replace(cfg, confirm_window=confirm_window)
+    _pipe, fines, track_gt_votes = run_scenario(scenario, cfg)
 
     # Score fines against GT.
     m.emitted_fines = len(fines)
@@ -382,9 +413,7 @@ def evaluate_system(
         if (tid, violation) in seen:
             m.duplicates += 1
         seen.add((tid, violation))
-        votes = track_gt_votes.get(tid, {})
-        gt_id = max(votes, key=lambda g: (votes[g], g if g is not None else -1)) \
-            if votes else None
+        gt_id = majority_gt(track_gt_votes.get(tid, {}))
         gt = gt_by_id.get(gt_id)
         if gt is None or violation not in gt.violations:
             # attributed to a vehicle that shouldn't have this violation
@@ -394,6 +423,12 @@ def evaluate_system(
             continue
         if plate != gt.plate:
             m.wrong_plate += 1
+            m.false_positives += 1
+            continue
+        if (gt_id, violation) in matched_expected:
+            # a second track fined the same vehicle for the same violation
+            # (identity split): a duplicate fine, not a second true positive.
+            m.duplicates += 1
             m.false_positives += 1
             continue
         m.true_positives += 1
@@ -415,8 +450,15 @@ def _linear(box0: Box, dx: int, dy: int, frame: int) -> Box:
     return (x1 + dx * frame, y1 + dy * frame, x2 + dx * frame, y2 + dy * frame)
 
 
+# Frames a scenario vehicle stays in view: ~1.2 s at 25 fps. The shipped helmet
+# rule needs >= 12 observed frames (modules/temporal_eval.py), so the old
+# 8-10-frame clips (0.3-0.4 s) could no longer exercise it; a realistic dwell
+# does, and `brief_pass` keeps the short-dwell case visible as a known miss.
+DWELL = 30
+
+
 def _single_vehicle_scenario(
-    name, gt_id, plate, body_label, violations, *, n=8, box0=(100, 100, 160, 200),
+    name, gt_id, plate, body_label, violations, *, n=DWELL, box0=(100, 100, 160, 200),
     dx=6, plate_from=0, plate_offset=(10, 205, 50, 235),
 ) -> Scenario:
     frames = []
@@ -448,9 +490,11 @@ def builtin_scenarios() -> list:
     scenarios.append(_single_vehicle_scenario(
         "single_triple", 1, "KA05MN6789", "TripleRiding", {"triple_riding"}))
 
-    # 3. plate appears late (frame 4) — fine must still land once readable.
+    # 3. plate first readable at frame 15, after the helmet decision has
+    # confirmed: the confirmed violation must be HELD, then fined once the
+    # plate stabilises — never fined against no plate, never dropped.
     scenarios.append(_single_vehicle_scenario(
-        "late_plate", 1, "MH12AB1234", "WithoutHelmet", {"no_helmet"}, plate_from=4))
+        "late_plate", 1, "MH12AB1234", "WithoutHelmet", {"no_helmet"}, plate_from=15))
 
     # 4. clean helmeted rider — must NOT be fined.
     scenarios.append(_single_vehicle_scenario(
@@ -473,19 +517,20 @@ def builtin_scenarios() -> list:
         "two_adjacent",
         [GTVehicle(1, "MH12AB1234", frozenset({"no_helmet"})),
          GTVehicle(2, "KA05MN6789", frozenset())],
-        [_two_vehicle_frame(f, bikeA, bikeB) for f in range(8)],
+        [_two_vehicle_frame(f, bikeA, bikeB) for f in range(DWELL)],
     ))
 
-    # 6. crossing bikes: A moves right, B moves left, they cross mid-scene.
+    # 6. crossing bikes: A moves right, B moves left, they cross mid-scene
+    # (around frame 19).
     def crossA(f):
-        body = _linear((100, 100, 150, 200), 20, 0, f)
-        plate = _linear((105, 205, 140, 235), 20, 0, f)
+        body = _linear((100, 100, 150, 200), 8, 0, f)
+        plate = _linear((105, 205, 140, 235), 8, 0, f)
         return VehicleFrame(1, [DetBox("WithoutHelmet", body, 0.9),
                                 DetBox("Plate", plate, 0.9)], "MH12AB1234")
 
     def crossB(f):
-        body = _linear((400, 100, 450, 200), -20, 0, f)
-        plate = _linear((405, 205, 440, 235), -20, 0, f)
+        body = _linear((400, 100, 450, 200), -8, 0, f)
+        plate = _linear((405, 205, 440, 235), -8, 0, f)
         return VehicleFrame(2, [DetBox("TripleRiding", body, 0.9),
                                 DetBox("Plate", plate, 0.9)], "KA05MN6789")
 
@@ -493,7 +538,7 @@ def builtin_scenarios() -> list:
         "crossing",
         [GTVehicle(1, "MH12AB1234", frozenset({"no_helmet"})),
          GTVehicle(2, "KA05MN6789", frozenset({"triple_riding"}))],
-        [_two_vehicle_frame(f, crossA, crossB) for f in range(10)],
+        [_two_vehicle_frame(f, crossA, crossB) for f in range(DWELL)],
     ))
 
     # 7. three bikes side by side, middle one no-helmet.
@@ -516,12 +561,12 @@ def builtin_scenarios() -> list:
         [GTVehicle(1, "MH12AB1234", frozenset()),
          GTVehicle(2, "KA05MN6789", frozenset({"no_helmet"})),
          GTVehicle(3, "DL8CAF5031", frozenset())],
-        [three(f) for f in range(8)],
+        [three(f) for f in range(DWELL)],
     ))
 
     # 8. occlusion: a no-helmet rider vanishes for 2 frames then returns.
     def occ(f):
-        if f in (4, 5):  # occluded — no detections
+        if f in (12, 13):  # occluded — no detections
             return []
         body = _linear((100, 100, 150, 200), 6, 0, f)
         plate = _linear((105, 205, 140, 235), 6, 0, f)
@@ -531,7 +576,30 @@ def builtin_scenarios() -> list:
     scenarios.append(Scenario(
         "occlusion",
         [GTVehicle(1, "MH12AB1234", frozenset({"no_helmet"}))],
-        [occ(f) for f in range(10)],
+        [occ(f) for f in range(DWELL)],
+    ))
+
+    # 9. a no-helmet rider in view for only 8 frames (0.3 s). The shipped rule
+    # needs 12 observed frames, so this is a MISS BY DESIGN — the price of the
+    # false-flag protection measured in temporal_eval. Kept in the suite so the
+    # headline recall carries that cost instead of hiding it.
+    scenarios.append(_single_vehicle_scenario(
+        "brief_pass", 1, "MH12AB1234", "WithoutHelmet", {"no_helmet"}, n=8))
+
+    # 10. the rider leaves view for 20 frames (> the tracker's 15-frame max_age)
+    # and comes back as a NEW track. Exactly one fine, not two.
+    def reenter(f):
+        if 30 <= f < 50:
+            return []
+        x = 100 + 3 * (f % 50)
+        return [VehicleFrame(1, [DetBox("WithoutHelmet", (x, 100, x + 50, 200), 0.9),
+                                 DetBox("Plate", (x + 5, 205, x + 40, 235), 0.9)],
+                             "MH12AB1234")]
+
+    scenarios.append(Scenario(
+        "reappears_after_exit",
+        [GTVehicle(1, "MH12AB1234", frozenset({"no_helmet"}))],
+        [reenter(f) for f in range(80)],
     ))
 
     return scenarios

@@ -195,6 +195,10 @@ def parse_args(argv=None):
                           "character noise (no OCR engine or data needed)")
     ap.add_argument("--sweep", action="store_true",
                     help="with --simulate, sweep the character substitution rate")
+    ap.add_argument("--policy-sweep", action="store_true",
+                    help="with --simulate, choose the stabilizer thresholds "
+                         "(agreement / margin / observations): selected on a dev "
+                         "seed, reported on another, written as Markdown too")
     ap.add_argument("--pipeline", default="none", choices=sorted(PIPELINES),
                     help="preprocessing pipeline to use (default: none)")
     ap.add_argument("--compare-preprocess", action="store_true",
@@ -216,6 +220,15 @@ def main(argv=None) -> int:
             "mode": "simulate",
             "default_noise": report.as_dict(),
         }
+        if args.policy_sweep:
+            from modules.ocr_temporal_eval import stabilizer_experiment
+
+            exp = stabilizer_experiment()
+            payload["stabilizer_selection"] = exp
+            sel = exp["selection"]
+            print(f"\n=== stabilizer thresholds: selected {sel['selected']} "
+                  f"({sel['selected_by']}) ===")
+            _write_stabilizer_md(args, exp)
         if args.sweep:
             payload["noise_sweep"] = noise_sweep()
             print("\n=== substitution-rate sweep ===")
@@ -286,6 +299,47 @@ def main(argv=None) -> int:
         payload["best_pipeline"] = ranked[0][0]
 
     return _write(args, payload, "ocr_eval")
+
+
+def _write_stabilizer_md(args, exp: dict) -> None:
+    sel = exp["selection"]
+    lines = [
+        "# OCR stabilizer thresholds — selection experiment", "",
+        f"> {exp['caveat']}", "",
+        f"- {exp['sequences_per_rate']} simulated plate sequences per condition, "
+        f"{exp['frames_per_sequence']} frames each; selected on seed {exp['dev_seed']}, "
+        f"reported on seed {exp['test_seed']}.",
+        f"- Objective: {sel['objective']}; if none qualifies, minimise the worst-case "
+        "wrong-plate rate (ties -> coverage; exact ties on both -> the more "
+        "conservative config: larger margin, then more observations).",
+        "- `sys` = share of plates whose sequences contain a *consistent* look-alike "
+        "misread (the same glyph misread the same way on half the frames).",
+        "- wrong-plate rate = share of ALL vehicles fined against a plate that is not "
+        "theirs. coverage = share for which any plate is elected.",
+        "", f"**Selected: `{sel['selected']}`** ({sel['selected_by']}); previous default "
+        f"`{exp['previous_default']}`.", "",
+        "## Selection (dev seed)", "",
+        "| config | mean coverage | worst wrong-plate rate | meets target |",
+        "|---|---:|---:|---|",
+    ]
+    for t in sorted(sel["table"], key=lambda t: (t["worst_wrong_plate_rate"],
+                                                  -t["mean_coverage"])):
+        lines.append(f"| `{t['config']}` | {t['mean_coverage']:.3f} | "
+                     f"{t['worst_wrong_plate_rate']:.1%} | "
+                     f"{'yes' if t['feasible'] else 'no'} |")
+    lines += ["", "## Held-out seed", "",
+              "| condition | config | coverage | correct | wrong plate | abstain |",
+              "|---|---|---:|---:|---:|---:|"]
+    for cond, rows in exp["test"].items():
+        for name, m in rows.items():
+            lines.append(f"| {cond} | `{name}` | {m['coverage']:.3f} | "
+                         f"{m['correct_rate']:.3f} | {m['wrong_plate_rate']:.1%} | "
+                         f"{m['abstain_rate']:.3f} |")
+    os.makedirs(args.out, exist_ok=True)
+    path = os.path.join(args.out, "ocr_stabilizer_selection.md")
+    with open(path, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    print(f"wrote {path}")
 
 
 def _write(args, payload: dict, default_stem: str) -> int:

@@ -77,6 +77,17 @@ class EvidencePackage:
         """The image a fine record points at (annotated frame if we have it)."""
         return self.annotated_path or self.violation_crop_path or self.original_path
 
+    def db_paths(self) -> dict:
+        """The package's files in the shape ``Database.record_fine(evidence=)``
+        stores, so the DB row links to the sidecar (hashes, model version,
+        confidence breakdown) and not just to one image."""
+        return {
+            "original_path": self.original_path,
+            "annotated_path": self.primary_path,
+            "plate_crop_path": self.plate_crop_path,
+            "metadata_path": self.metadata_path,
+        }
+
 
 def build_evidence(
     evidence_root: str,
@@ -96,6 +107,8 @@ def build_evidence(
     pipeline_version: str | None = None,
     config_snapshot: dict | None = None,
     source_id: str | None = None,
+    plate_votes: dict | None = None,
+    video_time_s: float | None = None,
 ) -> EvidencePackage:
     """Write an evidence package and return the paths (as basenames)."""
     os.makedirs(evidence_root, exist_ok=True)
@@ -139,12 +152,14 @@ def build_evidence(
         "violation": violation,
         "track_id": track_id,
         "frame_index": frame_index,
+        "video_time_s": video_time_s,
         "timestamp": ts.isoformat(),
         "model_version": model_version,
         "pipeline_version": pipeline_version,
         "source_id": source_id,
         "config_snapshot": config_snapshot,
         "confidence": confidence,
+        "plate_votes": plate_votes,
         "speed": speed,
         "files": files,
         "hashes": hashes,
