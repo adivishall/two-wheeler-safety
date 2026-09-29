@@ -279,7 +279,7 @@ per sequence, with whole cameras held out, and an export that refuses any image
 that is — or copies — evaluation data. A harness that runs the shipped pipeline
 over labelled footage and charges every wrong fine to the first stage that
 failed, per condition. On the real still images I could stratify the detector
-by measured conditions: 27 comparisons, 9 significant on val, 2 replicated on
+by measured conditions: 25 comparisons, 11 significant on val, 2 replicated on
 test — and one of those rests on 3 test images. That taught me to require
 replication before calling anything a finding.
 

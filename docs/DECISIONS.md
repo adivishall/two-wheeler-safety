@@ -338,10 +338,12 @@ freshness interlock is a safety rule rather than a tuned threshold.
 ## 25. Field data is split by group, frozen, and guarded on the way to training
 
 **Decision.** Field splits are assigned to sequences (or camera-days), never
-frames; whole cameras are EXTERNAL, named before their footage is used; the
-assignment is frozen in a hash-checked lock. Training data leaves only through
-an export that checks every image against evaluation data by group, SHA-256 and
-perceptual hash, and the trainer runs the same guard.
+frames; whole cameras are EXTERNAL, named before their footage is used; the lock
+records every sequence's split and refuses renamed, removed or re-grouped
+sequences; it accumulates the byte hash of every evaluation file. Training data
+leaves only through an export that checks every image against evaluation data by
+path, byte hash (including history) and object-crop perceptual hash, and the
+trainer runs the same guard over `train` and `val`, failing if it checks nothing.
 
 **Why.** Frames of one sequence are near-duplicates, so a frame-level split
 leaks by construction; the master dataset already showed 8–10% of held-out

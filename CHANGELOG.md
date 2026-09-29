@@ -44,6 +44,10 @@ traffic-camera evidence ([docs/FIELD_EVALUATION.md](docs/FIELD_EVALUATION.md),
   already-calibrated scores (AUDIT W1); now out of fold with a Brier CI.
 - Committed results carried absolute local paths (W2); `make eval-compare`
   selected on test and `make eval-ocr` dropped the threshold selection (W3).
+- Before release, an independent review of this layer found ten defects (AUDIT
+  V1–V10) — among them a split lock that a renamed sequence could slip past, a
+  trainer guard that passed image lists unchecked, and a scorer that let a
+  wrong-plate fine hide behind a correct one. All fixed with regression tests.
 
 ## [1.1.0] — 2026-09-28 — audit, shared decision core, decisions by experiment
 

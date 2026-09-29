@@ -97,8 +97,8 @@ compute, which is why the order is what it is.
 
 - **Problem.** The one data-cleaning experiment is undecided: v2 leads the v1
   recipe mean but with 2 vs 1 seeds.
-- **Evidence.** `recipe_comparison_val.md`: mAP@50 +0.041 [−0.013, +0.107],
-  WithoutHelmet +0.042 [−0.001, +0.081]; v1's checkpoint is its better seed.
+- **Evidence.** `recipe_comparison_val.md`: mAP@50 +0.041 [−0.035, +0.117],
+  WithoutHelmet +0.042 [+0.005, +0.079]; v1's checkpoint is its better seed.
 - **Hypothesis.** De-duplication improves WithoutHelmet without costing Plate.
 - **Implementation.** Train v1 seed 2 and v2 seeds 1–2 (identical args except
   data and seed); `compare_recipes.py` on val; report the winner on test once.

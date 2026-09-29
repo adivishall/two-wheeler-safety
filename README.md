@@ -153,8 +153,8 @@ is the loop that answers it ([docs/FIELD_EVALUATION.md](docs/FIELD_EVALUATION.md
   plate crops, and the shipped pipeline over labelled sequences per condition,
   with every missed or wrong fine charged to the first stage that failed.
   **NOT MEASURED** until footage exists.
-- **The detector by measured condition, on the real images**: of 27 per-class
-  comparisons, 2 replicated on test — and one of those rests on 3 test images.
+- **The detector by measured condition, on the real images**: of 25 per-class
+  comparisons, 11 cleared 95% on val and 2 replicated on test — and one of those rests on 3 test images.
   Multi-rider scenes look harder for no-helmet on val (AP 0.56 vs 0.84) but not
   on test: a lead, not a result.
 - **Reviews as labels**: a dismissal records the failing stage and the true
@@ -165,7 +165,7 @@ is the loop that answers it ([docs/FIELD_EVALUATION.md](docs/FIELD_EVALUATION.md
   50-image *blind*, uniform-random audit of held-out labels — the model never
   chooses which evaluation labels get fixed.
 - **Recipes compared by seed means**: v2 (de-duplicated data) leads the v1
-  recipe by +0.041 mAP@50 [−0.013, +0.107] with 2 vs 1 seeds — no verdict yet.
+  recipe by +0.041 mAP@50 [−0.035, +0.117] with 2 vs 1 seeds — no verdict yet.
   No model was retrained: the weaknesses found need new labels, not new runs.
 
 ## What the audit found
@@ -222,7 +222,7 @@ applied, and a live SHA-256 check of its evidence files.
 ## Evaluate it
 
 ```bash
-pytest                                   # 692 tests, model-free, ~95% branch coverage of modules/
+pytest                                   # 712 tests, model-free, ~95% branch coverage of modules/
 python3 evaluate_pipeline.py             # pipeline metrics, error budget (no weights)
 python3 evaluate_temporal.py             # temporal-rule experiment (no weights)
 python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results --name ocr_policy_simulation

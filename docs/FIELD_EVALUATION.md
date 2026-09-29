@@ -60,19 +60,37 @@ worth knowing.
 *groups* — a sequence, or with `--group-by camera_day` a camera's whole day —
 never to frames (frames of a sequence are near-duplicates). `external` is whole
 cameras, named up front: viewpoints the system was never developed on. New
-groups are placed by a salted hash, so adding data never reshuffles old data;
-assignments are frozen in `splits.lock.json` (hash-checked — a hand edit is
-refused), never move when ratios change, and a camera can't be declared
-external after its footage was used.
+groups are placed by a salted hash, so adding data never reshuffles old data.
+The lock (`splits.lock.json`, hash-checked — a hand edit is refused) records
+every *sequence's* split: a locked sequence that is renamed, removed, or
+re-grouped (its camera or date edited) stops everything rather than being
+re-hashed into development. A camera can't be declared external after its
+footage was used.
 
 **Evaluation data cannot become training data.** Field training data leaves
 only through `export_training`: development frames, label-confidence floor,
-rejected labels dropped — and first, every image is checked against the
-evaluation splits three ways (group, SHA-256, perceptual hash ≤ 5 bits), because
-each alone has a hole (a copied file, a re-encode). `train_traffic.py
---field-dataset DIR` runs the same guard over any training config before
-training starts (exit 3 on a leak). Every export records the lock hash and a
-fingerprint of the evaluation side.
+rejected labels dropped, frames with a rider of unknown helmet state skipped
+whole (dropping just that box would teach it as background). First, every image
+is checked against evaluation data, because each check alone has a hole:
+
+- it is not an evaluation file — any labelled frame *or any image in an
+  evaluation sequence's frame directory*;
+- its bytes match no evaluation file the lock has ever recorded — the lock
+  appends the SHA-256 of every evaluation file, so a renamed copy, or a copy of
+  a since-deleted original, is still caught; an evaluation frame that is
+  missing and was never hashed fails the check closed;
+- its objects don't all reappear, at the same places with near-identical crops,
+  in one evaluation frame (a re-encode or resize). The perceptual check works on
+  object crops, not whole frames: whole-frame hashes match any two moments of a
+  fixed camera through the shared background.
+
+`train_traffic.py --field-dataset DIR` runs the same guard over every image a
+YOLO config trains on *or selects checkpoints with* (`train` and `val`; image
+directories, `.txt` image lists, or lists of either) before training starts, and
+a guard that finds nothing to check fails (exit 3). Every export records the
+lock hash and a fingerprint of the evaluation side. Frames extracted from an
+evaluation *video* are covered only once labelled; exporting them some other way
+is outside what the guard can see.
 
 ```bash
 python3 field_dataset.py validate data/field --check-files
@@ -117,8 +135,9 @@ check it takes the blame (`tests/test_field_eval.py`).
 
 `evaluate_conditions.py` stratifies the detector on the real val/test images by
 conditions *measured* from pixels and boxes (cut points fitted on val, reused on
-test). 27 per-class comparisons had ≥ 10 instances on both sides; 9 cleared 95%
-on val where ~1 would by chance, and **2 replicated on test**:
+test). 25 per-class comparisons had ≥ 10 instances on both sides (a binary
+condition is tested once, not as two mirror images); 11 cleared 95% on val
+where ~1 would by chance, and **2 replicated on test**:
 
 | condition (proxy) | class | val ΔAP vs rest | test ΔAP vs rest | reading |
 |---|---|---|---|---|
@@ -152,6 +171,12 @@ reviews — **only violations the pipeline produced** (scored, with an evidence
 sidecar). The pre-1.1.0 demo seeder's rows looked like real runs (camera-like
 sources, a real model version, hand-picked scores, "reviews"); the first
 version of this export admitted them. They are now excluded, with a test.
+
+Two rules for these labels to mean anything: duplicate and unusable-evidence
+dismissals are not correctness labels (excluded); and calibration must be fitted
+on reviews of *uniformly sampled or exhaustively reviewed* sessions — reviews
+the active-learning queue prioritised (low scores, contested plates) would bias
+P(correct | score) toward the hard cases.
 
 `calibrate_confidence.py --db traffic.db` judges calibration **out of fold**
 (grouped by session), adopts a calibrator only if its Brier score beats the raw
@@ -199,10 +224,14 @@ per recipe; a class significantly worse vetoes a better average.
 
 Applied to what exists (`recipe_comparison_val.md`): v2 (de-duplicated data)
 against the v1 *recipe* mean rather than the shipped checkpoint is +0.041
-[−0.013, +0.107] mAP@50, WithoutHelmet +0.042 [−0.001, +0.081], and v2's
-earlier "Plate regression" is gone (−0.010 [−0.037, +0.013]) — with 2 vs 1
-seeds, **insufficient seeds**, no verdict. The shipped v1 checkpoint is the
-better of its two seeds.
+[−0.035, +0.117] mAP@50, WithoutHelmet +0.042 [+0.005, +0.079], and v2's
+earlier "Plate regression" is gone (−0.010 [−0.074, +0.053]) — with 2 vs 1
+seeds, **insufficient seeds**, no verdict (v2's single seed contributes no
+seed variance, which is exactly why no verdict is given). The shipped v1
+checkpoint is the better of its two seeds. The interval adds image-bootstrap
+and between-seed variance under a Welch t; on simulated identical recipes with
+three seeds each it promotes 2.0% of the time (nominal 2.5%) and rejects 9.5% —
+the per-class veto's deliberate cost.
 
 ## 8. Camera configuration and calibration — design
 

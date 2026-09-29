@@ -10,7 +10,7 @@ weights, or the ~2 GB DL stack; it runs in well under a minute on a laptop.
 
 ```bash
 pip install -r requirements-ci.txt -c constraints-ci.txt   # pinned, model-free
-pytest                        # 692 tests
+pytest                        # 712 tests
 pytest --cov --cov-report=term-missing   # with branch coverage
 ```
 
@@ -34,7 +34,7 @@ plate a crop shows. An OCR call on a crop that is not a plate â€” a stale box â€
 reads nothing and is counted. That is how the stale-plate-box bug was caught and
 how it stays fixed.
 
-## What is covered (692 tests across 50 files)
+## What is covered (712 tests across 50 files)
 
 | Area | Files | Focus |
 |------|-------|-------|
