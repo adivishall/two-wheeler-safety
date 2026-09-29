@@ -1,0 +1,55 @@
+{
+  "config": {
+    "budget": 150,
+    "decay": 0.6,
+    "eval_audit": 50,
+    "op_thresholds": {
+      "Plate": 0.25,
+      "TripleRiding": 0.3,
+      "WithHelmet": 0.25,
+      "WithoutHelmet": 0.375
+    },
+    "seed": 0,
+    "source_classes": {
+      "aug": [
+        "Plate",
+        "TripleRiding",
+        "WithHelmet",
+        "WithoutHelmet"
+      ],
+      "ds1": [
+        "Plate",
+        "WithHelmet",
+        "WithoutHelmet"
+      ],
+      "dst": [
+        "TripleRiding"
+      ],
+      "dsv": [
+        "Plate",
+        "WithoutHelmet"
+      ]
+    }
+  },
+  "environment": {
+    "chip": "Apple M4",
+    "cv2": "4.13.0",
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "processor": "arm",
+    "python": "3.13.7"
+  },
+  "generated_at": "2026-09-29T05:44:14.225940+00:00",
+  "git": {
+    "commit": "3221214",
+    "dirty": false
+  },
+  "models": [
+    {
+      "path": "runs/detect/traffic_model-2/weights/best.pt",
+      "sha256": "sha256:d49f79833cb86eda7d098b86679e02aced9c31c23b4eb20a18b06097fb712cbd",
+      "version": "traffic-4class@1.0.0"
+    }
+  ]
+}

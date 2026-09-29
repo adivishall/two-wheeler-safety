@@ -1,0 +1,352 @@
+[
+ {
+  "image": "eval/clean_splits/val/images/ds1_c3258f_RMD01EC198351396_jpg.rf.25774968e8361c9490710e543ddc744e.jpg",
+  "item_id": "val:ds1_c3258f_RMD01EC198351396_jpg.rf.25774968e8361c9490710e543ddc744e.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_dca7a9_ADB18TE193610796_jpg.rf.6badabfc86d2a94f57084cec7ecf4578.jpg",
+  "item_id": "val:ds1_dca7a9_ADB18TE193610796_jpg.rf.6badabfc86d2a94f57084cec7ecf4578.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_4e4168_KBA01EC190872581_jpg.rf.fdf8bc3219354d7e38e68972a43973f5.jpg",
+  "item_id": "test:ds1_4e4168_KBA01EC190872581_jpg.rf.fdf8bc3219354d7e38e68972a43973f5.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_4fa36f_KBA01EC190721559_jpg.rf.f6cd20a200528535b7b875cc7fd079d8.jpg",
+  "item_id": "val:ds1_4fa36f_KBA01EC190721559_jpg.rf.f6cd20a200528535b7b875cc7fd079d8.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_f8b87b_flip-overloading-43-_jpg.rf.dd9d5ad0571ea8765d6262c500c31b67.jpg",
+  "item_id": "val:dst_f8b87b_flip-overloading-43-_jpg.rf.dd9d5ad0571ea8765d6262c500c31b67.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_688b2a_overload-413-_jpg.rf.f6d9dffcfd7d846da64d72d9d2aa4890.jpg",
+  "item_id": "val:dst_688b2a_overload-413-_jpg.rf.f6d9dffcfd7d846da64d72d9d2aa4890.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_d27ebe_CYB00EC198314748_jpg.rf.d5a995fba2ea23fff978cc09a31fd04b.jpg",
+  "item_id": "val:ds1_d27ebe_CYB00EC198314748_jpg.rf.d5a995fba2ea23fff978cc09a31fd04b.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_79025b_ADB03TE193659644_jpg.rf.a6f664016b11b704f7d9832909e17b56.jpg",
+  "item_id": "val:ds1_79025b_ADB03TE193659644_jpg.rf.a6f664016b11b704f7d9832909e17b56.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_4797eb_overload-417-_jpg.rf.3bc0390b0b2d1322bbe32c8b9666fb0d.jpg",
+  "item_id": "val:dst_4797eb_overload-417-_jpg.rf.3bc0390b0b2d1322bbe32c8b9666fb0d.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_ae1c85_KBA01EC190655917_jpg.rf.b6e57c493a3bde0ecaf9d4636c1a9008.jpg",
+  "item_id": "val:ds1_ae1c85_KBA01EC190655917_jpg.rf.b6e57c493a3bde0ecaf9d4636c1a9008.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_2fed4b_BikesHelmets464_png.rf.63bc46aefe260e94513106013b09c318.jpg",
+  "item_id": "val:ds1_2fed4b_BikesHelmets464_png.rf.63bc46aefe260e94513106013b09c318.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_d1c28a_100_jpg.rf.5a40976d71e5f7d8ad5baa1c18bcc415.jpg",
+  "item_id": "val:dst_d1c28a_100_jpg.rf.5a40976d71e5f7d8ad5baa1c18bcc415.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_f7dd75_KBA01EC190600987_jpg.rf.79dab79dc7c0998bb16ce2d875867620.jpg",
+  "item_id": "test:ds1_f7dd75_KBA01EC190600987_jpg.rf.79dab79dc7c0998bb16ce2d875867620.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_66a704_KBA01EC190954447_jpg.rf.80f100ab8d795181056e307dcf491ba1.jpg",
+  "item_id": "val:ds1_66a704_KBA01EC190954447_jpg.rf.80f100ab8d795181056e307dcf491ba1.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_fba923_KBA01EC191025094_jpg.rf.7edadc6eef8c14529a2d25cdf9f996a3.jpg",
+  "item_id": "test:ds1_fba923_KBA01EC191025094_jpg.rf.7edadc6eef8c14529a2d25cdf9f996a3.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_aa660c_ADB03EC198603283_jpg.rf.dab3a1d87246726d148b9a71937ba4f3.jpg",
+  "item_id": "test:ds1_aa660c_ADB03EC198603283_jpg.rf.dab3a1d87246726d148b9a71937ba4f3.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_4bac7d_KBA01EC190087538_jpg.rf.ac2bdb7c2ba50e0cb27708a174e1a5f8.jpg",
+  "item_id": "val:ds1_4bac7d_KBA01EC190087538_jpg.rf.ac2bdb7c2ba50e0cb27708a174e1a5f8.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/dst_2a6895_overload-348-_jpg.rf.90f2f8fb4bb821a56cb802e5f20791b6.jpg",
+  "item_id": "test:dst_2a6895_overload-348-_jpg.rf.90f2f8fb4bb821a56cb802e5f20791b6.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_80901e_CYB03EC198353784_jpg.rf.5b27484994d5d81d4eb9c2d61ed35534.jpg",
+  "item_id": "val:ds1_80901e_CYB03EC198353784_jpg.rf.5b27484994d5d81d4eb9c2d61ed35534.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_b4b985_CYB00EC198313938_jpg.rf.7489383c24fd09814d5c706d620742b8.jpg",
+  "item_id": "test:ds1_b4b985_CYB00EC198313938_jpg.rf.7489383c24fd09814d5c706d620742b8.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_8026c2_CYB00EC198314407_jpg.rf.42e38d767dd63c7ae1c0f5925a5ea150.jpg",
+  "item_id": "test:ds1_8026c2_CYB00EC198314407_jpg.rf.42e38d767dd63c7ae1c0f5925a5ea150.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_8fe9d3_KBA01EC191136609_jpg.rf.c3874f00b070d53303b1f9a45641cff6.jpg",
+  "item_id": "val:ds1_8fe9d3_KBA01EC191136609_jpg.rf.c3874f00b070d53303b1f9a45641cff6.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_408020_1_jpg.rf.43de6d367c24c040e4801558a117b43b.jpg",
+  "item_id": "val:dst_408020_1_jpg.rf.43de6d367c24c040e4801558a117b43b.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_bb68d9_BikesHelmets310_png.rf.f4721cd850e8eafa39de9ccbfd29f4bf.jpg",
+  "item_id": "test:ds1_bb68d9_BikesHelmets310_png.rf.f4721cd850e8eafa39de9ccbfd29f4bf.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_a92f0f_ADB03TE193654927_jpg.rf.09249f03be6132db795258cdc231eb37.jpg",
+  "item_id": "val:ds1_a92f0f_ADB03TE193654927_jpg.rf.09249f03be6132db795258cdc231eb37.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_e4eb89_ADB04EC198517166_jpg.rf.cf5b00f882c73fb9ec84731c7c9f805f.jpg",
+  "item_id": "val:ds1_e4eb89_ADB04EC198517166_jpg.rf.cf5b00f882c73fb9ec84731c7c9f805f.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_83c351_ADB03TE193672777_jpg.rf.70ecdd8304c29eeb6e0d53e819a66c04.jpg",
+  "item_id": "val:ds1_83c351_ADB03TE193672777_jpg.rf.70ecdd8304c29eeb6e0d53e819a66c04.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_1fedfc_RMD02EC198316733_jpg.rf.66ef77e77761419685587c513e13ad0d.jpg",
+  "item_id": "val:ds1_1fedfc_RMD02EC198316733_jpg.rf.66ef77e77761419685587c513e13ad0d.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_ed85f2_ADB03TE193710917_jpg.rf.224f2d2c94455baeb6f33699577ed0ea.jpg",
+  "item_id": "val:ds1_ed85f2_ADB03TE193710917_jpg.rf.224f2d2c94455baeb6f33699577ed0ea.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_51973f_ADB03TE193732316_jpg.rf.dd888fe45b210534afaa9996ccdf4062.jpg",
+  "item_id": "val:ds1_51973f_ADB03TE193732316_jpg.rf.dd888fe45b210534afaa9996ccdf4062.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_7206c9_CYB00EC198314650_jpg.rf.e0d311dca5e6dc84197534283f2807e6.jpg",
+  "item_id": "test:ds1_7206c9_CYB00EC198314650_jpg.rf.e0d311dca5e6dc84197534283f2807e6.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_155b35_KBA01EC190474679_jpg.rf.0f408b6905169f5223d614230af611c9.jpg",
+  "item_id": "test:ds1_155b35_KBA01EC190474679_jpg.rf.0f408b6905169f5223d614230af611c9.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_a8e7ae_KBA01EC191136636_jpg.rf.7f3885533f5756c217a7726019f7384f.jpg",
+  "item_id": "test:ds1_a8e7ae_KBA01EC191136636_jpg.rf.7f3885533f5756c217a7726019f7384f.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_cdf60f_CYB03EC198374695_jpg.rf.6b4590cb6a15019976e6764f97e06263.jpg",
+  "item_id": "val:ds1_cdf60f_CYB03EC198374695_jpg.rf.6b4590cb6a15019976e6764f97e06263.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_012628_CYB01EC198313881_jpg.rf.a05516b96c576a5ba9fb70ad59bdce42.jpg",
+  "item_id": "test:ds1_012628_CYB01EC198313881_jpg.rf.a05516b96c576a5ba9fb70ad59bdce42.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_9306a4_1638029132252_jpg.rf.c6762a4b1c424ff20de6dcd4194ccbda.jpg",
+  "item_id": "val:dst_9306a4_1638029132252_jpg.rf.c6762a4b1c424ff20de6dcd4194ccbda.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_9714bb_BikesHelmets612_png.rf.297d56e476159888e02a873b62b23f14.jpg",
+  "item_id": "val:ds1_9714bb_BikesHelmets612_png.rf.297d56e476159888e02a873b62b23f14.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_43918f_RMD01EC198326883_jpg.rf.9b94a138e69aefe986cd5b927aaa39fb.jpg",
+  "item_id": "val:ds1_43918f_RMD01EC198326883_jpg.rf.9b94a138e69aefe986cd5b927aaa39fb.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_8d5401_BikesHelmets756_png.rf.04f9ae34cf66838bcb495a0117763470.jpg",
+  "item_id": "val:ds1_8d5401_BikesHelmets756_png.rf.04f9ae34cf66838bcb495a0117763470.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_740f71_images--1-_jpg.rf.c8c72549f5f54f7ef84d760bbdfbe951.jpg",
+  "item_id": "test:ds1_740f71_images--1-_jpg.rf.c8c72549f5f54f7ef84d760bbdfbe951.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_11ae6a_KBA01EC190769810_jpg.rf.a1a3251a9b73692f18b824254b3fd006.jpg",
+  "item_id": "val:ds1_11ae6a_KBA01EC190769810_jpg.rf.a1a3251a9b73692f18b824254b3fd006.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_368c14_RMD01EC198326351_jpg.rf.9c0394a18900d82825de9e14d86cb24f.jpg",
+  "item_id": "val:ds1_368c14_RMD01EC198326351_jpg.rf.9c0394a18900d82825de9e14d86cb24f.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_41f0b9_ADB03EC198692480_jpg.rf.f13d998dfc965e3f35744e2f2ab89368.jpg",
+  "item_id": "val:ds1_41f0b9_ADB03EC198692480_jpg.rf.f13d998dfc965e3f35744e2f2ab89368.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/dst_009f6e_overload-419-_jpg.rf.62875520234e8dbef24b9415d5479e91.jpg",
+  "item_id": "test:dst_009f6e_overload-419-_jpg.rf.62875520234e8dbef24b9415d5479e91.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_f2f4cc_CYB00EC198319933_jpg.rf.6c6d931d5e36812c36ab7e9c28520809.jpg",
+  "item_id": "val:ds1_f2f4cc_CYB00EC198319933_jpg.rf.6c6d931d5e36812c36ab7e9c28520809.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_a573d7_KBA01EC190474543_jpg.rf.01b09353842122cea9526c555e3cd6e7.jpg",
+  "item_id": "test:ds1_a573d7_KBA01EC190474543_jpg.rf.01b09353842122cea9526c555e3cd6e7.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/test/images/ds1_901eec_ADB03TE193734082_jpg.rf.146cd3aa6845772b6ab5dac845ccdb93.jpg",
+  "item_id": "test:ds1_901eec_ADB03TE193734082_jpg.rf.146cd3aa6845772b6ab5dac845ccdb93.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/ds1_8728b5_KBA01EC190846487_jpg.rf.f3ce860d167c3ad17b32876379865c11.jpg",
+  "item_id": "val:ds1_8728b5_KBA01EC190846487_jpg.rf.f3ce860d167c3ad17b32876379865c11.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_e35fd4_overload-40-_jpg.rf.e8d196d413a1991491b3a28966a14d10.jpg",
+  "item_id": "val:dst_e35fd4_overload-40-_jpg.rf.e8d196d413a1991491b3a28966a14d10.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ },
+ {
+  "image": "eval/clean_splits/val/images/dst_7d817a_flip-overloading-87-_jpg.rf.a4711446253dbe7b0facd5e04ee39338.jpg",
+  "item_id": "val:dst_7d817a_flip-overloading-87-_jpg.rf.a4711446253dbe7b0facd5e04ee39338.jpg",
+  "purpose": "evaluation_audit",
+  "selection": "uniform random, seed 0",
+  "show_predictions": false
+ }
+]
