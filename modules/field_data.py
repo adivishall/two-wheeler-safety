@@ -358,8 +358,8 @@ def load_dataset(root: str, *, check_files: bool = False) -> FieldDataset:
         path = _safe_rel(f.get("frame_path"), where, issues)
         if not path:
             issues.append(f"{where}: frame_path is required")
-        elif sequences[sid].frames_dir and os.path.dirname(path) == os.path.normpath(
-                sequences[sid].frames_dir):
+        elif (fdir := sequences[sid].frames_dir) and os.path.dirname(path) == os.path.normpath(
+                fdir):
             stem = os.path.splitext(os.path.basename(path))[0]
             if not stem.isdigit() or int(stem) != idx:
                 issues.append(f"{where}: files in a frames_dir must be named by frame index "
