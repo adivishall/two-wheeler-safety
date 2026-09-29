@@ -62,7 +62,7 @@
     },
     "temporal_gain_vs_best_single_frame": -0.42
   },
-  "generated_at": "2026-09-29T00:16:15.625129+00:00",
+  "generated_at": "2026-09-29T04:50:28.516069+00:00",
   "mode": "simulate",
   "noise_sweep": {
     "note": "Simulated OCR noise, not field data. These numbers describe the stated character-error model; they measure the decision rule, not EasyOCR's accuracy on real plates.",

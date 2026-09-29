@@ -534,7 +534,7 @@
     },
     "images": 352
   },
-  "generated_at": "2026-09-29T00:10:35.321637+00:00",
+  "generated_at": "2026-09-29T04:49:24.763804+00:00",
   "imgsz": 640,
   "iou": 0.5,
   "model": "runs/detect/traffic_model-2/weights/best.pt",
@@ -576,7 +576,7 @@
       "nms_iou": 0.7,
       "note": "Ultralytics val(): multi-label NMS, rect batches"
     },
-    "save_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/runs/detect/val-24"
+    "save_dir": "runs/detect/val-37"
   },
   "provenance": {
     "config": {
@@ -607,9 +607,9 @@
       "torch": "2.12.1",
       "ultralytics": "8.4.71"
     },
-    "generated_at": "2026-09-29T00:10:34.826401+00:00",
+    "generated_at": "2026-09-29T04:49:23.224550+00:00",
     "git": {
-      "commit": "4497f8a",
+      "commit": "89fba50",
       "dirty": false
     },
     "models": [

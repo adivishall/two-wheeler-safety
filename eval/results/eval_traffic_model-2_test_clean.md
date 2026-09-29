@@ -1,6 +1,6 @@
 # Model evaluation — eval_traffic_model-2_test_clean
 
-- Generated: 2026-09-29T00:11:01.873011+00:00
+- Generated: 2026-09-29T04:49:50.801482+00:00
 - Model: `runs/detect/traffic_model-2/weights/best.pt` (version **traffic-4class@1.0.0**)
 - Data: `eval/clean_splits/data.yaml` (split: test)
 - conf=0.25, iou=0.5, imgsz=640, device=mps
@@ -19,7 +19,7 @@
 | WithoutHelmet | 0.7966 | 0.7333 | 0.7913 | 0.612 |
 | TripleRiding | 0.8984 | 0.9667 | 0.9707 | 0.7695 |
 
-Confusion matrix / PR curves: `/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/runs/detect/val-25`
+Confusion matrix / PR curves: `runs/detect/val-38`
 
 ## Error analysis
 
