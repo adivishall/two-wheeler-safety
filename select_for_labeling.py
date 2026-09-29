@@ -160,6 +160,21 @@ def render(queue, pool, pool_sizes, budget, review_pool, audit_n=0) -> str:
         base = pat.split(":")[1]
         why, metric = RESOLVES.get(base, ("", ""))
         lines.append(f"| `{pat}` | {n} | {why} | {metric} |")
+    src_q: dict[str, int] = {}
+    src_p: dict[str, int] = {}
+    for items, sink in ((queue, src_q), (pool, src_p)):
+        for c in items:
+            s = c.detail.get("upstream_source", c.source)
+            sink[s] = sink.get(s, 0) + 1
+    lines += ["", "## By upstream source", "",
+              "`aug` images are offline-augmented copies whose original is not recoverable "
+              "(`label_audit.source_of`): a label fixed on one fixes that copy only — as it "
+              "would on an original, whose copies can't be found either. Dropping offline "
+              "augmentation for online augmentation of cleaned originals is the structural "
+              "fix (docs/ROADMAP.md).", "",
+              "| source | pool candidates | queue |", "|---|---:|---:|"]
+    for s in sorted(set(src_p) | set(src_q)):
+        lines.append(f"| {s} | {src_p.get(s, 0)} | {src_q.get(s, 0)} |")
     lines += ["", "## Top 25", "", "| # | item | purpose | priority | signals |",
               "|---:|---|---|---:|---|"]
     for i, c in enumerate(queue[:25], 1):
