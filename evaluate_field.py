@@ -61,8 +61,9 @@ def _render(report: dict) -> str:
              "visible; a fine on no labelled vehicle is a phantom.", "",
              "## End to end", "",
              f"Fine precision **{ov['fine_precision']}**, recall **{ov['fine_recall']}** — "
-             f"{ov['correct']} correct, {ov['wrong_plate']} wrong plate, {ov['missed']} missed, "
-             f"{ov['false_fines']} false, {ov['phantom_fines']} phantom; "
+             f"{ov['fines_issued']} fines issued: {ov['correct']} correct, {ov['wrong_plate']} "
+             f"wrong plate, {ov['false_fines']} false, {ov['duplicate_fines']} duplicate, "
+             f"{ov['phantom_fines']} phantom; {ov['missed']} violations missed; "
              f"{ov['correctly_withheld']} correctly withheld (plate not visible).",
              f"Largest error owner: **{ov['bottleneck']}** ({ov['bottleneck_errors']} errors).",
              "", "| condition | vehicles | fine P | fine R | rider recall | class acc | "
@@ -77,14 +78,15 @@ def _render(report: dict) -> str:
     lines += ["", "## OCR on labelled plate crops", "",
               f"{ocr['vehicles_scored']} vehicles, {ocr['reads']} reads, latency "
               f"{ocr['latency_ms']} ms. {ocr['scoring']}.", "",
-              "| policy | coverage | normalized match | wrong plate | exact | char acc | "
-              "edit dist | invalid | abstain |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+              "| policy | coverage | normalized match | wrong plate | exact (read verbatim) | "
+              "char acc | edit dist | invalid | no answer (by rule) |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
     for p, m in ocr["overall"].items():
         if m.get("vehicles"):
             lines.append(f"| {p} | {m['coverage']} | {m['normalized_match']} | "
                          f"{m['wrong_plate_rate']} | {m['exact_match']} | {m['char_accuracy']} | "
                          f"{m['mean_edit_distance']} | {m['invalid_rate']} | "
-                         f"{m['abstention_rate']} |")
+                         f"{m['no_answer_rate']} ({m['abstention_rate']}) |")
     for attr, values in ocr["by_condition"].items():
         lines += ["", f"### OCR by {attr}", "",
                   "| value | vehicles | last | best_conf | temporal (coverage) |",

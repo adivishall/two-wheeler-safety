@@ -48,8 +48,8 @@ VIOLATION_CLASS = {"no_helmet": "WithoutHelmet", "triple_riding": "TripleRiding"
 MATCH_IOU = 0.5
 BLUR_ORDER = ["unknown", "sharp", "mild", "severe"]
 STAGES = ("detection: rider missed", "detection: wrong class", "tracking: track lost",
-          "detection: plate missed", "association: plate not linked", "ocr: plate misread",
-          "decision rule: not confirmed")
+          "detection: plate missed", "association: plate mislinked", "ocr: plate misread",
+          "decision rule: not confirmed", "decision rule: duplicate")
 
 
 # -- per-vehicle conditions ---------------------------------------------------------
@@ -171,25 +171,48 @@ def _decide(policy: str, reads: list[PlateRead]) -> tuple[str, str, bool]:
 POLICIES = ("last", "best_conf", "temporal")
 
 
-def _ocr_metrics(truths: list[str], outs: list[tuple[str, str, bool]]) -> dict:
+def _read_verbatim(truth: str, raw: str | None) -> bool:
+    """The OCR produced the true plate itself — spaces/case aside, before any
+    look-alike correction."""
+    return bool(truth) and normalize_plate(raw or "") == truth
+
+
+def _ocr_metrics(policy: str, truths: list[str], outs: list[tuple[str, str, bool]],
+                 reads: list[list[PlateRead]]) -> dict:
+    """One policy's metrics, defined the same way for every policy:
+
+    * ``exact_match`` — right AND read verbatim: for a single-frame policy its
+      chosen read; for the vote, at least one of the vehicle's reads.
+    * ``normalized_match`` — the named plate (after the stabilizer's cleaning
+      and look-alike correction) is right.
+    * ``no_answer_rate`` — no plate named (1 - coverage), for any reason;
+      ``abstention_rate`` — declined by rule (only the vote does that).
+    * character accuracy, edit distance and invalid-format rate are over the
+      vehicles a plate was named for."""
     n = len(truths)
     if n == 0:
         return {"vehicles": 0}
-    answered = [(t, raw, p) for t, (raw, p, ab) in zip(truths, outs) if not ab and p]
-    right = sum(1 for t, _, p in answered if p == t)
+    rows = list(zip(truths, outs, reads))
+    answered = [(t, raw, p, rs) for t, (raw, p, ab), rs in rows if not ab and p]
+    right = [(t, raw, p, rs) for t, raw, p, rs in answered if p == t]
+    if policy == "temporal":
+        exact = sum(1 for t, _, _, rs in right if any(_read_verbatim(t, r.text) for r in rs))
+    else:
+        exact = sum(1 for t, raw, _, _ in right if _read_verbatim(t, raw))
     return {
         "vehicles": n,
         "coverage": round(len(answered) / n, 4),
-        "abstention_rate": round(sum(1 for *_, ab in outs if ab) / n, 4),
-        "exact_match": round(sum(1 for t, raw, _ in answered if raw.strip() == t) / n, 4),
-        "normalized_match": round(right / n, 4),
-        "wrong_plate_rate": round((len(answered) - right) / n, 4),
-        "accuracy_when_answered": round(right / len(answered), 4) if answered else None,
-        "char_accuracy": (round(sum(char_accuracy(t, p) for t, _, p in answered)
+        "no_answer_rate": round(1 - len(answered) / n, 4),
+        "abstention_rate": round(sum(1 for _, (_, _, ab), _ in rows if ab) / n, 4),
+        "exact_match": round(exact / n, 4),
+        "normalized_match": round(len(right) / n, 4),
+        "wrong_plate_rate": round((len(answered) - len(right)) / n, 4),
+        "accuracy_when_answered": round(len(right) / len(answered), 4) if answered else None,
+        "char_accuracy": (round(sum(char_accuracy(t, p) for t, _, p, _ in answered)
                                 / len(answered), 4) if answered else None),
-        "mean_edit_distance": (round(sum(levenshtein(t, p) for t, _, p in answered)
+        "mean_edit_distance": (round(sum(levenshtein(t, p) for t, _, p, _ in answered)
                                      / len(answered), 3) if answered else None),
-        "invalid_rate": (round(sum(1 for *_, p in answered if not matches_structure(p))
+        "invalid_rate": (round(sum(1 for *_, p, _ in answered if not matches_structure(p))
                                / len(answered), 4) if answered else None),
     }
 
@@ -202,8 +225,9 @@ def ocr_report(ds: FieldDataset, vehicles: list[VehicleLabel], reads: dict) -> d
     lat = sorted(r.latency_ms for v in scored for r in reads[v.key])
 
     def block(subset):
-        return {p: _ocr_metrics([v.plate_text for v in subset],
-                                [outs[p][v.key] for v in subset]) for p in POLICIES}
+        return {p: _ocr_metrics(p, [v.plate_text for v in subset],
+                                [outs[p][v.key] for v in subset],
+                                [reads[v.key] for v in subset]) for p in POLICIES}
 
     by_seq = frames_by_sequence(ds)
     conds = {v.key: vehicle_conditions(ds, v, by_seq.get(v.sequence_id, [])) for v in scored}
@@ -319,9 +343,16 @@ def _best(box, candidates):
     return best_i
 
 
+STATE_CLASS = {"helmet": "WithHelmet", "no_helmet": "WithoutHelmet"}
+ISSUED = ("correct fine", "wrong plate", "duplicate fine", "false fine",
+          "fined without a visible plate")
+
+
 def score_sequence(ds: FieldDataset, run: SequenceRun) -> dict:
-    """Per labelled vehicle: stage-level measurements, fine outcomes and, for
-    every error, the first failing stage. Plus phantom fines (no vehicle)."""
+    """Per labelled vehicle: stage-level measurements; one outcome per issued
+    fine (correct / wrong plate / duplicate / false / fined without a visible
+    plate) and one per labelled violation left unfined (missed / correctly
+    withheld); for every error, the first failing stage. Plus phantom fines."""
     sid = run.sequence_id
     vehicles = [v for v in ds.vehicles.values() if v.sequence_id == sid]
     frames: dict[int, FrameLabel] = {f.frame_index: f for f in ds.frames
@@ -332,27 +363,33 @@ def score_sequence(ds: FieldDataset, run: SequenceRun) -> dict:
         m: dict[str, Any] = {
             "rider_frames": 0, "rider_detected": 0, "class_frames": 0, "class_right": 0,
             "plate_frames": 0, "plate_detected": 0, "assoc_frames": 0, "assoc_right": 0,
-            "tracks": []}
+            "tracks": [], "class_by_state": {}}
         per_vehicle[v.vehicle_id] = m
-        want_class = ("TripleRiding" if v.rider_count >= 3 else
-                      "WithoutHelmet" if "no_helmet" in v.helmet_states else "WithHelmet")
         for idx, f in frames.items():
             rec = run.frames[idx]
-            riders = [o.box for o in f.objects if o.vehicle_id == v.vehicle_id
-                      and o.role == "rider"]
+            riders = [o for o in f.objects if o.vehicle_id == v.vehicle_id and o.role == "rider"]
             plates = [o.box for o in f.objects if o.vehicle_id == v.vehicle_id
                       and o.role == "plate"]
             rider_dets = [(lab, b) for lab, b in rec["dets"] if lab in RIDER_LABELS]
             track_bodies = [t[1] for t in rec["tracks"]]
             main_track = None
-            for gb in riders:
+            for o in riders:
                 m["rider_frames"] += 1
-                j = _best(gb, [b for _, b in rider_dets])
+                # Each rider is scored against its OWN state (a helmeted pillion
+                # on a no-helmet vehicle is right to be called WithHelmet).
+                state = "triple" if v.rider_count >= 3 else (o.helmet_state or "unknown")
+                want = "TripleRiding" if state == "triple" else STATE_CLASS.get(state)
+                j = _best(o.box, [b for _, b in rider_dets])
                 if j is not None:
                     m["rider_detected"] += 1
-                    m["class_frames"] += 1
-                    m["class_right"] += rider_dets[j][0] == want_class
-                t = _best(gb, track_bodies)
+                    if want:
+                        right = rider_dets[j][0] == want
+                        m["class_frames"] += 1
+                        m["class_right"] += right
+                        cell = m["class_by_state"].setdefault(state, [0, 0])
+                        cell[0] += 1
+                        cell[1] += right
+                t = _best(o.box, track_bodies)
                 if t is not None:
                     main_track = rec["tracks"][t][0]
                     m["tracks"].append(main_track)
@@ -384,27 +421,31 @@ def score_sequence(ds: FieldDataset, run: SequenceRun) -> dict:
         tracks = m["tracks"]
         main = max(set(tracks), key=tracks.count) if tracks else None
         fines = fines_by_vehicle.get(v.vehicle_id, [])
-        fined = {(f["violation"], f["plate"]) for f in fines}
         plate_ok = bool(v.plate_text) and v.plate_visibility != "none"
-        elected = run.stable_plates.get(main) if main is not None else None
-        for viol in sorted(v.violations | {f["violation"] for f in fines}):
-            labelled = viol in v.violations
-            got = [p for vv, p in fined if vv == viol]
-            if labelled and not plate_ok:
-                kind = "fined without a visible plate" if got else "correctly withheld"
-            elif labelled and v.plate_text in got:
-                kind = "correct fine"
-            elif labelled and got:
-                kind = "wrong plate"
-            elif labelled:
-                kind = "missed"
-            else:
-                kind = "false fine"
-            stage = None
-            if kind in ("missed", "wrong plate", "false fine", "fined without a visible plate"):
-                stage = _first_failure(v, viol, m, main, run, elected, kind)
-            outcomes.append({"vehicle_id": v.vehicle_id, "violation": viol, "outcome": kind,
+
+        def add(viol, kind, _v=v, _m=m, _main=main):
+            stage = (_first_failure(_v, viol, _m, _main, run, kind)
+                     if kind not in ("correct fine", "correctly withheld") else None)
+            outcomes.append({"vehicle_id": _v.vehicle_id, "violation": viol, "outcome": kind,
                              "stage": stage})
+
+        for viol in sorted(v.violations | {f["violation"] for f in fines}):
+            issued = [f for f in fines if f["violation"] == viol]
+            if viol not in v.violations:
+                for _ in issued:
+                    add(viol, "false fine")
+            elif not plate_ok:
+                for _ in issued:
+                    add(viol, "fined without a visible plate")
+                if not issued:
+                    add(viol, "correctly withheld")
+            else:
+                right = [f for f in issued if f["plate"] == v.plate_text]
+                add(viol, "correct fine" if right else "missed")
+                for _ in right[1:]:
+                    add(viol, "duplicate fine")
+                for _ in (f for f in issued if f["plate"] != v.plate_text):
+                    add(viol, "wrong plate")
     return {"sequence_id": sid, "vehicles": per_vehicle, "outcomes": outcomes,
             "phantom_fines": phantom, "withheld": run.withheld}
 
@@ -413,23 +454,42 @@ def _rate(num: int, den: int) -> float:
     return num / den if den else 0.0
 
 
-def _first_failure(v, viol, m, main, run, elected, kind) -> str:
+def _low(num: int, den: int) -> bool:
+    """A stage failed for this vehicle: it had frames to be judged on, and got
+    fewer than half right. No applicable frames is not a failure."""
+    return den > 0 and num / den < 0.5
+
+
+def _first_failure(v, viol, m, main, run, kind) -> str:
+    by_state = m["class_by_state"]
     if kind == "false fine":
-        if _rate(m["class_right"], m["class_frames"]) < 0.5:
+        # A helmeted rider called bare-headed (or two riders called triple): the
+        # detector is to blame if it mostly got the innocent riders' class wrong.
+        # (For a no-helmet false fine, bare-headed riders are not innocent.)
+        innocent = [c for st, c in by_state.items()
+                    if not (viol == "no_helmet" and st == "no_helmet")]
+        seen = sum(n for n, _r in innocent)
+        wrong = sum(n - r for n, r in innocent)
+        if seen and wrong / seen >= 0.5:
             return "detection: wrong class"
         return "decision rule: not confirmed"
-    if _rate(m["rider_detected"], m["rider_frames"]) < 0.5:
+    if kind == "duplicate fine":
+        return "decision rule: duplicate"
+    if kind == "fined without a visible plate":
+        return "association: plate mislinked"  # its plate was never visible: it came from elsewhere
+    if _low(m["rider_detected"], m["rider_frames"]):
         return "detection: rider missed"
-    if viol in VIOLATION_CLASS and _rate(m["class_right"], m["class_frames"]) < 0.5:
+    state = {"no_helmet": "no_helmet", "triple_riding": "triple"}.get(viol)
+    if state and state in by_state and _low(by_state[state][1], by_state[state][0]):
         return "detection: wrong class"
-    if main is None or _rate(m["tracks"].count(main), m["rider_frames"]) < 0.5:
+    if main is None or _low(m["tracks"].count(main), m["rider_frames"]):
         return "tracking: track lost"
-    if viol not in run.confirmed.get(main, set()) and kind == "missed":
+    if kind == "missed" and viol not in run.confirmed.get(main, set()):
         return "decision rule: not confirmed"
-    if _rate(m["plate_detected"], m["plate_frames"]) < 0.5:
+    if _low(m["plate_detected"], m["plate_frames"]):
         return "detection: plate missed"
-    if _rate(m["assoc_right"], m["assoc_frames"]) < 0.5:
-        return "association: plate not linked"
+    if _low(m["assoc_right"], m["assoc_frames"]):
+        return "association: plate mislinked"
     return "ocr: plate misread"
 
 
@@ -441,7 +501,7 @@ def condition_matrix(ds: FieldDataset, scores: list[dict]) -> dict:
 
     def empty():
         return {"vehicles": 0, "expected_fines": 0, "correct": 0, "wrong_plate": 0,
-                "missed": 0, "false_fines": 0, "correctly_withheld": 0,
+                "missed": 0, "false_fines": 0, "duplicate_fines": 0, "correctly_withheld": 0,
                 "fined_without_visible_plate": 0, "rider_frames": 0, "rider_detected": 0,
                 "class_frames": 0, "class_right": 0, "plate_frames": 0, "plate_detected": 0,
                 "assoc_frames": 0, "assoc_right": 0, "track_fragments": 0,
@@ -451,7 +511,8 @@ def condition_matrix(ds: FieldDataset, scores: list[dict]) -> dict:
     overall = empty()
     phantom = 0
     kind_key = {"correct fine": "correct", "wrong plate": "wrong_plate", "missed": "missed",
-                "false fine": "false_fines", "correctly withheld": "correctly_withheld",
+                "false fine": "false_fines", "duplicate fine": "duplicate_fines",
+                "correctly withheld": "correctly_withheld",
                 "fined without a visible plate": "fined_without_visible_plate"}
     for sc in scores:
         phantom += len(sc["phantom_fines"])
@@ -468,14 +529,17 @@ def condition_matrix(ds: FieldDataset, scores: list[dict]) -> dict:
                 row["track_fragments"] += max(0, len(set(m["tracks"])) - 1)
                 for o in outs:
                     row[kind_key[o["outcome"]]] += 1
-                    if o["outcome"] in ("correct fine", "wrong plate", "missed"):
+                    # One "correct fine" or "missed" per labelled violation with a
+                    # visible plate; extra issued fines are counted, not expected.
+                    if o["outcome"] in ("correct fine", "missed"):
                         row["expected_fines"] += 1
                     if o["stage"]:
                         row["stages"][o["stage"]] += 1
 
-    def finish(row):
-        issued = row["correct"] + row["wrong_plate"] + row["false_fines"] + \
-            row["fined_without_visible_plate"]
+    def finish(row, phantoms=0):
+        issued = (row["correct"] + row["wrong_plate"] + row["false_fines"]
+                  + row["duplicate_fines"] + row["fined_without_visible_plate"] + phantoms)
+        row["fines_issued"] = issued
         row["fine_precision"] = round(row["correct"] / issued, 4) if issued else None
         row["fine_recall"] = (round(row["correct"] / row["expected_fines"], 4)
                               if row["expected_fines"] else None)
@@ -489,8 +553,8 @@ def condition_matrix(ds: FieldDataset, scores: list[dict]) -> dict:
         row["bottleneck_errors"] = errs[worst] if worst else 0
         return row
 
-    overall = finish(overall)
     overall["phantom_fines"] = phantom
+    overall = finish(overall, phantom)  # per-condition rows can't hold phantoms
     return {"overall": overall,
             "by_condition": {a: {val: finish(r) for val, r in sorted(vals.items())}
                              for a, vals in table.items()}}

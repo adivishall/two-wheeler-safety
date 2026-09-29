@@ -77,9 +77,15 @@ def _run(ds, *, labels=None, plates=True, ocr=None, phantom=False, rider_seen=Tr
     return score_sequence(ds, run)
 
 
-def _outcome(score, vid, violation):
+def _outcome(score, vid, violation, kind=None):
     return next(o for o in score["outcomes"]
-                if o["vehicle_id"] == vid and o["violation"] == violation)
+                if o["vehicle_id"] == vid and o["violation"] == violation
+                and (kind is None or o["outcome"] == kind))
+
+
+def _kinds(score, vid, violation):
+    return sorted(o["outcome"] for o in score["outcomes"]
+                  if o["vehicle_id"] == vid and o["violation"] == violation)
 
 
 def test_a_correct_run_fines_the_violator_with_its_own_plate(tmp_path):
@@ -102,8 +108,61 @@ def test_a_correct_run_fines_the_violator_with_its_own_plate(tmp_path):
 ])
 def test_each_broken_stage_takes_the_blame(tmp_path, kwargs, outcome, stage):
     ds = _dataset(tmp_path)
-    o = _outcome(_run(ds, **kwargs), "v1", "no_helmet")
+    o = _outcome(_run(ds, **kwargs), "v1", "no_helmet", outcome)
     assert (o["outcome"], o["stage"]) == (outcome, stage)
+
+
+def test_a_misread_plate_is_a_missed_violation_and_a_wrong_fine(tmp_path):
+    ds = _dataset(tmp_path)
+    sc = _run(ds, ocr={"v1": "MH12AB1284", "v2": PLATES["v2"]})
+    assert _kinds(sc, "v1", "no_helmet") == ["missed", "wrong plate"]
+    assert {o["stage"] for o in sc["outcomes"] if o["vehicle_id"] == "v1"} == \
+        {"ocr: plate misread"}
+    ov = condition_matrix(ds, [sc])["overall"]
+    assert (ov["fine_precision"], ov["fine_recall"], ov["expected_fines"]) == (0.0, 0.0, 1)
+
+
+def test_every_issued_fine_is_scored_not_just_one_per_vehicle(tmp_path):
+    """Regression: a correct and a wrong-plate fine on one vehicle used to
+    collapse into a single 'correct fine' (precision 1.0)."""
+    from modules.field_eval import SequenceRun
+
+    ds = _dataset(tmp_path)
+    run = SequenceRun("s1")
+    for i in range(0, N, 3):
+        run.frames[i] = {"dets": [], "tracks": [(1, tuple(BOXES["v1"]["rider"]), None)]}
+    run.decisions = [{"track_id": 1, "violation": "no_helmet", "plate": PLATES["v1"],
+                      "frame_index": 12},
+                     {"track_id": 1, "violation": "no_helmet", "plate": "MH12AB1284",
+                      "frame_index": 20},
+                     {"track_id": 9, "violation": "no_helmet", "plate": "DL01ZZ9999",
+                      "frame_index": 21}]  # a track matching no labelled vehicle
+    sc = score_sequence(ds, run)
+    assert _kinds(sc, "v1", "no_helmet") == ["correct fine", "wrong plate"]
+    ov = condition_matrix(ds, [sc])["overall"]
+    assert ov["fines_issued"] == 3 and ov["phantom_fines"] == 1
+    assert ov["fine_precision"] == round(1 / 3, 4) and ov["fine_recall"] == 1.0
+
+
+def test_a_mixed_vehicle_scores_each_rider_against_its_own_state(tmp_path):
+    """Regression: class accuracy used the vehicle-level class, so a perfect
+    detector on a no-helmet rider with a helmeted pillion scored 50%."""
+    from modules.field_eval import SequenceRun
+
+    ds = _dataset(tmp_path)
+    v1 = ds.vehicles[("s1", "v1")]
+    v1.rider_count, v1.helmet_states = 2, ["no_helmet", "helmet"]
+    pillion = (100, 40, 180, 100)
+    run = SequenceRun("s1")
+    for f in ds.frames:
+        from modules.field_data import FrameObject
+        f.objects.append(FrameObject("v1", "rider", pillion, helmet_state="helmet"))
+        run.frames[f.frame_index] = {
+            "dets": [("WithoutHelmet", tuple(BOXES["v1"]["rider"])), ("WithHelmet", pillion)],
+            "tracks": []}
+    m = score_sequence(ds, run)["vehicles"]["v1"]
+    assert m["class_right"] == m["class_frames"] == 20
+
 
 
 def test_a_helmeted_rider_called_bare_headed_is_a_false_fine_on_the_detector(tmp_path):
@@ -242,3 +301,32 @@ def test_plate_reads_are_taken_on_labelled_boxes_in_frame_order_and_timed(tmp_pa
     assert len(reads[("s1", "v1")]) == 10 and reads[("s1", "v1")][0].text == "MH12AB1234"
     assert reads[("s1", "v2")][0].text is None  # unreadable -> a missed read, not dropped
     assert all(r.latency_ms >= 0 for r in reads[("s1", "v1")])
+
+
+def test_ocr_metrics_mean_the_same_thing_for_every_policy(tmp_path):
+    """Regression: exact_match compared raw text for single-frame policies but
+    the normalized vote for the temporal one, and only the vote could
+    'abstain' — three identical reads scored 0 / 0 / 1."""
+    ds = _dataset(tmp_path)
+    v1, v2 = ds.vehicles[("s1", "v1")], ds.vehicles[("s1", "v2")]
+    reads = {v1.key: [PlateRead("MH 12 AB 1234", 0.9, 5.0)] * 3,
+             v2.key: [PlateRead(None, 0.0, 5.0)] * 3}  # nothing readable
+    o = ocr_report(ds, [v1, v2], reads)["overall"]
+    assert o["last"]["exact_match"] == o["best_conf"]["exact_match"] == \
+        o["temporal"]["exact_match"] == 0.5
+    for p in ("last", "best_conf", "temporal"):
+        assert o[p]["no_answer_rate"] == 0.5
+    assert o["temporal"]["abstention_rate"] == 0.5 and o["last"]["abstention_rate"] == 0.0
+
+
+def test_a_fine_on_an_invisible_plate_is_blamed_on_association(tmp_path):
+    """Regression: with no plate frames to judge, the plate-detection gate read
+    0/0 as a failure and blamed 'plate missed'."""
+    ds = _dataset(tmp_path)
+    v1 = ds.vehicles[("s1", "v1")]
+    v1.plate_visibility, v1.plate_text = "none", ""
+    for f in ds.frames:
+        f.objects = [o for o in f.objects if not (o.vehicle_id == "v1" and o.role == "plate")]
+    o = _outcome(_run(ds), "v1", "no_helmet")
+    assert (o["outcome"], o["stage"]) == ("fined without a visible plate",
+                                          "association: plate mislinked")

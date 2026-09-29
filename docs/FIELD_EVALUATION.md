@@ -107,7 +107,7 @@ resolution, vehicles in frame (density), crossing, camera — for detection
 association accuracy, OCR, fine precision and recall, wrong plates, missed
 violations, false fines and phantom fines. **Every missed or wrong fine is
 charged to the first stage that failed** (rider missed → wrong class → track
-lost → decision rule not confirming → plate missed → plate not linked → plate
+lost → decision rule not confirming → plate missed → plate mislinked → plate
 misread), so each condition's bottleneck is a count, not an opinion. A
 violation whose plate isn't visible is expected to be *withheld*; a fine on it
 is counted separately, never as a success. Tests break one stage at a time and
