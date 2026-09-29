@@ -185,3 +185,21 @@ def test_dirty_flag_ignores_generated_results(tmp_path, monkeypatch):
     assert git_state()["dirty"] is False
     (tmp_path / "new_rule.py").write_text("x = 3\n")  # untracked source: dirty
     assert git_state()["dirty"] is True
+
+
+def test_portable_path_never_writes_the_local_home_into_a_result(tmp_path, monkeypatch):
+    """Committed results carried /Users/<name>/... from Ultralytics' save_dir and
+    resolved dataset dirs. Inside the repo a path becomes relative; outside it,
+    the home directory is shown as ~."""
+    import os
+
+    from modules.provenance import portable_path
+
+    monkeypatch.chdir(tmp_path)
+    inside = tmp_path / "runs" / "detect" / "val-3"
+    assert portable_path(str(inside)) == os.path.join("runs", "detect", "val-3")
+    assert portable_path("runs/detect/val-3") == os.path.join("runs", "detect", "val-3")
+    monkeypatch.setenv("HOME", str(tmp_path.parent))
+    outside = tmp_path.parent / "Downloads" / "data"
+    assert portable_path(str(outside)) == os.path.join("~", "Downloads", "data")
+    assert portable_path("") == ""

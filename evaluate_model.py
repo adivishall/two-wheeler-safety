@@ -48,6 +48,7 @@ from modules.evaluation import (
     match_image,
 )
 from modules.logging_setup import configure_logging, get_logger
+from modules.provenance import portable_path
 
 log = get_logger("evaluate")
 
@@ -89,7 +90,7 @@ def run_official_val(model, data_path, split, imgsz, conf, iou, device) -> dict:
         "mean_precision": round(float(box.mp), 4),
         "mean_recall": round(float(box.mr), 4),
         "per_class": per_class,
-        "save_dir": str(getattr(metrics, "save_dir", "")),
+        "save_dir": portable_path(str(getattr(metrics, "save_dir", ""))),
     }
 
 

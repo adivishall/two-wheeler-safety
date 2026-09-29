@@ -29,6 +29,7 @@ import sys
 from datetime import datetime, timezone
 
 from modules.logging_setup import configure_logging, get_logger
+from modules.provenance import portable_path
 
 log = get_logger("dataset_manifest")
 
@@ -98,7 +99,7 @@ def describe_split(images_dir: str, classes: list[str]) -> dict:
         )
 
     return {
-        "images_dir": images_dir,
+        "images_dir": portable_path(images_dir),
         "images": images,
         "label_files": label_files,
         "background_images": background,

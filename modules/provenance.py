@@ -122,6 +122,26 @@ GENERATED_PATHS = ("eval/results", "data/dataset_manifest.json",
 DOC_PATTERNS = ("*.md",)
 
 
+def portable_path(path: str) -> str:
+    """A path safe to write into a committed result: relative to the working
+    directory when inside it, else with the home directory shown as ``~``.
+    Libraries hand back absolute paths (Ultralytics' ``save_dir``, resolved
+    dataset dirs); committing them publishes the local username and layout."""
+    if not path:
+        return path
+    p = os.path.abspath(path)
+    cwd = os.getcwd()
+    try:
+        if os.path.commonpath([p, cwd]) == cwd:
+            return os.path.relpath(p, cwd)
+    except ValueError:  # different drives on Windows
+        pass
+    home = os.path.expanduser("~")
+    if p == home or p.startswith(home + os.sep):
+        return "~" + p[len(home):]
+    return p
+
+
 def git_state() -> dict:
     """HEAD commit, and whether any tracked file OTHER than generated outputs
     and documentation has uncommitted changes (``dirty`` means the code that
