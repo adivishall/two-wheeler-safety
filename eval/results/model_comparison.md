@@ -1,25 +1,31 @@
 # Model A/B comparison
 
-- Generated: 2026-09-13T12:53:59.991229+00:00
-- Data: `eval/clean_splits/data.yaml` (split: **test**)
-- conf=0.25, iou=0.5, imgsz=640, device=mps
+- Generated: 2026-09-29T00:24:12.530766+00:00
+- Data: `eval/clean_splits/data.yaml` (split: **val**)
+- conf=0.001, iou=0.7, imgsz=640, device=mps
 - Ranked by: **map50**
 
-**Winner: `traffic_model_probe`** (every model saw the identical split and settings).
+**Highest point estimate: `traffic_model-2`** on the selection split (every model saw the identical split and settings).
 
-| Model | version | mAP@50 | mAP@50-95 | precision | recall | latency (ms) | size (MB) |
+> A point-estimate ranking is not a significance test. Whether a gap is real is answered by `evaluate_uncertainty.py` (paired image bootstrap).
+
+| Model | version | mAP@50 | mAP@50-95 | precision | recall | latency p50 (ms) | file (MB) |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `traffic_model_probe` | — | 0.7408 | 0.5455 | 0.7316 | 0.8021 | 27.88 | 5.96 |
-| `traffic_model_r2` | — | 0.7279 | 0.5188 | 0.8014 | 0.7684 | 27.4 | 23.35 |
-| `traffic_model-2` | traffic-4class@1.0.0 | 0.7265 | 0.532 | 0.7559 | 0.7846 | 27.91 | 5.96 |
-| `traffic_model_helmetfix` | — | 0.4996 | 0.3385 | 0.7996 | 0.5195 | 27.97 | 5.96 |
+| `traffic_model-2` | traffic-4class@1.0.0 | 0.7661 | 0.542 | 0.7773 | 0.7486 | 19.52 | 5.96 |
+| `traffic_model_v2_dedup` | traffic_model_v2_dedup@2.0.0 | 0.7444 | 0.5268 | 0.7624 | 0.772 | 13.57 | 5.96 |
+| `traffic_model_probe` | — | 0.7411 | 0.5162 | 0.696 | 0.7235 | 18.29 | 5.96 |
+| `traffic_model_r2` | — | 0.7379 | 0.5192 | 0.7064 | 0.7359 | 19.48 | 23.35 |
+| `traffic_model_seed1` | — | 0.7175 | 0.5071 | 0.6811 | 0.6961 | 19.56 | 5.96 |
+
+Latency: median of single-image `predict()` calls (load + pre/post-processing) after a warm-up, on the device above — a sanity check, not a benchmark (`benchmark.md` is). Between checkpoints of the same architecture a latency gap is measurement noise. File size includes any optimizer state left in the checkpoint.
 
 ## Per-class mAP@50
 
 | Model | Plate | TripleRiding | WithHelmet | WithoutHelmet |
 |---|---:|---:|---:|---:|
-| `traffic_model_probe` | 0.8403 | 0.8817 | 0.4699 | 0.7713 |
-| `traffic_model_r2` | 0.8355 | 0.902 | 0.4223 | 0.7519 |
-| `traffic_model-2` | 0.863 | 0.9502 | 0.3873 | 0.7054 |
-| `traffic_model_helmetfix` | 0.8708 | 0.0 | 0.4166 | 0.711 |
+| `traffic_model-2` | 0.8727 | 0.9075 | 0.5171 | 0.767 |
+| `traffic_model_v2_dedup` | 0.8566 | 0.8729 | 0.4495 | 0.7985 |
+| `traffic_model_probe` | 0.8413 | 0.9037 | 0.4294 | 0.7898 |
+| `traffic_model_r2` | 0.7905 | 0.8822 | 0.4994 | 0.7797 |
+| `traffic_model_seed1` | 0.8455 | 0.8391 | 0.4175 | 0.7679 |
 

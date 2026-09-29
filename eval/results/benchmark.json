@@ -1,0 +1,373 @@
+{
+  "device": "mps",
+  "generated_at": "2026-09-29T00:26:25.709908+00:00",
+  "image_benchmark": {
+    "batch": 1,
+    "device": "mps",
+    "first_call_ms": 401.56,
+    "image": "samples/test.jpg",
+    "inference": {
+      "fps": 43.5,
+      "max_ms": 24.81,
+      "mean_ms": 23.0,
+      "min_ms": 20.9,
+      "n": 50,
+      "p50_ms": 23.17,
+      "p90_ms": 24.42,
+      "state": "warm"
+    },
+    "ocr": {
+      "fps": 73.9,
+      "max_ms": 19.86,
+      "mean_ms": 13.53,
+      "min_ms": 10.36,
+      "n": 16,
+      "p50_ms": 12.42,
+      "p90_ms": 19.32
+    },
+    "resolution": [
+      1906,
+      1078
+    ]
+  },
+  "image_by_device": {
+    "cpu": {
+      "batch": 1,
+      "device": "cpu",
+      "first_call_ms": 53.99,
+      "image": "samples/test.jpg",
+      "inference": {
+        "fps": 48.2,
+        "max_ms": 23.2,
+        "mean_ms": 20.75,
+        "min_ms": 19.63,
+        "n": 50,
+        "p50_ms": 20.53,
+        "p90_ms": 22.43,
+        "state": "warm"
+      },
+      "ocr": {
+        "fps": 153.2,
+        "max_ms": 7.62,
+        "mean_ms": 6.53,
+        "min_ms": 6.09,
+        "n": 16,
+        "p50_ms": 6.69,
+        "p90_ms": 6.79
+      },
+      "resolution": [
+        1906,
+        1078
+      ]
+    },
+    "mps": {
+      "batch": 1,
+      "device": "mps",
+      "first_call_ms": 47.6,
+      "image": "samples/test.jpg",
+      "inference": {
+        "fps": 88.9,
+        "max_ms": 22.15,
+        "mean_ms": 11.25,
+        "min_ms": 9.67,
+        "n": 50,
+        "p50_ms": 10.17,
+        "p90_ms": 20.8,
+        "state": "warm"
+      },
+      "ocr": {
+        "fps": 72.2,
+        "max_ms": 18.77,
+        "mean_ms": 13.84,
+        "min_ms": 10.46,
+        "n": 16,
+        "p50_ms": 13.28,
+        "p90_ms": 18.2
+      },
+      "resolution": [
+        1906,
+        1078
+      ]
+    }
+  },
+  "inputs": {
+    "image": {
+      "fps": 25.0,
+      "frames": 1,
+      "height": 1078,
+      "path": "samples/test.jpg",
+      "sha256": "sha256:f82add8e4a199b5273410208feac6f62825f816c246e81d9f2e8c44fcbfbb6b3",
+      "width": 1906
+    },
+    "video": {
+      "fps": 25.0,
+      "frames": 120,
+      "height": 596,
+      "path": "demo_traffic.mp4",
+      "sha256": "sha256:b095924e1882ad2d1dcf95ea7818228f70490df9df4d38726be13fda9c56a7b4",
+      "width": 334
+    }
+  },
+  "machine": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "processor": "arm",
+    "python": "3.13.7"
+  },
+  "micro": {
+    "analyze_direct": {
+      "fps": 19.4,
+      "max_ms": 111.65,
+      "mean_ms": 51.53,
+      "min_ms": 27.87,
+      "n": 30,
+      "p50_ms": 47.22,
+      "p90_ms": 72.3
+    },
+    "analyze_via_api": {
+      "fps": 18.3,
+      "max_ms": 159.54,
+      "mean_ms": 54.67,
+      "min_ms": 28.68,
+      "n": 30,
+      "p50_ms": 48.57,
+      "p90_ms": 71.04
+    },
+    "api_overhead": {
+      "distinguishable": false,
+      "median_ms": 1.39,
+      "p10_ms": -7.12,
+      "p90_ms": 8.2,
+      "pairs": 30
+    },
+    "db_record_fine": {
+      "fps": 2371.5,
+      "max_ms": 0.75,
+      "mean_ms": 0.42,
+      "min_ms": 0.38,
+      "n": 200,
+      "p50_ms": 0.41,
+      "p90_ms": 0.45
+    },
+    "decision_core_step_3_bikes": {
+      "fps": 22543.5,
+      "max_ms": 0.09,
+      "mean_ms": 0.04,
+      "min_ms": 0.04,
+      "n": 300,
+      "p50_ms": 0.04,
+      "p90_ms": 0.06
+    }
+  },
+  "model": "runs/detect/traffic_model-2/weights/best.pt",
+  "model_load_seconds": 3.19,
+  "model_load_state": "cold: YOLO + EasyOCR constructed from disk in this process",
+  "ocr_lock_speedup": {
+    "locked_fps": 36.65,
+    "locked_ocr_calls": 30,
+    "repeats": 5,
+    "same_decisions": true,
+    "speedup_pct": 88.5,
+    "speedup_pct_range": [
+      79.8,
+      138.9
+    ],
+    "unlocked_fps": 19.44,
+    "unlocked_ocr_calls": 120
+  },
+  "peak_rss_mb": 941.6,
+  "provenance": {
+    "config": {
+      "batch": 1,
+      "device": "mps",
+      "iterations": 50,
+      "max_frames": 120,
+      "repeats": 5
+    },
+    "environment": {
+      "chip": "Apple M4",
+      "cuda": false,
+      "cv2": "4.13.0",
+      "easyocr": "1.7.2",
+      "machine": "arm64",
+      "mps": true,
+      "numpy": "2.4.6",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7",
+      "torch": "2.12.1",
+      "ultralytics": "8.4.71"
+    },
+    "generated_at": "2026-09-29T00:27:23.289587+00:00",
+    "git": {
+      "commit": "8a68089",
+      "dirty": false
+    },
+    "models": [
+      {
+        "path": "runs/detect/traffic_model-2/weights/best.pt",
+        "sha256": "sha256:d49f79833cb86eda7d098b86679e02aced9c31c23b4eb20a18b06097fb712cbd",
+        "version": "traffic-4class@1.0.0"
+      }
+    ]
+  },
+  "video_benchmark": {
+    "decisions": {
+      "fined": [
+        [
+          "MH02DL4596",
+          "no_helmet"
+        ]
+      ],
+      "withheld": 0
+    },
+    "device": "mps",
+    "fps_max": 37.16,
+    "fps_min": 34.95,
+    "fps_runs": [
+      34.95,
+      35.89,
+      37.02,
+      36.65,
+      37.16
+    ],
+    "frames": 120,
+    "ms_per_frame": 27.29,
+    "ocr_calls": 30,
+    "ocr_lock": true,
+    "ocr_lock_confidence": 0.9,
+    "repeats": 5,
+    "stage_profile": {
+      "measured_seconds": 2.936,
+      "stages": {
+        "db": {
+          "calls": 1,
+          "ms_per_call": 0.002,
+          "pct_of_wall": 0.0,
+          "seconds": 0.0
+        },
+        "encode": {
+          "calls": 120,
+          "ms_per_call": 0.149,
+          "pct_of_wall": 0.5,
+          "seconds": 0.0179
+        },
+        "evidence": {
+          "calls": 1,
+          "ms_per_call": 2.205,
+          "pct_of_wall": 0.1,
+          "seconds": 0.0022
+        },
+        "ocr": {
+          "calls": 30,
+          "ms_per_call": 25.979,
+          "pct_of_wall": 23.9,
+          "seconds": 0.7794
+        },
+        "read": {
+          "calls": 121,
+          "ms_per_call": 0.178,
+          "pct_of_wall": 0.7,
+          "seconds": 0.0215
+        },
+        "track": {
+          "calls": 120,
+          "ms_per_call": 0.061,
+          "pct_of_wall": 0.2,
+          "seconds": 0.0073
+        },
+        "yolo": {
+          "calls": 120,
+          "ms_per_call": 17.566,
+          "pct_of_wall": 64.7,
+          "seconds": 2.1079
+        }
+      },
+      "unaccounted_pct_of_wall": 9.9,
+      "unaccounted_seconds": 0.323,
+      "wall_seconds": 3.26
+    },
+    "throughput_fps": 36.65,
+    "video": "demo_traffic.mp4",
+    "wall_seconds": 3.27
+  },
+  "video_benchmark_no_ocr_lock": {
+    "decisions": {
+      "fined": [
+        [
+          "MH02DL4596",
+          "no_helmet"
+        ]
+      ],
+      "withheld": 0
+    },
+    "device": "mps",
+    "fps_max": 20.49,
+    "fps_min": 15.33,
+    "fps_runs": [
+      19.44,
+      15.33,
+      20.39,
+      15.34,
+      20.49
+    ],
+    "frames": 120,
+    "ms_per_frame": 51.43,
+    "ocr_calls": 120,
+    "ocr_lock": false,
+    "ocr_lock_confidence": 1.1,
+    "repeats": 5,
+    "stage_profile": {
+      "measured_seconds": 5.756,
+      "stages": {
+        "db": {
+          "calls": 1,
+          "ms_per_call": 0.004,
+          "pct_of_wall": 0.0,
+          "seconds": 0.0
+        },
+        "encode": {
+          "calls": 120,
+          "ms_per_call": 0.235,
+          "pct_of_wall": 0.5,
+          "seconds": 0.0282
+        },
+        "evidence": {
+          "calls": 1,
+          "ms_per_call": 3.888,
+          "pct_of_wall": 0.1,
+          "seconds": 0.0039
+        },
+        "ocr": {
+          "calls": 120,
+          "ms_per_call": 28.584,
+          "pct_of_wall": 55.7,
+          "seconds": 3.4301
+        },
+        "read": {
+          "calls": 121,
+          "ms_per_call": 0.226,
+          "pct_of_wall": 0.4,
+          "seconds": 0.0273
+        },
+        "track": {
+          "calls": 120,
+          "ms_per_call": 0.141,
+          "pct_of_wall": 0.3,
+          "seconds": 0.0169
+        },
+        "yolo": {
+          "calls": 120,
+          "ms_per_call": 18.744,
+          "pct_of_wall": 36.5,
+          "seconds": 2.2492
+        }
+      },
+      "unaccounted_pct_of_wall": 6.5,
+      "unaccounted_seconds": 0.4,
+      "wall_seconds": 6.156
+    },
+    "throughput_fps": 19.44,
+    "video": "demo_traffic.mp4",
+    "wall_seconds": 6.17
+  }
+}

@@ -1,0 +1,667 @@
+{
+  "class_names": [
+    "Plate",
+    "WithHelmet",
+    "WithoutHelmet",
+    "TripleRiding"
+  ],
+  "data": "eval/clean_splits/data.yaml",
+  "images": 352,
+  "imgsz": 640,
+  "models": [
+    {
+      "bootstrap": {
+        "images": 352,
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.7861,
+          "ci_low": 0.6682,
+          "std": 0.0298,
+          "value": 0.7214
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ap50": 0.8727,
+            "ci_high": 0.9119,
+            "ci_low": 0.8297,
+            "instances": 247,
+            "std": 0.0215
+          },
+          "TripleRiding": {
+            "ap50": 0.8608,
+            "ci_high": 0.9484,
+            "ci_low": 0.7626,
+            "instances": 58,
+            "std": 0.0475
+          },
+          "WithHelmet": {
+            "ap50": 0.4166,
+            "ci_high": 0.6247,
+            "ci_low": 0.2467,
+            "instances": 26,
+            "std": 0.095
+          },
+          "WithoutHelmet": {
+            "ap50": 0.7353,
+            "ci_high": 0.7963,
+            "ci_low": 0.6741,
+            "instances": 209,
+            "std": 0.0311
+          }
+        },
+        "seed": 0
+      },
+      "label": "traffic_model-2",
+      "path": "runs/detect/traffic_model-2/weights/best.pt",
+      "thresholds_selected": {
+        "Plate": {
+          "f1": 0.8596,
+          "fp": 21.0,
+          "gt": 247.0,
+          "precision": 0.9058,
+          "recall": 0.8178,
+          "threshold": 0.25,
+          "tp": 202.0
+        },
+        "TripleRiding": {
+          "f1": 0.8649,
+          "fp": 5.0,
+          "gt": 58.0,
+          "precision": 0.9057,
+          "recall": 0.8276,
+          "threshold": 0.55,
+          "tp": 48.0
+        },
+        "WithHelmet": {
+          "f1": 0.5806,
+          "fp": 18.0,
+          "gt": 26.0,
+          "precision": 0.5,
+          "recall": 0.6923,
+          "threshold": 0.675,
+          "tp": 18.0
+        },
+        "WithoutHelmet": {
+          "f1": 0.7481,
+          "fp": 42.0,
+          "gt": 209.0,
+          "precision": 0.7812,
+          "recall": 0.7177,
+          "threshold": 0.375,
+          "tp": 150.0
+        }
+      }
+    },
+    {
+      "bootstrap": {
+        "images": 352,
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.7484,
+          "ci_low": 0.6251,
+          "std": 0.0313,
+          "value": 0.6813
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ap50": 0.8485,
+            "ci_high": 0.8914,
+            "ci_low": 0.8004,
+            "instances": 247,
+            "std": 0.0232
+          },
+          "TripleRiding": {
+            "ap50": 0.8137,
+            "ci_high": 0.9168,
+            "ci_low": 0.7105,
+            "instances": 58,
+            "std": 0.0532
+          },
+          "WithHelmet": {
+            "ap50": 0.3184,
+            "ci_high": 0.5253,
+            "ci_low": 0.1531,
+            "instances": 26,
+            "std": 0.0954
+          },
+          "WithoutHelmet": {
+            "ap50": 0.7447,
+            "ci_high": 0.8059,
+            "ci_low": 0.685,
+            "instances": 209,
+            "std": 0.0311
+          }
+        },
+        "seed": 0
+      },
+      "label": "traffic_model_seed1",
+      "paired_vs_baseline": {
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.0246,
+          "ci_low": -0.108,
+          "diff": -0.0401,
+          "p_a_better": 0.12,
+          "significant": false
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ci_high": 0.0016,
+            "ci_low": -0.0478,
+            "diff": -0.0242,
+            "p_a_better": 0.035,
+            "significant": false
+          },
+          "TripleRiding": {
+            "ci_high": 0.0095,
+            "ci_low": -0.1138,
+            "diff": -0.0471,
+            "p_a_better": 0.059,
+            "significant": false
+          },
+          "WithHelmet": {
+            "ci_high": 0.1292,
+            "ci_low": -0.3469,
+            "diff": -0.0982,
+            "p_a_better": 0.201,
+            "significant": false
+          },
+          "WithoutHelmet": {
+            "ci_high": 0.0587,
+            "ci_low": -0.0349,
+            "diff": 0.0093,
+            "p_a_better": 0.695,
+            "significant": false
+          }
+        },
+        "seed": 0
+      },
+      "path": "runs/detect/traffic_model_seed1/weights/best.pt",
+      "thresholds_selected": {
+        "Plate": {
+          "f1": 0.8341,
+          "fp": 13.0,
+          "gt": 247.0,
+          "precision": 0.9347,
+          "recall": 0.753,
+          "threshold": 0.575,
+          "tp": 186.0
+        },
+        "TripleRiding": {
+          "f1": 0.8547,
+          "fp": 9.0,
+          "gt": 58.0,
+          "precision": 0.8475,
+          "recall": 0.8621,
+          "threshold": 0.775,
+          "tp": 50.0
+        },
+        "WithHelmet": {
+          "f1": 0.4583,
+          "fp": 11.0,
+          "gt": 26.0,
+          "precision": 0.5,
+          "recall": 0.4231,
+          "threshold": 0.525,
+          "tp": 11.0
+        },
+        "WithoutHelmet": {
+          "f1": 0.7488,
+          "fp": 55.0,
+          "gt": 209.0,
+          "precision": 0.7418,
+          "recall": 0.756,
+          "threshold": 0.55,
+          "tp": 158.0
+        }
+      }
+    },
+    {
+      "bootstrap": {
+        "images": 352,
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.8095,
+          "ci_low": 0.6863,
+          "std": 0.0314,
+          "value": 0.7422
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ap50": 0.8503,
+            "ci_high": 0.8941,
+            "ci_low": 0.8021,
+            "instances": 247,
+            "std": 0.023
+          },
+          "TripleRiding": {
+            "ap50": 0.8927,
+            "ci_high": 0.9606,
+            "ci_low": 0.812,
+            "instances": 58,
+            "std": 0.0384
+          },
+          "WithHelmet": {
+            "ap50": 0.4441,
+            "ci_high": 0.6597,
+            "ci_low": 0.2645,
+            "instances": 26,
+            "std": 0.1025
+          },
+          "WithoutHelmet": {
+            "ap50": 0.7818,
+            "ci_high": 0.8346,
+            "ci_low": 0.725,
+            "instances": 209,
+            "std": 0.0278
+          }
+        },
+        "seed": 0
+      },
+      "label": "traffic_model_v2_dedup",
+      "paired_vs_baseline": {
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.0633,
+          "ci_low": -0.0221,
+          "diff": 0.0208,
+          "p_a_better": 0.826,
+          "significant": false
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ci_high": -0.0027,
+            "ci_low": -0.0443,
+            "diff": -0.0224,
+            "p_a_better": 0.013,
+            "significant": true
+          },
+          "TripleRiding": {
+            "ci_high": 0.1132,
+            "ci_low": -0.0387,
+            "diff": 0.0319,
+            "p_a_better": 0.755,
+            "significant": false
+          },
+          "WithHelmet": {
+            "ci_high": 0.1674,
+            "ci_low": -0.1072,
+            "diff": 0.0275,
+            "p_a_better": 0.654,
+            "significant": false
+          },
+          "WithoutHelmet": {
+            "ci_high": 0.0874,
+            "ci_low": 0.0054,
+            "diff": 0.0464,
+            "p_a_better": 0.988,
+            "significant": true
+          }
+        },
+        "seed": 0
+      },
+      "path": "runs/detect/traffic_model_v2_dedup/weights/best.pt",
+      "thresholds_selected": {
+        "Plate": {
+          "f1": 0.8511,
+          "fp": 23.0,
+          "gt": 247.0,
+          "precision": 0.8969,
+          "recall": 0.8097,
+          "threshold": 0.4,
+          "tp": 200.0
+        },
+        "TripleRiding": {
+          "f1": 0.8991,
+          "fp": 2.0,
+          "gt": 58.0,
+          "precision": 0.9608,
+          "recall": 0.8448,
+          "threshold": 0.45,
+          "tp": 49.0
+        },
+        "WithHelmet": {
+          "f1": 0.5818,
+          "fp": 13.0,
+          "gt": 26.0,
+          "precision": 0.5517,
+          "recall": 0.6154,
+          "threshold": 0.525,
+          "tp": 16.0
+        },
+        "WithoutHelmet": {
+          "f1": 0.7468,
+          "fp": 36.0,
+          "gt": 209.0,
+          "precision": 0.8022,
+          "recall": 0.6986,
+          "threshold": 0.45,
+          "tp": 146.0
+        }
+      }
+    },
+    {
+      "bootstrap": {
+        "images": 352,
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.7355,
+          "ci_low": 0.6202,
+          "std": 0.0292,
+          "value": 0.67
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ap50": 0.8316,
+            "ci_high": 0.8789,
+            "ci_low": 0.7833,
+            "instances": 247,
+            "std": 0.0243
+          },
+          "TripleRiding": {
+            "ap50": 0.7865,
+            "ci_high": 0.8926,
+            "ci_low": 0.6717,
+            "instances": 58,
+            "std": 0.0578
+          },
+          "WithHelmet": {
+            "ap50": 0.3123,
+            "ci_high": 0.5061,
+            "ci_low": 0.1686,
+            "instances": 26,
+            "std": 0.0865
+          },
+          "WithoutHelmet": {
+            "ap50": 0.7498,
+            "ci_high": 0.8029,
+            "ci_low": 0.6904,
+            "instances": 209,
+            "std": 0.0286
+          }
+        },
+        "seed": 0
+      },
+      "label": "traffic_model_probe",
+      "paired_vs_baseline": {
+        "level": 0.95,
+        "map50": {
+          "ci_high": -0.006,
+          "ci_low": -0.0953,
+          "diff": -0.0513,
+          "p_a_better": 0.013,
+          "significant": true
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ci_high": -0.0127,
+            "ci_low": -0.0686,
+            "diff": -0.0411,
+            "p_a_better": 0.001,
+            "significant": true
+          },
+          "TripleRiding": {
+            "ci_high": -0.0102,
+            "ci_low": -0.1489,
+            "diff": -0.0743,
+            "p_a_better": 0.007,
+            "significant": true
+          },
+          "WithHelmet": {
+            "ci_high": 0.0418,
+            "ci_low": -0.2385,
+            "diff": -0.1044,
+            "p_a_better": 0.074,
+            "significant": false
+          },
+          "WithoutHelmet": {
+            "ci_high": 0.0481,
+            "ci_low": -0.0186,
+            "diff": 0.0144,
+            "p_a_better": 0.796,
+            "significant": false
+          }
+        },
+        "seed": 0
+      },
+      "path": "runs/detect/traffic_model_probe/weights/best.pt",
+      "thresholds_selected": {
+        "Plate": {
+          "f1": 0.826,
+          "fp": 33.0,
+          "gt": 247.0,
+          "precision": 0.8565,
+          "recall": 0.7976,
+          "threshold": 0.325,
+          "tp": 197.0
+        },
+        "TripleRiding": {
+          "f1": 0.8257,
+          "fp": 6.0,
+          "gt": 58.0,
+          "precision": 0.8824,
+          "recall": 0.7759,
+          "threshold": 0.175,
+          "tp": 45.0
+        },
+        "WithHelmet": {
+          "f1": 0.4324,
+          "fp": 32.0,
+          "gt": 26.0,
+          "precision": 0.3333,
+          "recall": 0.6154,
+          "threshold": 0.55,
+          "tp": 16.0
+        },
+        "WithoutHelmet": {
+          "f1": 0.7657,
+          "fp": 36.0,
+          "gt": 209.0,
+          "precision": 0.8085,
+          "recall": 0.7273,
+          "threshold": 0.6,
+          "tp": 152.0
+        }
+      }
+    },
+    {
+      "bootstrap": {
+        "images": 352,
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.7557,
+          "ci_low": 0.6372,
+          "std": 0.0311,
+          "value": 0.6911
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ap50": 0.7874,
+            "ci_high": 0.8459,
+            "ci_low": 0.7286,
+            "instances": 247,
+            "std": 0.0296
+          },
+          "TripleRiding": {
+            "ap50": 0.8214,
+            "ci_high": 0.9145,
+            "ci_low": 0.7124,
+            "instances": 58,
+            "std": 0.0529
+          },
+          "WithHelmet": {
+            "ap50": 0.3948,
+            "ci_high": 0.6004,
+            "ci_low": 0.2343,
+            "instances": 26,
+            "std": 0.0927
+          },
+          "WithoutHelmet": {
+            "ap50": 0.7608,
+            "ci_high": 0.8121,
+            "ci_low": 0.7035,
+            "instances": 209,
+            "std": 0.0279
+          }
+        },
+        "seed": 0
+      },
+      "label": "traffic_model_r2",
+      "paired_vs_baseline": {
+        "level": 0.95,
+        "map50": {
+          "ci_high": 0.0066,
+          "ci_low": -0.0667,
+          "diff": -0.0303,
+          "p_a_better": 0.052,
+          "significant": false
+        },
+        "n_boot": 2000,
+        "per_class": {
+          "Plate": {
+            "ci_high": -0.0445,
+            "ci_low": -0.125,
+            "diff": -0.0853,
+            "p_a_better": 0.0,
+            "significant": true
+          },
+          "TripleRiding": {
+            "ci_high": 0.0122,
+            "ci_low": -0.1044,
+            "diff": -0.0394,
+            "p_a_better": 0.067,
+            "significant": false
+          },
+          "WithHelmet": {
+            "ci_high": 0.104,
+            "ci_low": -0.1475,
+            "diff": -0.0218,
+            "p_a_better": 0.401,
+            "significant": false
+          },
+          "WithoutHelmet": {
+            "ci_high": 0.0627,
+            "ci_low": -0.016,
+            "diff": 0.0255,
+            "p_a_better": 0.885,
+            "significant": false
+          }
+        },
+        "seed": 0
+      },
+      "path": "runs/detect/traffic_model_r2/weights/best.pt",
+      "thresholds_selected": {
+        "Plate": {
+          "f1": 0.7904,
+          "fp": 30.0,
+          "gt": 247.0,
+          "precision": 0.8578,
+          "recall": 0.7328,
+          "threshold": 0.425,
+          "tp": 181.0
+        },
+        "TripleRiding": {
+          "f1": 0.8288,
+          "fp": 7.0,
+          "gt": 58.0,
+          "precision": 0.8679,
+          "recall": 0.7931,
+          "threshold": 0.375,
+          "tp": 46.0
+        },
+        "WithHelmet": {
+          "f1": 0.5283,
+          "fp": 13.0,
+          "gt": 26.0,
+          "precision": 0.5185,
+          "recall": 0.5385,
+          "threshold": 0.7,
+          "tp": 14.0
+        },
+        "WithoutHelmet": {
+          "f1": 0.7512,
+          "fp": 52.0,
+          "gt": 209.0,
+          "precision": 0.7512,
+          "recall": 0.7512,
+          "threshold": 0.4,
+          "tp": 157.0
+        }
+      }
+    }
+  ],
+  "n_boot": 2000,
+  "name": "uncertainty_val",
+  "provenance": {
+    "config": {
+      "conf": 0.001,
+      "device": "mps",
+      "imgsz": 640,
+      "nms_iou": 0.7
+    },
+    "dataset": {
+      "data_yaml": "eval/clean_splits/data.yaml",
+      "scheme": "names+sizes+label-contents",
+      "split": "val",
+      "split_images": 352,
+      "split_version": "sha256:032b9391d7cd2dc2",
+      "version": "sha256:e1be4f14028241d1"
+    },
+    "environment": {
+      "chip": "Apple M4",
+      "cuda": false,
+      "cv2": "4.13.0",
+      "machine": "arm64",
+      "mps": true,
+      "numpy": "2.4.6",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7",
+      "torch": "2.12.1",
+      "ultralytics": "8.4.71"
+    },
+    "generated_at": "2026-09-29T00:11:54.757140+00:00",
+    "git": {
+      "commit": "4497f8a",
+      "dirty": false
+    },
+    "models": [
+      {
+        "path": "runs/detect/traffic_model-2/weights/best.pt",
+        "sha256": "sha256:d49f79833cb86eda7d098b86679e02aced9c31c23b4eb20a18b06097fb712cbd",
+        "version": "traffic-4class@1.0.0"
+      },
+      {
+        "path": "runs/detect/traffic_model_seed1/weights/best.pt",
+        "sha256": "sha256:7b5090724e60b3ca0139807a02ee842cbb645ce9e4f5492d54662bcff10d4134",
+        "version": null
+      },
+      {
+        "path": "runs/detect/traffic_model_v2_dedup/weights/best.pt",
+        "sha256": "sha256:6339adafd4fb3633ed100166f86fcbd4990b8eed0179a48d72c679bf70a1b53d",
+        "version": "traffic_model_v2_dedup@2.0.0"
+      },
+      {
+        "path": "runs/detect/traffic_model_probe/weights/best.pt",
+        "sha256": "sha256:a6ef0802fc61a14e7b54ea226aef0f8cb8d25e7fa326333dd6e7d520445f292a",
+        "version": null
+      },
+      {
+        "path": "runs/detect/traffic_model_r2/weights/best.pt",
+        "sha256": "sha256:3b40f3d3baedd7a99589e213045fdc0203e7df2e09ad78366767478cf52161d2",
+        "version": null
+      }
+    ]
+  },
+  "seed": 0,
+  "split": "val",
+  "thresholds_from": null
+}

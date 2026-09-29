@@ -1,44 +1,126 @@
 {
-  "conf": 0.25,
+  "conf": 0.001,
   "data": "eval/clean_splits/data.yaml",
   "device": "mps",
-  "generated_at": "2026-09-13T12:53:59.991229+00:00",
+  "generated_at": "2026-09-29T00:24:12.530766+00:00",
   "imgsz": 640,
-  "iou": 0.5,
+  "iou": 0.7,
   "models": [
+    {
+      "label": "traffic_model-2",
+      "latency": {
+        "device": "mps",
+        "fps": 49.3,
+        "images": 25,
+        "mean_ms": 20.27,
+        "p50_ms": 19.52,
+        "p90_ms": 30.38
+      },
+      "map50": 0.7661,
+      "map50_95": 0.542,
+      "mean_precision": 0.7773,
+      "mean_recall": 0.7486,
+      "model_version": "traffic-4class@1.0.0",
+      "per_class": {
+        "Plate": {
+          "map50": 0.8727,
+          "precision": 0.9414,
+          "recall": 0.7801
+        },
+        "TripleRiding": {
+          "map50": 0.9075,
+          "precision": 0.8847,
+          "recall": 0.8621
+        },
+        "WithHelmet": {
+          "map50": 0.5171,
+          "precision": 0.4193,
+          "recall": 0.6538
+        },
+        "WithoutHelmet": {
+          "map50": 0.767,
+          "precision": 0.8638,
+          "recall": 0.6986
+        }
+      },
+      "size_mb": 5.96,
+      "weights": "runs/detect/traffic_model-2/weights/best.pt"
+    },
+    {
+      "label": "traffic_model_v2_dedup",
+      "latency": {
+        "device": "mps",
+        "fps": 60.3,
+        "images": 25,
+        "mean_ms": 16.58,
+        "p50_ms": 13.57,
+        "p90_ms": 26.27
+      },
+      "map50": 0.7444,
+      "map50_95": 0.5268,
+      "mean_precision": 0.7624,
+      "mean_recall": 0.772,
+      "model_version": "traffic_model_v2_dedup@2.0.0",
+      "per_class": {
+        "Plate": {
+          "map50": 0.8566,
+          "precision": 0.9069,
+          "recall": 0.8285
+        },
+        "TripleRiding": {
+          "map50": 0.8729,
+          "precision": 0.892,
+          "recall": 0.8544
+        },
+        "WithHelmet": {
+          "map50": 0.4495,
+          "precision": 0.4665,
+          "recall": 0.6923
+        },
+        "WithoutHelmet": {
+          "map50": 0.7985,
+          "precision": 0.784,
+          "recall": 0.7129
+        }
+      },
+      "size_mb": 5.96,
+      "weights": "runs/detect/traffic_model_v2_dedup/weights/best.pt"
+    },
     {
       "label": "traffic_model_probe",
       "latency": {
-        "fps": 35.9,
+        "device": "mps",
+        "fps": 49.2,
         "images": 25,
-        "mean_ms": 27.88,
-        "p90_ms": 28.5
+        "mean_ms": 20.31,
+        "p50_ms": 18.29,
+        "p90_ms": 27.08
       },
-      "map50": 0.7408,
-      "map50_95": 0.5455,
-      "mean_precision": 0.7316,
-      "mean_recall": 0.8021,
+      "map50": 0.7411,
+      "map50_95": 0.5162,
+      "mean_precision": 0.696,
+      "mean_recall": 0.7235,
       "model_version": null,
       "per_class": {
         "Plate": {
-          "map50": 0.8403,
-          "precision": 0.8647,
-          "recall": 0.8779
+          "map50": 0.8413,
+          "precision": 0.8778,
+          "recall": 0.7935
         },
         "TripleRiding": {
-          "map50": 0.8817,
-          "precision": 0.931,
-          "recall": 0.9
+          "map50": 0.9037,
+          "precision": 0.9001,
+          "recall": 0.777
         },
         "WithHelmet": {
-          "map50": 0.4699,
-          "precision": 0.4211,
-          "recall": 0.5926
+          "map50": 0.4294,
+          "precision": 0.247,
+          "recall": 0.5769
         },
         "WithoutHelmet": {
-          "map50": 0.7713,
-          "precision": 0.7097,
-          "recall": 0.8381
+          "map50": 0.7898,
+          "precision": 0.7591,
+          "recall": 0.7464
         }
       },
       "size_mb": 5.96,
@@ -47,119 +129,140 @@
     {
       "label": "traffic_model_r2",
       "latency": {
-        "fps": 36.5,
+        "device": "mps",
+        "fps": 46.3,
         "images": 25,
-        "mean_ms": 27.4,
-        "p90_ms": 27.92
+        "mean_ms": 21.59,
+        "p50_ms": 19.48,
+        "p90_ms": 29.12
       },
-      "map50": 0.7279,
-      "map50_95": 0.5188,
-      "mean_precision": 0.8014,
-      "mean_recall": 0.7684,
+      "map50": 0.7379,
+      "map50_95": 0.5192,
+      "mean_precision": 0.7064,
+      "mean_recall": 0.7359,
       "model_version": null,
       "per_class": {
         "Plate": {
-          "map50": 0.8355,
-          "precision": 0.9051,
-          "recall": 0.8732
+          "map50": 0.7905,
+          "precision": 0.8505,
+          "recall": 0.749
         },
         "TripleRiding": {
-          "map50": 0.902,
-          "precision": 0.9021,
-          "recall": 0.9217
+          "map50": 0.8822,
+          "precision": 0.8563,
+          "recall": 0.8217
         },
         "WithHelmet": {
-          "map50": 0.4223,
-          "precision": 0.6487,
-          "recall": 0.4788
+          "map50": 0.4994,
+          "precision": 0.3838,
+          "recall": 0.6154
         },
         "WithoutHelmet": {
-          "map50": 0.7519,
-          "precision": 0.7499,
-          "recall": 0.8
+          "map50": 0.7797,
+          "precision": 0.7353,
+          "recall": 0.7575
         }
       },
       "size_mb": 23.35,
       "weights": "runs/detect/traffic_model_r2/weights/best.pt"
     },
     {
-      "label": "traffic_model-2",
+      "label": "traffic_model_seed1",
       "latency": {
-        "fps": 35.8,
+        "device": "mps",
+        "fps": 48.4,
         "images": 25,
-        "mean_ms": 27.91,
-        "p90_ms": 28.35
+        "mean_ms": 20.67,
+        "p50_ms": 19.56,
+        "p90_ms": 27.39
       },
-      "map50": 0.7265,
-      "map50_95": 0.532,
-      "mean_precision": 0.7559,
-      "mean_recall": 0.7846,
-      "model_version": "traffic-4class@1.0.0",
-      "per_class": {
-        "Plate": {
-          "map50": 0.863,
-          "precision": 0.8939,
-          "recall": 0.9008
-        },
-        "TripleRiding": {
-          "map50": 0.9502,
-          "precision": 0.8529,
-          "recall": 0.9667
-        },
-        "WithHelmet": {
-          "map50": 0.3873,
-          "precision": 0.5385,
-          "recall": 0.5185
-        },
-        "WithoutHelmet": {
-          "map50": 0.7054,
-          "precision": 0.7383,
-          "recall": 0.7524
-        }
-      },
-      "size_mb": 5.96,
-      "weights": "runs/detect/traffic_model-2/weights/best.pt"
-    },
-    {
-      "label": "traffic_model_helmetfix",
-      "latency": {
-        "fps": 35.7,
-        "images": 25,
-        "mean_ms": 27.97,
-        "p90_ms": 28.68
-      },
-      "map50": 0.4996,
-      "map50_95": 0.3385,
-      "mean_precision": 0.7996,
-      "mean_recall": 0.5195,
+      "map50": 0.7175,
+      "map50_95": 0.5071,
+      "mean_precision": 0.6811,
+      "mean_recall": 0.6961,
       "model_version": null,
       "per_class": {
         "Plate": {
-          "map50": 0.8708,
-          "precision": 0.8902,
-          "recall": 0.855
+          "map50": 0.8455,
+          "precision": 0.9218,
+          "recall": 0.749
         },
         "TripleRiding": {
-          "map50": 0.0,
-          "precision": 1.0,
-          "recall": 0.0
+          "map50": 0.8391,
+          "precision": 0.6285,
+          "recall": 0.9138
         },
         "WithHelmet": {
-          "map50": 0.4166,
-          "precision": 0.5693,
-          "recall": 0.4899
+          "map50": 0.4175,
+          "precision": 0.4151,
+          "recall": 0.3846
         },
         "WithoutHelmet": {
-          "map50": 0.711,
-          "precision": 0.739,
-          "recall": 0.7333
+          "map50": 0.7679,
+          "precision": 0.7592,
+          "recall": 0.7368
         }
       },
       "size_mb": 5.96,
-      "weights": "runs/detect/traffic_model_helmetfix/weights/best.pt"
+      "weights": "runs/detect/traffic_model_seed1/weights/best.pt"
     }
   ],
+  "provenance": {
+    "dataset": {
+      "data_yaml": "eval/clean_splits/data.yaml",
+      "scheme": "names+sizes+label-contents",
+      "split": "val",
+      "split_images": 352,
+      "split_version": "sha256:032b9391d7cd2dc2",
+      "version": "sha256:e1be4f14028241d1"
+    },
+    "environment": {
+      "chip": "Apple M4",
+      "cuda": false,
+      "cv2": "4.13.0",
+      "machine": "arm64",
+      "mps": true,
+      "numpy": "2.4.6",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7",
+      "torch": "2.12.1",
+      "ultralytics": "8.4.71"
+    },
+    "generated_at": "2026-09-29T00:24:12.530781+00:00",
+    "git": {
+      "commit": "ea57ebe",
+      "dirty": false
+    },
+    "models": [
+      {
+        "path": "runs/detect/traffic_model-2/weights/best.pt",
+        "sha256": "sha256:d49f79833cb86eda7d098b86679e02aced9c31c23b4eb20a18b06097fb712cbd",
+        "version": "traffic-4class@1.0.0"
+      },
+      {
+        "path": "runs/detect/traffic_model_seed1/weights/best.pt",
+        "sha256": "sha256:7b5090724e60b3ca0139807a02ee842cbb645ce9e4f5492d54662bcff10d4134",
+        "version": null
+      },
+      {
+        "path": "runs/detect/traffic_model_v2_dedup/weights/best.pt",
+        "sha256": "sha256:6339adafd4fb3633ed100166f86fcbd4990b8eed0179a48d72c679bf70a1b53d",
+        "version": "traffic_model_v2_dedup@2.0.0"
+      },
+      {
+        "path": "runs/detect/traffic_model_probe/weights/best.pt",
+        "sha256": "sha256:a6ef0802fc61a14e7b54ea226aef0f8cb8d25e7fa326333dd6e7d520445f292a",
+        "version": null
+      },
+      {
+        "path": "runs/detect/traffic_model_r2/weights/best.pt",
+        "sha256": "sha256:3b40f3d3baedd7a99589e213045fdc0203e7df2e09ad78366767478cf52161d2",
+        "version": null
+      }
+    ]
+  },
   "rank_by": "map50",
-  "split": "test",
-  "winner": "traffic_model_probe"
+  "split": "val",
+  "winner": "traffic_model-2"
 }

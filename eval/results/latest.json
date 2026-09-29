@@ -1,38 +1,40 @@
 {
   "end_to_end": {
-    "false_negatives": 0,
+    "false_negatives": 1,
     "false_positives": 0,
     "precision": 1.0,
-    "recall": 1.0,
-    "scenarios": 8,
-    "true_positives": 8
+    "recall": 0.9,
+    "scenarios": 10,
+    "true_positives": 9
   },
   "error_budget": {
-    "bottleneck": "ocr",
+    "bottleneck": "rider_recall",
+    "method": "oracle ablation at the measured operating point",
+    "robust_to_ocr_assumption": true,
     "stages": [
       {
-        "f1_drop": 0.4533,
-        "share": 0.7682,
-        "stage": "ocr"
+        "recovered_f1": 0.014,
+        "share": 0.5385,
+        "stage": "rider_recall"
       },
       {
-        "f1_drop": 0.0903,
-        "share": 0.153,
-        "stage": "detection_class"
+        "recovered_f1": 0.0109,
+        "share": 0.4192,
+        "stage": "helmet_class"
       },
       {
-        "f1_drop": 0.0431,
-        "share": 0.073,
-        "stage": "detection"
-      },
-      {
-        "f1_drop": 0.0034,
-        "share": 0.0058,
+        "recovered_f1": 0.0011,
+        "share": 0.0423,
         "stage": "plate_recall"
+      },
+      {
+        "recovered_f1": 0.0,
+        "share": 0.0,
+        "stage": "ocr"
       }
     ]
   },
-  "generated_at": "2026-09-14T09:22:14.416725+00:00",
+  "generated_at": "2026-09-29T00:13:14.337811+00:00",
   "ocr_policy": {
     "best_conf": {
       "answered_accuracy": 0.7,
@@ -43,8 +45,8 @@
       "coverage": 1.0
     },
     "temporal": {
-      "answered_accuracy": 0.9804,
-      "coverage": 0.51
+      "answered_accuracy": 1.0,
+      "coverage": 0.28
     }
   },
   "source": "evaluate_pipeline.py",
@@ -71,9 +73,9 @@
     }
   },
   "vs_single_frame": {
-    "clean_naive_f1": 0.9116,
-    "clean_pipeline_f1": 1.0,
-    "noisy_naive_f1": 0.8198,
-    "noisy_pipeline_f1": 0.9619
+    "clean_naive_f1": 0.9199,
+    "clean_pipeline_f1": 0.9762,
+    "noisy_naive_f1": 0.8282,
+    "noisy_pipeline_f1": 0.9567
   }
 }

@@ -7,7 +7,7 @@
     "TripleRiding"
   ],
   "data_yaml": "master_traffic_violation_dataset/data.yaml",
-  "generated_at": "2026-09-13T13:07:38.608136+00:00",
+  "generated_at": "2026-09-29T00:13:13.289555+00:00",
   "known_limitations": [
     "Source datasets, their authors and their licences are not recorded with the data; do not redistribute the images or assert a licence until traced.",
     "Validation and test splits are small and imbalanced (WithHelmet has only 27 instances in each), so per-class metrics for WithHelmet are high-variance and should be read as indicative.",
@@ -46,7 +46,7 @@
         "WithoutHelmet": 105
       },
       "images": 194,
-      "images_dir": "master_traffic_violation_dataset/test/images",
+      "images_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/master_traffic_violation_dataset/test/images",
       "instances": 311,
       "label_files": 194
     },
@@ -59,7 +59,7 @@
         "WithoutHelmet": 4862
       },
       "images": 11195,
-      "images_dir": "master_traffic_violation_dataset/train/images",
+      "images_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/master_traffic_violation_dataset/train/images",
       "instances": 21191,
       "label_files": 11195
     },
@@ -72,7 +72,7 @@
         "WithoutHelmet": 209
       },
       "images": 383,
-      "images_dir": "master_traffic_violation_dataset/valid/images",
+      "images_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/master_traffic_violation_dataset/valid/images",
       "instances": 572,
       "label_files": 383
     }
@@ -89,5 +89,5 @@
     "instances": 22074,
     "label_files": 11772
   },
-  "version": "sha256:bef022b6e9fd485e"
+  "version": "sha256:362a262721cd15ab"
 }

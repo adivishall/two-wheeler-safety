@@ -1,0 +1,307 @@
+{
+  "class_names": [
+    "Plate",
+    "WithHelmet",
+    "WithoutHelmet",
+    "TripleRiding"
+  ],
+  "data": "master_traffic_violation_dataset/data.yaml",
+  "dataset_version": "sha256:362a262721cd15ab",
+  "model_probe": {
+    "by_source": {
+      "ds1": {
+        "images": 296,
+        "share_with_prediction": {
+          "Plate": 0.6453,
+          "TripleRiding": 0.0169,
+          "WithHelmet": 0.1284,
+          "WithoutHelmet": 0.6081
+        }
+      },
+      "dst": {
+        "images": 87,
+        "share_with_prediction": {
+          "Plate": 0.0575,
+          "TripleRiding": 0.8851,
+          "WithHelmet": 0.0,
+          "WithoutHelmet": 0.1149
+        }
+      }
+    },
+    "conf": 0.25,
+    "model": "runs/detect/traffic_model-2/weights/best.pt",
+    "split": "val"
+  },
+  "splits": {
+    "test": {
+      "background_images": 31,
+      "class_cooccurrence_images": {
+        "Plate": {
+          "Plate": 106,
+          "TripleRiding": 0,
+          "WithHelmet": 10,
+          "WithoutHelmet": 78
+        },
+        "TripleRiding": {
+          "Plate": 0,
+          "TripleRiding": 48,
+          "WithHelmet": 0,
+          "WithoutHelmet": 0
+        },
+        "WithHelmet": {
+          "Plate": 10,
+          "TripleRiding": 0,
+          "WithHelmet": 13,
+          "WithoutHelmet": 6
+        },
+        "WithoutHelmet": {
+          "Plate": 78,
+          "TripleRiding": 0,
+          "WithHelmet": 6,
+          "WithoutHelmet": 86
+        }
+      },
+      "contradiction_examples": [],
+      "disjoint_label_groups": [
+        [
+          "Plate",
+          "WithHelmet",
+          "WithoutHelmet"
+        ],
+        [
+          "TripleRiding"
+        ]
+      ],
+      "duplicate_boxes": 0,
+      "helmet_contradictions": 0,
+      "images": 194,
+      "malformed_examples": [],
+      "malformed_labels": {},
+      "per_class": {
+        "Plate": {
+          "instances": 131,
+          "median_area_pct": 0.283,
+          "tiny_boxes": 12,
+          "tiny_share": 0.0916
+        },
+        "TripleRiding": {
+          "instances": 48,
+          "median_area_pct": 63.758,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        },
+        "WithHelmet": {
+          "instances": 27,
+          "median_area_pct": 8.719,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        },
+        "WithoutHelmet": {
+          "instances": 105,
+          "median_area_pct": 11.3,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        }
+      },
+      "source_class_instances": {
+        "ds1": {
+          "Plate": 131,
+          "WithHelmet": 27,
+          "WithoutHelmet": 105
+        },
+        "dst": {
+          "TripleRiding": 48
+        }
+      },
+      "sources": {
+        "ds1": 146,
+        "dst": 48
+      },
+      "unreadable_images": null
+    },
+    "train": {
+      "background_images": 453,
+      "class_cooccurrence_images": {
+        "Plate": {
+          "Plate": 4837,
+          "TripleRiding": 0,
+          "WithHelmet": 2378,
+          "WithoutHelmet": 3684
+        },
+        "TripleRiding": {
+          "Plate": 0,
+          "TripleRiding": 4844,
+          "WithHelmet": 0,
+          "WithoutHelmet": 0
+        },
+        "WithHelmet": {
+          "Plate": 2378,
+          "TripleRiding": 0,
+          "WithHelmet": 3310,
+          "WithoutHelmet": 1478
+        },
+        "WithoutHelmet": {
+          "Plate": 3684,
+          "TripleRiding": 0,
+          "WithHelmet": 1478,
+          "WithoutHelmet": 3910
+        }
+      },
+      "contradiction_examples": [],
+      "disjoint_label_groups": [
+        [
+          "Plate",
+          "WithHelmet",
+          "WithoutHelmet"
+        ],
+        [
+          "TripleRiding"
+        ]
+      ],
+      "duplicate_boxes": 0,
+      "helmet_contradictions": 0,
+      "images": 11195,
+      "malformed_examples": [],
+      "malformed_labels": {},
+      "per_class": {
+        "Plate": {
+          "instances": 6605,
+          "median_area_pct": 0.187,
+          "tiny_boxes": 1123,
+          "tiny_share": 0.17
+        },
+        "TripleRiding": {
+          "instances": 4862,
+          "median_area_pct": 51.371,
+          "tiny_boxes": 8,
+          "tiny_share": 0.0016
+        },
+        "WithHelmet": {
+          "instances": 4862,
+          "median_area_pct": 7.51,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        },
+        "WithoutHelmet": {
+          "instances": 4862,
+          "median_area_pct": 8.851,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        }
+      },
+      "source_class_instances": {
+        "aug": {
+          "Plate": 5038,
+          "TripleRiding": 4538,
+          "WithHelmet": 4579,
+          "WithoutHelmet": 3349
+        },
+        "ds1": {
+          "Plate": 1494,
+          "WithHelmet": 283,
+          "WithoutHelmet": 1307
+        },
+        "dst": {
+          "TripleRiding": 324
+        },
+        "dsv": {
+          "Plate": 73,
+          "WithoutHelmet": 206
+        }
+      },
+      "sources": {
+        "aug": 8985,
+        "ds1": 1820,
+        "dst": 323,
+        "dsv": 67
+      },
+      "unreadable_images": null
+    },
+    "val": {
+      "background_images": 76,
+      "class_cooccurrence_images": {
+        "Plate": {
+          "Plate": 208,
+          "TripleRiding": 0,
+          "WithHelmet": 22,
+          "WithoutHelmet": 175
+        },
+        "TripleRiding": {
+          "Plate": 0,
+          "TripleRiding": 87,
+          "WithHelmet": 0,
+          "WithoutHelmet": 0
+        },
+        "WithHelmet": {
+          "Plate": 22,
+          "TripleRiding": 0,
+          "WithHelmet": 25,
+          "WithoutHelmet": 15
+        },
+        "WithoutHelmet": {
+          "Plate": 175,
+          "TripleRiding": 0,
+          "WithHelmet": 15,
+          "WithoutHelmet": 184
+        }
+      },
+      "contradiction_examples": [],
+      "disjoint_label_groups": [
+        [
+          "Plate",
+          "WithHelmet",
+          "WithoutHelmet"
+        ],
+        [
+          "TripleRiding"
+        ]
+      ],
+      "duplicate_boxes": 0,
+      "helmet_contradictions": 0,
+      "images": 383,
+      "malformed_examples": [],
+      "malformed_labels": {},
+      "per_class": {
+        "Plate": {
+          "instances": 247,
+          "median_area_pct": 0.33,
+          "tiny_boxes": 23,
+          "tiny_share": 0.0931
+        },
+        "TripleRiding": {
+          "instances": 89,
+          "median_area_pct": 58.838,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        },
+        "WithHelmet": {
+          "instances": 27,
+          "median_area_pct": 3.944,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        },
+        "WithoutHelmet": {
+          "instances": 209,
+          "median_area_pct": 19.615,
+          "tiny_boxes": 0,
+          "tiny_share": 0.0
+        }
+      },
+      "source_class_instances": {
+        "ds1": {
+          "Plate": 247,
+          "WithHelmet": 27,
+          "WithoutHelmet": 209
+        },
+        "dst": {
+          "TripleRiding": 89
+        }
+      },
+      "sources": {
+        "ds1": 296,
+        "dst": 87
+      },
+      "unreadable_images": null
+    }
+  }
+}

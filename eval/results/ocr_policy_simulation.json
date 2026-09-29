@@ -9,7 +9,9 @@
       "drop_char_rate": 0.04,
       "insert_char_rate": 0.03,
       "miss_frame_rate": 0.1,
-      "substitute_rate": 0.12
+      "substitute_rate": 0.12,
+      "systematic_rate": 0.0,
+      "systematic_strength": 0.5
     },
     "policies": {
       "best_conf": {
@@ -43,24 +45,24 @@
         "policy": "last"
       },
       "temporal": {
-        "abstain_rate": 0.49,
-        "answered_accuracy": 0.9804,
-        "char_accuracy": 0.5089,
-        "confidence_separation": 0.2531,
-        "coverage": 0.51,
-        "exact_match": 0.5,
-        "invalid_rate": 0.49,
-        "mean_conf_correct": 0.4913,
-        "mean_conf_wrong": 0.2382,
-        "mean_edit_distance": 4.89,
+        "abstain_rate": 0.72,
+        "answered_accuracy": 1.0,
+        "char_accuracy": 0.28,
+        "confidence_separation": 0.2525,
+        "coverage": 0.28,
+        "exact_match": 0.28,
+        "invalid_rate": 0.72,
+        "mean_conf_correct": 0.5466,
+        "mean_conf_wrong": 0.2941,
+        "mean_edit_distance": 7.17,
         "n": 100,
-        "normalized_match": 0.5,
+        "normalized_match": 0.28,
         "policy": "temporal"
       }
     },
-    "temporal_gain_vs_best_single_frame": -0.2
+    "temporal_gain_vs_best_single_frame": -0.42
   },
-  "generated_at": "2026-09-13T12:57:55.469664+00:00",
+  "generated_at": "2026-09-29T00:16:15.625129+00:00",
   "mode": "simulate",
   "noise_sweep": {
     "note": "Simulated OCR noise, not field data. These numbers describe the stated character-error model; they measure the decision rule, not EasyOCR's accuracy on real plates.",
@@ -75,7 +77,9 @@
           "drop_char_rate": 0.04,
           "insert_char_rate": 0.03,
           "miss_frame_rate": 0.1,
-          "substitute_rate": 0.04
+          "substitute_rate": 0.04,
+          "systematic_rate": 0.0,
+          "systematic_strength": 0.5
         },
         "policies": {
           "best_conf": {
@@ -109,22 +113,22 @@
             "policy": "last"
           },
           "temporal": {
-            "abstain_rate": 0.22,
-            "answered_accuracy": 0.9872,
-            "char_accuracy": 0.779,
-            "confidence_separation": 0.2757,
-            "coverage": 0.78,
-            "exact_match": 0.77,
-            "invalid_rate": 0.22,
-            "mean_conf_correct": 0.5566,
-            "mean_conf_wrong": 0.2809,
-            "mean_edit_distance": 2.21,
+            "abstain_rate": 0.36,
+            "answered_accuracy": 1.0,
+            "char_accuracy": 0.64,
+            "confidence_separation": 0.2603,
+            "coverage": 0.64,
+            "exact_match": 0.64,
+            "invalid_rate": 0.36,
+            "mean_conf_correct": 0.5869,
+            "mean_conf_wrong": 0.3266,
+            "mean_edit_distance": 3.59,
             "n": 100,
-            "normalized_match": 0.77,
+            "normalized_match": 0.64,
             "policy": "temporal"
           }
         },
-        "temporal_gain_vs_best_single_frame": -0.16
+        "temporal_gain_vs_best_single_frame": -0.29
       },
       "0.08": {
         "frames_per_sequence": 10,
@@ -136,7 +140,9 @@
           "drop_char_rate": 0.04,
           "insert_char_rate": 0.03,
           "miss_frame_rate": 0.1,
-          "substitute_rate": 0.08
+          "substitute_rate": 0.08,
+          "systematic_rate": 0.0,
+          "systematic_strength": 0.5
         },
         "policies": {
           "best_conf": {
@@ -170,22 +176,22 @@
             "policy": "last"
           },
           "temporal": {
-            "abstain_rate": 0.36,
+            "abstain_rate": 0.56,
             "answered_accuracy": 1.0,
-            "char_accuracy": 0.64,
-            "confidence_separation": 0.3038,
-            "coverage": 0.64,
-            "exact_match": 0.64,
-            "invalid_rate": 0.36,
-            "mean_conf_correct": 0.5538,
-            "mean_conf_wrong": 0.25,
-            "mean_edit_distance": 3.58,
+            "char_accuracy": 0.44,
+            "confidence_separation": 0.3145,
+            "coverage": 0.44,
+            "exact_match": 0.44,
+            "invalid_rate": 0.56,
+            "mean_conf_correct": 0.6206,
+            "mean_conf_wrong": 0.3061,
+            "mean_edit_distance": 5.57,
             "n": 100,
-            "normalized_match": 0.64,
+            "normalized_match": 0.44,
             "policy": "temporal"
           }
         },
-        "temporal_gain_vs_best_single_frame": -0.2
+        "temporal_gain_vs_best_single_frame": -0.4
       },
       "0.12": {
         "frames_per_sequence": 10,
@@ -197,7 +203,9 @@
           "drop_char_rate": 0.04,
           "insert_char_rate": 0.03,
           "miss_frame_rate": 0.1,
-          "substitute_rate": 0.12
+          "substitute_rate": 0.12,
+          "systematic_rate": 0.0,
+          "systematic_strength": 0.5
         },
         "policies": {
           "best_conf": {
@@ -231,22 +239,22 @@
             "policy": "last"
           },
           "temporal": {
-            "abstain_rate": 0.49,
-            "answered_accuracy": 0.9804,
-            "char_accuracy": 0.5089,
-            "confidence_separation": 0.2531,
-            "coverage": 0.51,
-            "exact_match": 0.5,
-            "invalid_rate": 0.49,
-            "mean_conf_correct": 0.4913,
-            "mean_conf_wrong": 0.2382,
-            "mean_edit_distance": 4.89,
+            "abstain_rate": 0.72,
+            "answered_accuracy": 1.0,
+            "char_accuracy": 0.28,
+            "confidence_separation": 0.2525,
+            "coverage": 0.28,
+            "exact_match": 0.28,
+            "invalid_rate": 0.72,
+            "mean_conf_correct": 0.5466,
+            "mean_conf_wrong": 0.2941,
+            "mean_edit_distance": 7.17,
             "n": 100,
-            "normalized_match": 0.5,
+            "normalized_match": 0.28,
             "policy": "temporal"
           }
         },
-        "temporal_gain_vs_best_single_frame": -0.2
+        "temporal_gain_vs_best_single_frame": -0.42
       },
       "0.20": {
         "frames_per_sequence": 10,
@@ -258,7 +266,9 @@
           "drop_char_rate": 0.04,
           "insert_char_rate": 0.03,
           "miss_frame_rate": 0.1,
-          "substitute_rate": 0.2
+          "substitute_rate": 0.2,
+          "systematic_rate": 0.0,
+          "systematic_strength": 0.5
         },
         "policies": {
           "best_conf": {
@@ -292,22 +302,22 @@
             "policy": "last"
           },
           "temporal": {
-            "abstain_rate": 0.77,
-            "answered_accuracy": 0.913,
-            "char_accuracy": 0.228,
-            "confidence_separation": 0.2689,
-            "coverage": 0.23,
-            "exact_match": 0.21,
-            "invalid_rate": 0.77,
-            "mean_conf_correct": 0.4909,
-            "mean_conf_wrong": 0.222,
-            "mean_edit_distance": 7.68,
+            "abstain_rate": 0.88,
+            "answered_accuracy": 1.0,
+            "char_accuracy": 0.12,
+            "confidence_separation": 0.3226,
+            "coverage": 0.12,
+            "exact_match": 0.12,
+            "invalid_rate": 0.88,
+            "mean_conf_correct": 0.5624,
+            "mean_conf_wrong": 0.2398,
+            "mean_edit_distance": 8.76,
             "n": 100,
-            "normalized_match": 0.21,
+            "normalized_match": 0.12,
             "policy": "temporal"
           }
         },
-        "temporal_gain_vs_best_single_frame": -0.24
+        "temporal_gain_vs_best_single_frame": -0.33
       },
       "0.30": {
         "frames_per_sequence": 10,
@@ -319,7 +329,9 @@
           "drop_char_rate": 0.04,
           "insert_char_rate": 0.03,
           "miss_frame_rate": 0.1,
-          "substitute_rate": 0.3
+          "substitute_rate": 0.3,
+          "systematic_rate": 0.0,
+          "systematic_strength": 0.5
         },
         "policies": {
           "best_conf": {
@@ -353,23 +365,330 @@
             "policy": "last"
           },
           "temporal": {
-            "abstain_rate": 0.89,
-            "answered_accuracy": 0.9091,
-            "char_accuracy": 0.109,
-            "confidence_separation": 0.2166,
-            "coverage": 0.11,
-            "exact_match": 0.1,
-            "invalid_rate": 0.89,
-            "mean_conf_correct": 0.4255,
-            "mean_conf_wrong": 0.2089,
-            "mean_edit_distance": 8.88,
+            "abstain_rate": 0.98,
+            "answered_accuracy": 1.0,
+            "char_accuracy": 0.02,
+            "confidence_separation": 0.2465,
+            "coverage": 0.02,
+            "exact_match": 0.02,
+            "invalid_rate": 0.98,
+            "mean_conf_correct": 0.4721,
+            "mean_conf_wrong": 0.2256,
+            "mean_edit_distance": 9.77,
             "n": 100,
-            "normalized_match": 0.1,
+            "normalized_match": 0.02,
             "policy": "temporal"
           }
         },
-        "temporal_gain_vs_best_single_frame": -0.13
+        "temporal_gain_vs_best_single_frame": -0.21
       }
     }
+  },
+  "stabilizer_selection": {
+    "caveat": "Simulated character-level OCR noise (look-alike substitutions, drops, insertions, missed frames). Measures the decision rule, not EasyOCR's field accuracy.",
+    "dev_seed": 1234,
+    "frames_per_sequence": 10,
+    "previous_default": "1.0.0 rule: obs>=2, agreement>=0.35, no margin",
+    "selection": {
+      "objective": "max mean coverage s.t. wrong-plate rate <= 1% in every design condition (sub=0.04,sys=0.0, sub=0.08,sys=0.0, sub=0.12,sys=0.0, sub=0.04,sys=0.3, sub=0.08,sys=0.3, sub=0.12,sys=0.3)",
+      "selected": "support>=3, agreement>=0.35, margin>=0.3",
+      "selected_by": "fallback: no config met the target; most coverage among configs within 2 SE (0.89%) of the lowest worst-case wrong-plate rate (2.0%)",
+      "table": [
+        {
+          "config": "1.0.0 rule: obs>=2, agreement>=0.35, no margin",
+          "feasible": false,
+          "mean_coverage": 1.0,
+          "worst_wrong_plate_rate": 0.594
+        },
+        {
+          "config": "support>=1, agreement>=0.35, margin>=0.0",
+          "feasible": false,
+          "mean_coverage": 0.9825,
+          "worst_wrong_plate_rate": 0.485
+        },
+        {
+          "config": "support>=1, agreement>=0.35, margin>=0.1",
+          "feasible": false,
+          "mean_coverage": 0.8218,
+          "worst_wrong_plate_rate": 0.164
+        },
+        {
+          "config": "support>=1, agreement>=0.35, margin>=0.2",
+          "feasible": false,
+          "mean_coverage": 0.7438,
+          "worst_wrong_plate_rate": 0.099
+        },
+        {
+          "config": "support>=1, agreement>=0.35, margin>=0.3",
+          "feasible": false,
+          "mean_coverage": 0.6092,
+          "worst_wrong_plate_rate": 0.071
+        },
+        {
+          "config": "support>=1, agreement>=0.5, margin>=0.0",
+          "feasible": false,
+          "mean_coverage": 0.6383,
+          "worst_wrong_plate_rate": 0.11
+        },
+        {
+          "config": "support>=1, agreement>=0.5, margin>=0.1",
+          "feasible": false,
+          "mean_coverage": 0.6353,
+          "worst_wrong_plate_rate": 0.108
+        },
+        {
+          "config": "support>=1, agreement>=0.5, margin>=0.2",
+          "feasible": false,
+          "mean_coverage": 0.601,
+          "worst_wrong_plate_rate": 0.084
+        },
+        {
+          "config": "support>=1, agreement>=0.5, margin>=0.3",
+          "feasible": false,
+          "mean_coverage": 0.5632,
+          "worst_wrong_plate_rate": 0.071
+        },
+        {
+          "config": "support>=2, agreement>=0.35, margin>=0.0",
+          "feasible": false,
+          "mean_coverage": 0.7647,
+          "worst_wrong_plate_rate": 0.092
+        },
+        {
+          "config": "support>=2, agreement>=0.35, margin>=0.1",
+          "feasible": false,
+          "mean_coverage": 0.764,
+          "worst_wrong_plate_rate": 0.089
+        },
+        {
+          "config": "support>=2, agreement>=0.35, margin>=0.2",
+          "feasible": false,
+          "mean_coverage": 0.7187,
+          "worst_wrong_plate_rate": 0.061
+        },
+        {
+          "config": "support>=2, agreement>=0.35, margin>=0.3",
+          "feasible": false,
+          "mean_coverage": 0.5785,
+          "worst_wrong_plate_rate": 0.034
+        },
+        {
+          "config": "support>=2, agreement>=0.5, margin>=0.0",
+          "feasible": false,
+          "mean_coverage": 0.5685,
+          "worst_wrong_plate_rate": 0.05
+        },
+        {
+          "config": "support>=2, agreement>=0.5, margin>=0.1",
+          "feasible": false,
+          "mean_coverage": 0.5685,
+          "worst_wrong_plate_rate": 0.049
+        },
+        {
+          "config": "support>=2, agreement>=0.5, margin>=0.2",
+          "feasible": false,
+          "mean_coverage": 0.5647,
+          "worst_wrong_plate_rate": 0.045
+        },
+        {
+          "config": "support>=2, agreement>=0.5, margin>=0.3",
+          "feasible": false,
+          "mean_coverage": 0.5317,
+          "worst_wrong_plate_rate": 0.034
+        },
+        {
+          "config": "support>=3, agreement>=0.35, margin>=0.0",
+          "feasible": false,
+          "mean_coverage": 0.5873,
+          "worst_wrong_plate_rate": 0.04
+        },
+        {
+          "config": "support>=3, agreement>=0.35, margin>=0.1",
+          "feasible": false,
+          "mean_coverage": 0.5852,
+          "worst_wrong_plate_rate": 0.037
+        },
+        {
+          "config": "support>=3, agreement>=0.35, margin>=0.2",
+          "feasible": false,
+          "mean_coverage": 0.5695,
+          "worst_wrong_plate_rate": 0.03
+        },
+        {
+          "config": "support>=3, agreement>=0.35, margin>=0.3",
+          "feasible": false,
+          "mean_coverage": 0.4997,
+          "worst_wrong_plate_rate": 0.021
+        },
+        {
+          "config": "support>=3, agreement>=0.5, margin>=0.0",
+          "feasible": false,
+          "mean_coverage": 0.445,
+          "worst_wrong_plate_rate": 0.021
+        },
+        {
+          "config": "support>=3, agreement>=0.5, margin>=0.1",
+          "feasible": false,
+          "mean_coverage": 0.445,
+          "worst_wrong_plate_rate": 0.021
+        },
+        {
+          "config": "support>=3, agreement>=0.5, margin>=0.2",
+          "feasible": false,
+          "mean_coverage": 0.4442,
+          "worst_wrong_plate_rate": 0.021
+        },
+        {
+          "config": "support>=3, agreement>=0.5, margin>=0.3",
+          "feasible": false,
+          "mean_coverage": 0.4395,
+          "worst_wrong_plate_rate": 0.02
+        }
+      ]
+    },
+    "sequences_per_rate": 1000,
+    "test": {
+      "sub=0.04,sys=0.0": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.598,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.402
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.3,
+          "correct_rate": 0.699,
+          "coverage": 0.7,
+          "wrong_plate_rate": 0.001
+        }
+      },
+      "sub=0.04,sys=0.3": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.564,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.436
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.375,
+          "correct_rate": 0.607,
+          "coverage": 0.625,
+          "wrong_plate_rate": 0.018
+        }
+      },
+      "sub=0.08,sys=0.0": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.478,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.522
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.503,
+          "correct_rate": 0.496,
+          "coverage": 0.497,
+          "wrong_plate_rate": 0.001
+        }
+      },
+      "sub=0.08,sys=0.3": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.466,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.534
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.515,
+          "correct_rate": 0.471,
+          "coverage": 0.485,
+          "wrong_plate_rate": 0.014
+        }
+      },
+      "sub=0.12,sys=0.0": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.378,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.622
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.656,
+          "correct_rate": 0.343,
+          "coverage": 0.344,
+          "wrong_plate_rate": 0.001
+        }
+      },
+      "sub=0.12,sys=0.3": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.396,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.604
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.657,
+          "correct_rate": 0.334,
+          "coverage": 0.343,
+          "wrong_plate_rate": 0.009
+        }
+      },
+      "sub=0.20,sys=0.0": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.285,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.715
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.849,
+          "correct_rate": 0.147,
+          "coverage": 0.151,
+          "wrong_plate_rate": 0.004
+        }
+      },
+      "sub=0.20,sys=0.3": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.001,
+          "correct_rate": 0.259,
+          "coverage": 0.999,
+          "wrong_plate_rate": 0.74
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.879,
+          "correct_rate": 0.116,
+          "coverage": 0.121,
+          "wrong_plate_rate": 0.005
+        }
+      },
+      "sub=0.30,sys=0.0": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.001,
+          "correct_rate": 0.14,
+          "coverage": 0.999,
+          "wrong_plate_rate": 0.859
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.97,
+          "correct_rate": 0.028,
+          "coverage": 0.03,
+          "wrong_plate_rate": 0.002
+        }
+      },
+      "sub=0.30,sys=0.3": {
+        "1.0.0 rule: obs>=2, agreement>=0.35, no margin": {
+          "abstain_rate": 0.0,
+          "correct_rate": 0.138,
+          "coverage": 1.0,
+          "wrong_plate_rate": 0.862
+        },
+        "support>=3, agreement>=0.35, margin>=0.3": {
+          "abstain_rate": 0.973,
+          "correct_rate": 0.025,
+          "coverage": 0.027,
+          "wrong_plate_rate": 0.002
+        }
+      }
+    },
+    "test_seed": 5678
   }
 }

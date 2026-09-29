@@ -1,135 +1,287 @@
 {
   "budget": {
-    "baseline_f1": 1.0,
-    "bottleneck": "ocr",
-    "interpretation": "Equal-rate fault injection: each stage is degraded by the same amount and the end-to-end F1 drop is measured. This ranks how much the system DEPENDS on each stage. It is NOT a claim about how often each stage fails in the field \u2014 that needs field data.",
+    "bottleneck": "rider_recall",
+    "bottleneck_robust_to_ocr_assumption": true,
+    "by_ocr_rate": {
+      "0.10": {
+        "all_faults_f1": 0.9547,
+        "ceiling_gap": 0.015,
+        "largest_owner": "rider_recall",
+        "ocr_read_error_rate": 0.1,
+        "stages": [
+          {
+            "description": "detector misses the rider box",
+            "f1_if_perfect": 0.9697,
+            "recovered_f1": 0.015,
+            "share_of_recovered": 0.5357,
+            "stage": "rider_recall"
+          },
+          {
+            "description": "detector labels the rider with the wrong helmet/triple class",
+            "f1_if_perfect": 0.9666,
+            "recovered_f1": 0.0119,
+            "share_of_recovered": 0.425,
+            "stage": "helmet_class"
+          },
+          {
+            "description": "detector misses the plate box (nothing to OCR)",
+            "f1_if_perfect": 0.9558,
+            "recovered_f1": 0.0011,
+            "share_of_recovered": 0.0393,
+            "stage": "plate_recall"
+          },
+          {
+            "description": "OCR reads the plate with a wrong glyph",
+            "f1_if_perfect": 0.9547,
+            "recovered_f1": 0.0,
+            "share_of_recovered": 0.0,
+            "stage": "ocr"
+          }
+        ]
+      },
+      "0.30": {
+        "all_faults_f1": 0.9557,
+        "ceiling_gap": 0.014,
+        "largest_owner": "rider_recall",
+        "ocr_read_error_rate": 0.3,
+        "stages": [
+          {
+            "description": "detector misses the rider box",
+            "f1_if_perfect": 0.9697,
+            "recovered_f1": 0.014,
+            "share_of_recovered": 0.5385,
+            "stage": "rider_recall"
+          },
+          {
+            "description": "detector labels the rider with the wrong helmet/triple class",
+            "f1_if_perfect": 0.9666,
+            "recovered_f1": 0.0109,
+            "share_of_recovered": 0.4192,
+            "stage": "helmet_class"
+          },
+          {
+            "description": "detector misses the plate box (nothing to OCR)",
+            "f1_if_perfect": 0.9567,
+            "recovered_f1": 0.0011,
+            "share_of_recovered": 0.0423,
+            "stage": "plate_recall"
+          },
+          {
+            "description": "OCR reads the plate with a wrong glyph",
+            "f1_if_perfect": 0.9547,
+            "recovered_f1": 0.0,
+            "share_of_recovered": 0.0,
+            "stage": "ocr"
+          }
+        ]
+      },
+      "0.50": {
+        "all_faults_f1": 0.9546,
+        "ceiling_gap": 0.0151,
+        "largest_owner": "rider_recall",
+        "ocr_read_error_rate": 0.5,
+        "stages": [
+          {
+            "description": "detector misses the rider box",
+            "f1_if_perfect": 0.9697,
+            "recovered_f1": 0.0151,
+            "share_of_recovered": 0.5551,
+            "stage": "rider_recall"
+          },
+          {
+            "description": "detector labels the rider with the wrong helmet/triple class",
+            "f1_if_perfect": 0.9655,
+            "recovered_f1": 0.0109,
+            "share_of_recovered": 0.4007,
+            "stage": "helmet_class"
+          },
+          {
+            "description": "detector misses the plate box (nothing to OCR)",
+            "f1_if_perfect": 0.9557,
+            "recovered_f1": 0.0011,
+            "share_of_recovered": 0.0404,
+            "stage": "plate_recall"
+          },
+          {
+            "description": "OCR reads the plate with a wrong glyph",
+            "f1_if_perfect": 0.9547,
+            "recovered_f1": 0.0001,
+            "share_of_recovered": 0.0037,
+            "stage": "ocr"
+          }
+        ]
+      }
+    },
+    "interpretation": "Each stage fails at its per-frame rate measured on the validation split (OCR, unmeasured, is swept); making one stage perfect and measuring the fine-F1 it recovers attributes the error. Synthetic scenarios, so this ranks where effort pays off in THIS pipeline; it is NOT a claim about how often each stage fails in the field.",
+    "method": "oracle ablation at the measured operating point",
+    "no_fault_f1": 0.9697,
+    "operating_point": {
+      "class_flip": {
+        "TripleRiding": [
+          "WithoutHelmet",
+          0.0517
+        ],
+        "WithHelmet": [
+          "WithoutHelmet",
+          0.1538
+        ],
+        "WithoutHelmet": [
+          "WithHelmet",
+          0.0766
+        ]
+      },
+      "plate_miss": 0.1822,
+      "rider_miss": {
+        "TripleRiding": 0.1034,
+        "WithHelmet": 0.1538,
+        "WithoutHelmet": 0.201
+      },
+      "source": "eval/results/eval_traffic_model-2_val_clean.json (confusion matrix, conf 0.25)"
+    },
     "seed": 7,
     "stages": [
       {
-        "best_trial_f1": 0.7333,
-        "description": "characters corrupted in the plate text (OCR noise)",
-        "f1_drop": 0.4533,
-        "injected_rate": 0.3,
-        "mean_f1": 0.5467,
-        "share_of_measured_sensitivity": 0.7682,
-        "stage": "ocr",
-        "worst_trial_f1": 0.3333
+        "description": "detector misses the rider box",
+        "f1_if_perfect": 0.9697,
+        "recovered_f1": 0.014,
+        "share_of_recovered": 0.5385,
+        "stage": "rider_recall"
       },
       {
-        "best_trial_f1": 0.9677,
-        "description": "helmet/no-helmet boxes flipped (class confusion)",
-        "f1_drop": 0.0903,
-        "injected_rate": 0.3,
-        "mean_f1": 0.9097,
-        "share_of_measured_sensitivity": 0.153,
-        "stage": "detection_class",
-        "worst_trial_f1": 0.8148
+        "description": "detector labels the rider with the wrong helmet/triple class",
+        "f1_if_perfect": 0.9666,
+        "recovered_f1": 0.0109,
+        "share_of_recovered": 0.4192,
+        "stage": "helmet_class"
       },
       {
-        "best_trial_f1": 1.0,
-        "description": "boxes vanish (detector recall failure)",
-        "f1_drop": 0.0431,
-        "injected_rate": 0.3,
-        "mean_f1": 0.9569,
-        "share_of_measured_sensitivity": 0.073,
-        "stage": "detection",
-        "worst_trial_f1": 0.7692
+        "description": "detector misses the plate box (nothing to OCR)",
+        "f1_if_perfect": 0.9567,
+        "recovered_f1": 0.0011,
+        "share_of_recovered": 0.0423,
+        "stage": "plate_recall"
       },
       {
-        "best_trial_f1": 1.0,
-        "description": "plate not read on a frame (plate detection/OCR miss)",
-        "f1_drop": 0.0034,
-        "injected_rate": 0.3,
-        "mean_f1": 0.9966,
-        "share_of_measured_sensitivity": 0.0058,
-        "stage": "plate_recall",
-        "worst_trial_f1": 0.9655
+        "description": "OCR reads the plate with a wrong glyph",
+        "f1_if_perfect": 0.9547,
+        "recovered_f1": 0.0,
+        "share_of_recovered": 0.0,
+        "stage": "ocr"
       }
     ],
-    "trials_per_injection": 20
+    "tolerance": {
+      "f1_by_rate": {
+        "helmet_class": {
+          "0.10": 0.9697,
+          "0.20": 0.9502,
+          "0.30": 0.8304,
+          "0.50": 0.5483
+        },
+        "ocr": {
+          "0.10": 0.9697,
+          "0.20": 0.9697,
+          "0.30": 0.9697,
+          "0.50": 0.9697
+        },
+        "plate_recall": {
+          "0.10": 0.9697,
+          "0.20": 0.9697,
+          "0.30": 0.9697,
+          "0.50": 0.9603
+        },
+        "rider_recall": {
+          "0.10": 0.9619,
+          "0.20": 0.9576,
+          "0.30": 0.9142,
+          "0.50": 0.6111
+        }
+      },
+      "unit": "probability per vehicle per frame"
+    },
+    "trials": 30
   },
-  "generated_at": "2026-09-14T09:22:14.416725+00:00",
+  "generated_at": "2026-09-29T00:13:14.337811+00:00",
   "headroom": {
     "note": "Both policies see identical detections. The naive policy is handed perfect plate-to-vehicle association for free, which a real single-frame system would not have, so the pipeline's measured advantage is a lower bound.",
     "rates": {
       "0.00": {
         "naive": {
-          "f1": 0.9116,
+          "f1": 0.9199,
           "mean_false_positives": 1.5,
-          "precision": 0.8377,
+          "precision": 0.8516,
           "recall": 1.0
         },
         "pipeline": {
-          "f1": 1.0,
+          "f1": 0.9762,
           "mean_false_positives": 0.0,
           "precision": 1.0,
-          "recall": 1.0
+          "recall": 0.9546
         },
-        "pipeline_f1_advantage": 0.0884
+        "pipeline_f1_advantage": 0.0563
       },
       "0.10": {
         "naive": {
-          "f1": 0.8402,
-          "mean_false_positives": 3.425,
-          "precision": 0.7345,
+          "f1": 0.8313,
+          "mean_false_positives": 4.383,
+          "precision": 0.722,
           "recall": 1.0
         },
         "pipeline": {
-          "f1": 0.9943,
-          "mean_false_positives": 0.025,
-          "precision": 0.9975,
-          "recall": 0.9917
+          "f1": 0.9753,
+          "mean_false_positives": 0.0,
+          "precision": 1.0,
+          "recall": 0.953
         },
-        "pipeline_f1_advantage": 0.1541
+        "pipeline_f1_advantage": 0.144
       },
       "0.20": {
         "naive": {
-          "f1": 0.8198,
-          "mean_false_positives": 4.075,
-          "precision": 0.708,
+          "f1": 0.8282,
+          "mean_false_positives": 4.5,
+          "precision": 0.718,
           "recall": 1.0
         },
         "pipeline": {
-          "f1": 0.9619,
-          "mean_false_positives": 0.225,
-          "precision": 0.976,
-          "recall": 0.9528
+          "f1": 0.9567,
+          "mean_false_positives": 0.0,
+          "precision": 1.0,
+          "recall": 0.9212
         },
-        "pipeline_f1_advantage": 0.1421
+        "pipeline_f1_advantage": 0.1285
       },
       "0.30": {
         "naive": {
-          "f1": 0.8105,
-          "mean_false_positives": 4.4,
-          "precision": 0.6966,
+          "f1": 0.8282,
+          "mean_false_positives": 4.5,
+          "precision": 0.718,
           "recall": 1.0
         },
         "pipeline": {
-          "f1": 0.9174,
-          "mean_false_positives": 0.3,
-          "precision": 0.9624,
-          "recall": 0.8889
+          "f1": 0.8611,
+          "mean_false_positives": 0.0,
+          "precision": 1.0,
+          "recall": 0.7879
         },
-        "pipeline_f1_advantage": 0.1069
+        "pipeline_f1_advantage": 0.0329
       },
       "0.40": {
         "naive": {
-          "f1": 0.8084,
-          "mean_false_positives": 4.475,
-          "precision": 0.6941,
+          "f1": 0.8282,
+          "mean_false_positives": 4.5,
+          "precision": 0.718,
           "recall": 1.0
         },
         "pipeline": {
-          "f1": 0.8511,
-          "mean_false_positives": 0.725,
-          "precision": 0.903,
-          "recall": 0.8222
+          "f1": 0.6649,
+          "mean_false_positives": 0.033,
+          "precision": 0.9925,
+          "recall": 0.606
         },
-        "pipeline_f1_advantage": 0.0427
+        "pipeline_f1_advantage": -0.1633
       }
     },
     "seed": 11,
-    "trials_per_rate": 20
+    "trials_per_rate": 30
   },
   "ocr": {
     "default_noise": {
@@ -142,7 +294,9 @@
         "drop_char_rate": 0.04,
         "insert_char_rate": 0.03,
         "miss_frame_rate": 0.1,
-        "substitute_rate": 0.12
+        "substitute_rate": 0.12,
+        "systematic_rate": 0.0,
+        "systematic_strength": 0.5
       },
       "policies": {
         "best_conf": {
@@ -176,22 +330,22 @@
           "policy": "last"
         },
         "temporal": {
-          "abstain_rate": 0.49,
-          "answered_accuracy": 0.9804,
-          "char_accuracy": 0.5089,
-          "confidence_separation": 0.2531,
-          "coverage": 0.51,
-          "exact_match": 0.5,
-          "invalid_rate": 0.49,
-          "mean_conf_correct": 0.4913,
-          "mean_conf_wrong": 0.2382,
-          "mean_edit_distance": 4.89,
+          "abstain_rate": 0.72,
+          "answered_accuracy": 1.0,
+          "char_accuracy": 0.28,
+          "confidence_separation": 0.2525,
+          "coverage": 0.28,
+          "exact_match": 0.28,
+          "invalid_rate": 0.72,
+          "mean_conf_correct": 0.5466,
+          "mean_conf_wrong": 0.2941,
+          "mean_edit_distance": 7.17,
           "n": 100,
-          "normalized_match": 0.5,
+          "normalized_match": 0.28,
           "policy": "temporal"
         }
       },
-      "temporal_gain_vs_best_single_frame": -0.2
+      "temporal_gain_vs_best_single_frame": -0.42
     },
     "noise_sweep": {
       "note": "Simulated OCR noise, not field data. These numbers describe the stated character-error model; they measure the decision rule, not EasyOCR's accuracy on real plates.",
@@ -206,7 +360,9 @@
             "drop_char_rate": 0.04,
             "insert_char_rate": 0.03,
             "miss_frame_rate": 0.1,
-            "substitute_rate": 0.04
+            "substitute_rate": 0.04,
+            "systematic_rate": 0.0,
+            "systematic_strength": 0.5
           },
           "policies": {
             "best_conf": {
@@ -240,22 +396,22 @@
               "policy": "last"
             },
             "temporal": {
-              "abstain_rate": 0.22,
-              "answered_accuracy": 0.9872,
-              "char_accuracy": 0.779,
-              "confidence_separation": 0.2757,
-              "coverage": 0.78,
-              "exact_match": 0.77,
-              "invalid_rate": 0.22,
-              "mean_conf_correct": 0.5566,
-              "mean_conf_wrong": 0.2809,
-              "mean_edit_distance": 2.21,
+              "abstain_rate": 0.36,
+              "answered_accuracy": 1.0,
+              "char_accuracy": 0.64,
+              "confidence_separation": 0.2603,
+              "coverage": 0.64,
+              "exact_match": 0.64,
+              "invalid_rate": 0.36,
+              "mean_conf_correct": 0.5869,
+              "mean_conf_wrong": 0.3266,
+              "mean_edit_distance": 3.59,
               "n": 100,
-              "normalized_match": 0.77,
+              "normalized_match": 0.64,
               "policy": "temporal"
             }
           },
-          "temporal_gain_vs_best_single_frame": -0.16
+          "temporal_gain_vs_best_single_frame": -0.29
         },
         "0.08": {
           "frames_per_sequence": 10,
@@ -267,7 +423,9 @@
             "drop_char_rate": 0.04,
             "insert_char_rate": 0.03,
             "miss_frame_rate": 0.1,
-            "substitute_rate": 0.08
+            "substitute_rate": 0.08,
+            "systematic_rate": 0.0,
+            "systematic_strength": 0.5
           },
           "policies": {
             "best_conf": {
@@ -301,22 +459,22 @@
               "policy": "last"
             },
             "temporal": {
-              "abstain_rate": 0.36,
+              "abstain_rate": 0.56,
               "answered_accuracy": 1.0,
-              "char_accuracy": 0.64,
-              "confidence_separation": 0.3038,
-              "coverage": 0.64,
-              "exact_match": 0.64,
-              "invalid_rate": 0.36,
-              "mean_conf_correct": 0.5538,
-              "mean_conf_wrong": 0.25,
-              "mean_edit_distance": 3.58,
+              "char_accuracy": 0.44,
+              "confidence_separation": 0.3145,
+              "coverage": 0.44,
+              "exact_match": 0.44,
+              "invalid_rate": 0.56,
+              "mean_conf_correct": 0.6206,
+              "mean_conf_wrong": 0.3061,
+              "mean_edit_distance": 5.57,
               "n": 100,
-              "normalized_match": 0.64,
+              "normalized_match": 0.44,
               "policy": "temporal"
             }
           },
-          "temporal_gain_vs_best_single_frame": -0.2
+          "temporal_gain_vs_best_single_frame": -0.4
         },
         "0.12": {
           "frames_per_sequence": 10,
@@ -328,7 +486,9 @@
             "drop_char_rate": 0.04,
             "insert_char_rate": 0.03,
             "miss_frame_rate": 0.1,
-            "substitute_rate": 0.12
+            "substitute_rate": 0.12,
+            "systematic_rate": 0.0,
+            "systematic_strength": 0.5
           },
           "policies": {
             "best_conf": {
@@ -362,22 +522,22 @@
               "policy": "last"
             },
             "temporal": {
-              "abstain_rate": 0.49,
-              "answered_accuracy": 0.9804,
-              "char_accuracy": 0.5089,
-              "confidence_separation": 0.2531,
-              "coverage": 0.51,
-              "exact_match": 0.5,
-              "invalid_rate": 0.49,
-              "mean_conf_correct": 0.4913,
-              "mean_conf_wrong": 0.2382,
-              "mean_edit_distance": 4.89,
+              "abstain_rate": 0.72,
+              "answered_accuracy": 1.0,
+              "char_accuracy": 0.28,
+              "confidence_separation": 0.2525,
+              "coverage": 0.28,
+              "exact_match": 0.28,
+              "invalid_rate": 0.72,
+              "mean_conf_correct": 0.5466,
+              "mean_conf_wrong": 0.2941,
+              "mean_edit_distance": 7.17,
               "n": 100,
-              "normalized_match": 0.5,
+              "normalized_match": 0.28,
               "policy": "temporal"
             }
           },
-          "temporal_gain_vs_best_single_frame": -0.2
+          "temporal_gain_vs_best_single_frame": -0.42
         },
         "0.20": {
           "frames_per_sequence": 10,
@@ -389,7 +549,9 @@
             "drop_char_rate": 0.04,
             "insert_char_rate": 0.03,
             "miss_frame_rate": 0.1,
-            "substitute_rate": 0.2
+            "substitute_rate": 0.2,
+            "systematic_rate": 0.0,
+            "systematic_strength": 0.5
           },
           "policies": {
             "best_conf": {
@@ -423,22 +585,22 @@
               "policy": "last"
             },
             "temporal": {
-              "abstain_rate": 0.77,
-              "answered_accuracy": 0.913,
-              "char_accuracy": 0.228,
-              "confidence_separation": 0.2689,
-              "coverage": 0.23,
-              "exact_match": 0.21,
-              "invalid_rate": 0.77,
-              "mean_conf_correct": 0.4909,
-              "mean_conf_wrong": 0.222,
-              "mean_edit_distance": 7.68,
+              "abstain_rate": 0.88,
+              "answered_accuracy": 1.0,
+              "char_accuracy": 0.12,
+              "confidence_separation": 0.3226,
+              "coverage": 0.12,
+              "exact_match": 0.12,
+              "invalid_rate": 0.88,
+              "mean_conf_correct": 0.5624,
+              "mean_conf_wrong": 0.2398,
+              "mean_edit_distance": 8.76,
               "n": 100,
-              "normalized_match": 0.21,
+              "normalized_match": 0.12,
               "policy": "temporal"
             }
           },
-          "temporal_gain_vs_best_single_frame": -0.24
+          "temporal_gain_vs_best_single_frame": -0.33
         },
         "0.30": {
           "frames_per_sequence": 10,
@@ -450,7 +612,9 @@
             "drop_char_rate": 0.04,
             "insert_char_rate": 0.03,
             "miss_frame_rate": 0.1,
-            "substitute_rate": 0.3
+            "substitute_rate": 0.3,
+            "systematic_rate": 0.0,
+            "systematic_strength": 0.5
           },
           "policies": {
             "best_conf": {
@@ -484,22 +648,22 @@
               "policy": "last"
             },
             "temporal": {
-              "abstain_rate": 0.89,
-              "answered_accuracy": 0.9091,
-              "char_accuracy": 0.109,
-              "confidence_separation": 0.2166,
-              "coverage": 0.11,
-              "exact_match": 0.1,
-              "invalid_rate": 0.89,
-              "mean_conf_correct": 0.4255,
-              "mean_conf_wrong": 0.2089,
-              "mean_edit_distance": 8.88,
+              "abstain_rate": 0.98,
+              "answered_accuracy": 1.0,
+              "char_accuracy": 0.02,
+              "confidence_separation": 0.2465,
+              "coverage": 0.02,
+              "exact_match": 0.02,
+              "invalid_rate": 0.98,
+              "mean_conf_correct": 0.4721,
+              "mean_conf_wrong": 0.2256,
+              "mean_edit_distance": 9.77,
               "n": 100,
-              "normalized_match": 0.1,
+              "normalized_match": 0.02,
               "policy": "temporal"
             }
           },
-          "temporal_gain_vs_best_single_frame": -0.13
+          "temporal_gain_vs_best_single_frame": -0.21
         }
       }
     }
@@ -582,13 +746,46 @@
   },
   "system": {
     "scenarios": {
-      "clean_helmet": {
+      "brief_pass": {
         "association": {
           "accuracy": 1.0,
           "ambiguous_bodies": 0,
           "correct": 8,
           "expected_pairs": 8,
           "frames": 8,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 0,
+          "expected_fines": 1,
+          "false_negatives": 1,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 0.0,
+          "scenario": "brief_pass",
+          "true_positives": 0,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 8,
+          "gt_frames": 8,
+          "id_switches": 0,
+          "matched_gt_frames": 8
+        }
+      },
+      "clean_helmet": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 30,
+          "expected_pairs": 30,
+          "frames": 30,
           "missed": 0,
           "wrong": 0
         },
@@ -609,21 +806,21 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 8,
-          "gt_frames": 8,
+          "frames": 30,
+          "gt_frames": 30,
           "id_switches": 0,
-          "matched_gt_frames": 8
+          "matched_gt_frames": 30
         }
       },
       "crossing": {
         "association": {
-          "accuracy": 1.0,
-          "ambiguous_bodies": 4,
-          "correct": 20,
-          "expected_pairs": 20,
-          "frames": 10,
-          "missed": 0,
-          "wrong": 0
+          "accuracy": 0.95,
+          "ambiguous_bodies": 10,
+          "correct": 57,
+          "expected_pairs": 60,
+          "frames": 30,
+          "missed": 3,
+          "wrong": 1
         },
         "system": {
           "duplicates": 0,
@@ -642,19 +839,19 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 10,
-          "gt_frames": 20,
+          "frames": 30,
+          "gt_frames": 60,
           "id_switches": 0,
-          "matched_gt_frames": 20
+          "matched_gt_frames": 60
         }
       },
       "late_plate": {
         "association": {
           "accuracy": 1.0,
           "ambiguous_bodies": 0,
-          "correct": 4,
-          "expected_pairs": 4,
-          "frames": 8,
+          "correct": 15,
+          "expected_pairs": 15,
+          "frames": 30,
           "missed": 0,
           "wrong": 0
         },
@@ -675,19 +872,19 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 8,
-          "gt_frames": 8,
+          "frames": 30,
+          "gt_frames": 30,
           "id_switches": 0,
-          "matched_gt_frames": 8
+          "matched_gt_frames": 30
         }
       },
       "occlusion": {
         "association": {
           "accuracy": 1.0,
           "ambiguous_bodies": 0,
-          "correct": 8,
-          "expected_pairs": 8,
-          "frames": 10,
+          "correct": 28,
+          "expected_pairs": 28,
+          "frames": 30,
           "missed": 0,
           "wrong": 0
         },
@@ -708,19 +905,52 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 10,
-          "gt_frames": 8,
+          "frames": 30,
+          "gt_frames": 28,
           "id_switches": 0,
-          "matched_gt_frames": 8
+          "matched_gt_frames": 28
+        }
+      },
+      "reappears_after_exit": {
+        "association": {
+          "accuracy": 1.0,
+          "ambiguous_bodies": 0,
+          "correct": 60,
+          "expected_pairs": 60,
+          "frames": 80,
+          "missed": 0,
+          "wrong": 0
+        },
+        "system": {
+          "duplicates": 0,
+          "emitted_fines": 1,
+          "expected_fines": 1,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "scenario": "reappears_after_exit",
+          "true_positives": 1,
+          "wrong_plate": 0,
+          "wrong_vehicle": 0
+        },
+        "tracking": {
+          "coverage": 1.0,
+          "false_tracks": 0,
+          "fragmentations": 0,
+          "frames": 80,
+          "gt_frames": 60,
+          "id_switches": 1,
+          "matched_gt_frames": 60
         }
       },
       "single_no_helmet": {
         "association": {
           "accuracy": 1.0,
           "ambiguous_bodies": 0,
-          "correct": 8,
-          "expected_pairs": 8,
-          "frames": 8,
+          "correct": 30,
+          "expected_pairs": 30,
+          "frames": 30,
           "missed": 0,
           "wrong": 0
         },
@@ -741,19 +971,19 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 8,
-          "gt_frames": 8,
+          "frames": 30,
+          "gt_frames": 30,
           "id_switches": 0,
-          "matched_gt_frames": 8
+          "matched_gt_frames": 30
         }
       },
       "single_triple": {
         "association": {
           "accuracy": 1.0,
           "ambiguous_bodies": 0,
-          "correct": 8,
-          "expected_pairs": 8,
-          "frames": 8,
+          "correct": 30,
+          "expected_pairs": 30,
+          "frames": 30,
           "missed": 0,
           "wrong": 0
         },
@@ -774,19 +1004,19 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 8,
-          "gt_frames": 8,
+          "frames": 30,
+          "gt_frames": 30,
           "id_switches": 0,
-          "matched_gt_frames": 8
+          "matched_gt_frames": 30
         }
       },
       "three_bikes": {
         "association": {
           "accuracy": 1.0,
           "ambiguous_bodies": 0,
-          "correct": 24,
-          "expected_pairs": 24,
-          "frames": 8,
+          "correct": 90,
+          "expected_pairs": 90,
+          "frames": 30,
           "missed": 0,
           "wrong": 0
         },
@@ -807,19 +1037,19 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 8,
-          "gt_frames": 24,
+          "frames": 30,
+          "gt_frames": 90,
           "id_switches": 0,
-          "matched_gt_frames": 24
+          "matched_gt_frames": 90
         }
       },
       "two_adjacent": {
         "association": {
           "accuracy": 1.0,
           "ambiguous_bodies": 0,
-          "correct": 16,
-          "expected_pairs": 16,
-          "frames": 8,
+          "correct": 60,
+          "expected_pairs": 60,
+          "frames": 30,
           "missed": 0,
           "wrong": 0
         },
@@ -840,23 +1070,23 @@
           "coverage": 1.0,
           "false_tracks": 0,
           "fragmentations": 0,
-          "frames": 8,
-          "gt_frames": 16,
+          "frames": 30,
+          "gt_frames": 60,
           "id_switches": 0,
-          "matched_gt_frames": 16
+          "matched_gt_frames": 60
         }
       }
     },
     "totals": {
       "duplicates": 0,
-      "emitted_fines": 8,
-      "expected_fines": 8,
-      "false_negatives": 0,
+      "emitted_fines": 9,
+      "expected_fines": 10,
+      "false_negatives": 1,
       "false_positives": 0,
       "precision": 1.0,
-      "recall": 1.0,
+      "recall": 0.9,
       "scenario": "ALL",
-      "true_positives": 8,
+      "true_positives": 9,
       "wrong_plate": 0,
       "wrong_vehicle": 0
     }
@@ -864,7 +1094,7 @@
   "violations": {
     "helmet": {
       "confirm_window_sweep": {
-        "note": "confirm_window=1 is single-frame fining (no temporal layer); higher windows require the violation to persist that many frames.",
+        "note": "Streak length alone (helmet dwell gate off). confirm_window=1 is single-frame fining. The scenarios contain one-frame flickers by construction; the shipped rule is chosen in eval/results/temporal_confirmation.md, not here.",
         "violation": "no_helmet",
         "windows": {
           "1": {
@@ -925,7 +1155,7 @@
         }
       },
       "decision": {
-        "confirm_window": 3,
+        "confirm_window": 5,
         "f1": 1.0,
         "false_negatives": 0,
         "false_positives": 0,
@@ -945,7 +1175,7 @@
     },
     "triple_riding": {
       "confirm_window_sweep": {
-        "note": "confirm_window=1 is single-frame fining (no temporal layer); higher windows require the violation to persist that many frames.",
+        "note": "Streak length alone (helmet dwell gate off). confirm_window=1 is single-frame fining. The scenarios contain one-frame flickers by construction; the shipped rule is chosen in eval/results/temporal_confirmation.md, not here.",
         "violation": "triple_riding",
         "windows": {
           "1": {
@@ -1006,7 +1236,7 @@
         }
       },
       "decision": {
-        "confirm_window": 3,
+        "confirm_window": 5,
         "f1": 1.0,
         "false_negatives": 0,
         "false_positives": 0,

@@ -1,0 +1,308 @@
+{
+  "what": "Visual review of the 16 highest-confidence false positives and 16 highest-confidence class confusions on the de-leaked VALIDATION split (traffic-4class@1.0.0, conf 0.25). Reviewer: the AI coding assistant (Claude), viewing each saved crop — not a human annotator, and not yet re-checked by one. Judgements made at crop resolution: they are an error-analysis aid, NOT ground truth, and several are marked ambiguous. Re-check any row with the listed artifact (evaluate_model.py --save-artifacts eval/artifacts_val).",
+  "false_positives": [
+    {
+      "rank": 0,
+      "artifact": "false_positives/018_ds1_387101_CYB00EC198316818_jpg.rf.2a98cb26c893dd67f780c6b60.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_387101_CYB00EC198316818_jpg.rf.2a98cb26c893dd67f780c6b607326e72.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.8985,
+      "judgement": "model_error:helmeted_rider_called_no_helmet(likely)"
+    },
+    {
+      "rank": 1,
+      "artifact": "false_positives/014_ds1_368e76_CYB00EC198311408_jpg.rf.1daf164fd13b7874491d9c2df.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_368e76_CYB00EC198311408_jpg.rf.1daf164fd13b7874491d9c2dfbddb7a4.jpg",
+      "predicted": "WithHelmet",
+      "labelled": null,
+      "score": 0.8971,
+      "judgement": "missing_label:unlabelled_rider"
+    },
+    {
+      "rank": 2,
+      "artifact": "false_positives/011_ds1_368c14_RMD01EC198326351_jpg.rf.9c0394a18900d82825de9e14d.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_368c14_RMD01EC198326351_jpg.rf.9c0394a18900d82825de9e14d86cb24f.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.8758,
+      "judgement": "missing_label:bareheaded_rider"
+    },
+    {
+      "rank": 3,
+      "artifact": "false_positives/021_ds1_3d27b8_KBA01EC190305918_jpg.rf.4e00656da64b912a652f2335c.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_3d27b8_KBA01EC190305918_jpg.rf.4e00656da64b912a652f2335cfd60bfb.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.813,
+      "judgement": "missing_label:bareheaded_rider(night)"
+    },
+    {
+      "rank": 4,
+      "artifact": "false_positives/005_ds1_1e24d2_CYB03EC198353903_jpg.rf.947e09f18a1e82d382598f250.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_1e24d2_CYB03EC198353903_jpg.rf.947e09f18a1e82d382598f250f99c8da.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.7708,
+      "judgement": "missing_label:bareheaded_rider"
+    },
+    {
+      "rank": 5,
+      "artifact": "false_positives/003_ds1_101784_KBA01EC191108356_jpg.rf.73bd74bb8ce8a24a1de21e570.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_101784_KBA01EC191108356_jpg.rf.73bd74bb8ce8a24a1de21e57002ab820.jpg",
+      "predicted": "Plate",
+      "labelled": null,
+      "score": 0.7476,
+      "judgement": "missing_label:plate"
+    },
+    {
+      "rank": 6,
+      "artifact": "false_positives/015_ds1_37f81b_CYB00EC198312400_jpg.rf.076a0b6a8adf676103e4f32ec.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_37f81b_CYB00EC198312400_jpg.rf.076a0b6a8adf676103e4f32ec02b5845.jpg",
+      "predicted": "Plate",
+      "labelled": null,
+      "score": 0.6946,
+      "judgement": "missing_label:plate"
+    },
+    {
+      "rank": 7,
+      "artifact": "false_positives/024_ds1_427ad3_CYB00EC198314520_jpg.rf.8d6684e67b97f08f0579e4ac3.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_427ad3_CYB00EC198314520_jpg.rf.8d6684e67b97f08f0579e4ac3b820df2.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.6926,
+      "judgement": "missing_label:rider_in_cap"
+    },
+    {
+      "rank": 8,
+      "artifact": "false_positives/007_ds1_29a63c_BikesHelmets301_png.rf.f4d291bda8c239728aee7c76d6.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_29a63c_BikesHelmets301_png.rf.f4d291bda8c239728aee7c76d63dd281.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.6879,
+      "judgement": "model_error:helmeted_person_with_bicycle_called_no_helmet"
+    },
+    {
+      "rank": 9,
+      "artifact": "false_positives/023_ds1_4121c7_KBA01EC190504168_jpg.rf.c1b43bf671572ebbb58657d93.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_4121c7_KBA01EC190504168_jpg.rf.c1b43bf671572ebbb58657d93b3377bf.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.6685,
+      "judgement": "model_error:pedestrian_beside_parked_motorbike"
+    },
+    {
+      "rank": 10,
+      "artifact": "false_positives/008_ds1_2a2a43_CYB00EC198323712_jpg.rf.5157b2c1d6c04eab4f83cf725.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_2a2a43_CYB00EC198323712_jpg.rf.5157b2c1d6c04eab4f83cf725bc686d9.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.6674,
+      "judgement": "missing_label:bareheaded_rider"
+    },
+    {
+      "rank": 11,
+      "artifact": "false_positives/027_ds1_45d36a_ADB01TE193700903_jpg.rf.95e0f1c2efad438e27ba280e4.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_45d36a_ADB01TE193700903_jpg.rf.95e0f1c2efad438e27ba280e4325b9fb.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.5863,
+      "judgement": "model_error:rotated_image_non_rider"
+    },
+    {
+      "rank": 12,
+      "artifact": "false_positives/020_ds1_3d0a53_CYB00EC198324260_jpg.rf.50d18aa8c2b0b7906afb08175.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_3d0a53_CYB00EC198324260_jpg.rf.50d18aa8c2b0b7906afb08175ff3611f.jpg",
+      "predicted": "WithHelmet",
+      "labelled": null,
+      "score": 0.5755,
+      "judgement": "missing_label:helmeted_rider"
+    },
+    {
+      "rank": 13,
+      "artifact": "false_positives/012_ds1_368c14_RMD01EC198326351_jpg.rf.9c0394a18900d82825de9e14d.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_368c14_RMD01EC198326351_jpg.rf.9c0394a18900d82825de9e14d86cb24f.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.5224,
+      "judgement": "missing_label:bareheaded_rider"
+    },
+    {
+      "rank": 14,
+      "artifact": "false_positives/001_ds1_062724_KBA01EC190628383_jpg.rf.9ea1b8b7e87d9899e478bc945.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_062724_KBA01EC190628383_jpg.rf.9ea1b8b7e87d9899e478bc94525ed8be.jpg",
+      "predicted": "Plate",
+      "labelled": null,
+      "score": 0.4987,
+      "judgement": "missing_label:plate"
+    },
+    {
+      "rank": 15,
+      "artifact": "false_positives/016_ds1_37f81b_CYB00EC198312400_jpg.rf.076a0b6a8adf676103e4f32ec.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_37f81b_CYB00EC198312400_jpg.rf.076a0b6a8adf676103e4f32ec02b5845.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": null,
+      "score": 0.4901,
+      "judgement": "ambiguous:truncated_rider_at_edge"
+    }
+  ],
+  "class_confusions": [
+    {
+      "rank": 0,
+      "artifact": "class_confusions/006_ds1_720931_CYB00EC198324054_jpg.rf.2916f1f5c0137faf10e3282b7.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_720931_CYB00EC198324054_jpg.rf.2916f1f5c0137faf10e3282b7f6ba69f.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.9517,
+      "judgement": "ambiguous:light_headwear"
+    },
+    {
+      "rank": 1,
+      "artifact": "class_confusions/001_ds1_2f82eb_RMD01EC198351922_jpg.rf.ce88871f04919811f2e862061.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_2f82eb_RMD01EC198351922_jpg.rf.ce88871f04919811f2e86206120da6db.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.9339,
+      "judgement": "label_error:full_face_helmet_labelled_WithoutHelmet"
+    },
+    {
+      "rank": 2,
+      "artifact": "class_confusions/014_ds1_ce81f6_CYB00EC198314242_jpg.rf.c04a4176cc841337f14520004.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_ce81f6_CYB00EC198314242_jpg.rf.c04a4176cc841337f14520004e57db67.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.9337,
+      "judgement": "label_error_probable:white_helmet_or_cap"
+    },
+    {
+      "rank": 3,
+      "artifact": "class_confusions/015_ds1_d27ebe_CYB00EC198314748_jpg.rf.d5a995fba2ea23fff978cc09a.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_d27ebe_CYB00EC198314748_jpg.rf.d5a995fba2ea23fff978cc09a31fd04b.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.9238,
+      "judgement": "label_error_probable:dark_helmet"
+    },
+    {
+      "rank": 4,
+      "artifact": "class_confusions/002_ds1_37f81b_CYB00EC198312400_jpg.rf.076a0b6a8adf676103e4f32ec.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_37f81b_CYB00EC198312400_jpg.rf.076a0b6a8adf676103e4f32ec02b5845.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": "WithHelmet",
+      "score": 0.903,
+      "judgement": "label_error_probable:no_helmet_visible_labelled_WithHelmet"
+    },
+    {
+      "rank": 5,
+      "artifact": "class_confusions/008_ds1_ad4018_CYB00EC198323668_jpg.rf.77c2da903779124b84457e55d.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_ad4018_CYB00EC198323668_jpg.rf.77c2da903779124b84457e55d6f88760.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.9017,
+      "judgement": "model_error:head_covering(dupatta)_called_helmet"
+    },
+    {
+      "rank": 6,
+      "artifact": "class_confusions/007_ds1_984b69_CYB00EC198320028_jpg.rf.36647a6378576cdce32cebec8.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_984b69_CYB00EC198320028_jpg.rf.36647a6378576cdce32cebec8e64dd8d.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.8889,
+      "judgement": "model_error:head_covering(dupatta)_called_helmet"
+    },
+    {
+      "rank": 7,
+      "artifact": "class_confusions/004_ds1_40dd10_CYB00EC198312804_jpg.rf.ad54ea0c8a422bd56ea3aaa34.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_40dd10_CYB00EC198312804_jpg.rf.ad54ea0c8a422bd56ea3aaa34d8cff66.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.8833,
+      "judgement": "model_error:head_covering(scarf)_called_helmet"
+    },
+    {
+      "rank": 8,
+      "artifact": "class_confusions/020_ds1_f2f4cc_CYB00EC198319933_jpg.rf.6c6d931d5e36812c36ab7e9c2.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_f2f4cc_CYB00EC198319933_jpg.rf.6c6d931d5e36812c36ab7e9c28520809.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": "WithHelmet",
+      "score": 0.8487,
+      "judgement": "model_error:helmeted_rider_called_no_helmet"
+    },
+    {
+      "rank": 9,
+      "artifact": "class_confusions/005_ds1_4d5f2d_KBA01EC190846591_jpg.rf.6c5c3f26d37cd1c0be6cae51a.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_4d5f2d_KBA01EC190846591_jpg.rf.6c5c3f26d37cd1c0be6cae51a6243e69.jpg",
+      "predicted": "Plate",
+      "labelled": "WithoutHelmet",
+      "score": 0.8079,
+      "judgement": "label_error:plate_labelled_WithoutHelmet"
+    },
+    {
+      "rank": 10,
+      "artifact": "class_confusions/019_ds1_f1a782_KBA01EC191005994_jpg.rf.2ef3ad7f4ff658bc3b8b158ae.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_f1a782_KBA01EC191005994_jpg.rf.2ef3ad7f4ff658bc3b8b158ae7c6ab3e.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": "WithHelmet",
+      "score": 0.8079,
+      "judgement": "label_error:bareheaded_riders_labelled_WithHelmet"
+    },
+    {
+      "rank": 11,
+      "artifact": "class_confusions/012_ds1_c3258f_RMD01EC198351396_jpg.rf.25774968e8361c9490710e543.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_c3258f_RMD01EC198351396_jpg.rf.25774968e8361c9490710e543ddc744e.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.7968,
+      "judgement": "model_error:bareheaded_rider_called_helmet"
+    },
+    {
+      "rank": 12,
+      "artifact": "class_confusions/009_ds1_ad4018_CYB00EC198323668_jpg.rf.77c2da903779124b84457e55d.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_ad4018_CYB00EC198323668_jpg.rf.77c2da903779124b84457e55d6f88760.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.7605,
+      "judgement": "ambiguous:resolution"
+    },
+    {
+      "rank": 13,
+      "artifact": "class_confusions/013_ds1_c4259e_CYB01EC198312695_jpg.rf.22c35f5fede10ca9ef1101ad4.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_c4259e_CYB01EC198312695_jpg.rf.22c35f5fede10ca9ef1101ad47032a6f.jpg",
+      "predicted": "WithoutHelmet",
+      "labelled": "WithHelmet",
+      "score": 0.7436,
+      "judgement": "model_error:helmeted_rider_called_no_helmet"
+    },
+    {
+      "rank": 14,
+      "artifact": "class_confusions/003_ds1_387101_CYB00EC198316818_jpg.rf.2a98cb26c893dd67f780c6b60.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_387101_CYB00EC198316818_jpg.rf.2a98cb26c893dd67f780c6b607326e72.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.7435,
+      "judgement": "ambiguous:hood"
+    },
+    {
+      "rank": 15,
+      "artifact": "class_confusions/018_ds1_e35b0e_RMD02EC198316918_jpg.rf.5f7dc4b0b3e43870160744cab.jpg",
+      "source_image": "eval/clean_splits/val/images/ds1_e35b0e_RMD02EC198316918_jpg.rf.5f7dc4b0b3e43870160744cab86ad698.jpg",
+      "predicted": "WithHelmet",
+      "labelled": "WithoutHelmet",
+      "score": 0.6538,
+      "judgement": "model_error:head_covering(scarf)_called_helmet"
+    }
+  ],
+  "tally": {
+    "false_positives": {
+      "model_error": 4,
+      "missing_label": 11,
+      "ambiguous": 1
+    },
+    "class_confusions": {
+      "ambiguous": 3,
+      "label_error": 3,
+      "label_error_probable": 3,
+      "model_error": 7
+    }
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "class_names": [
+    "Plate",
+    "WithHelmet",
+    "WithoutHelmet",
+    "TripleRiding"
+  ],
+  "conf": 0.25,
+  "data": "eval/clean_splits/data.yaml",
+  "device": "mps",
+  "generated_at": "2026-09-29T00:11:21.855068+00:00",
+  "imgsz": 640,
+  "iou": 0.5,
+  "model": "runs/detect/traffic_model_seed1/weights/best.pt",
+  "model_version": null,
+  "name": "eval_traffic_model_seed1_val_clean",
+  "official": {
+    "map50": 0.7175,
+    "map50_95": 0.5071,
+    "mean_precision": 0.6811,
+    "mean_recall": 0.6961,
+    "per_class": {
+      "Plate": {
+        "map50": 0.8455,
+        "map50_95": 0.4441,
+        "precision": 0.9218,
+        "recall": 0.749
+      },
+      "TripleRiding": {
+        "map50": 0.8391,
+        "map50_95": 0.6401,
+        "precision": 0.6285,
+        "recall": 0.9138
+      },
+      "WithHelmet": {
+        "map50": 0.4175,
+        "map50_95": 0.3386,
+        "precision": 0.4151,
+        "recall": 0.3846
+      },
+      "WithoutHelmet": {
+        "map50": 0.7679,
+        "map50_95": 0.6057,
+        "precision": 0.7592,
+        "recall": 0.7368
+      }
+    },
+    "protocol": {
+      "conf": 0.001,
+      "nms_iou": 0.7,
+      "note": "Ultralytics val(): multi-label NMS, rect batches"
+    },
+    "save_dir": "/Users/adivishal/Projects/Two Wheeler Safety ASEP 2/runs/detect/val-26"
+  },
+  "provenance": {
+    "config": {
+      "ap_conf": 0.001,
+      "ap_nms_iou": 0.7,
+      "imgsz": 640,
+      "match_iou": 0.5,
+      "operating_conf": 0.25
+    },
+    "dataset": {
+      "data_yaml": "eval/clean_splits/data.yaml",
+      "scheme": "names+sizes+label-contents",
+      "split": "val",
+      "split_images": 352,
+      "split_version": "sha256:032b9391d7cd2dc2",
+      "version": "sha256:e1be4f14028241d1"
+    },
+    "environment": {
+      "chip": "Apple M4",
+      "cuda": false,
+      "cv2": "4.13.0",
+      "machine": "arm64",
+      "mps": true,
+      "numpy": "2.4.6",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7",
+      "torch": "2.12.1",
+      "ultralytics": "8.4.71"
+    },
+    "generated_at": "2026-09-29T00:11:20.888993+00:00",
+    "git": {
+      "commit": "4497f8a",
+      "dirty": false
+    },
+    "models": [
+      {
+        "path": "runs/detect/traffic_model_seed1/weights/best.pt",
+        "sha256": "sha256:7b5090724e60b3ca0139807a02ee842cbb645ce9e4f5492d54662bcff10d4134",
+        "version": null
+      }
+    ]
+  },
+  "split": "val"
+}
