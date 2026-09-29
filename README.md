@@ -190,7 +190,7 @@ applied, and a live SHA-256 check of its evidence files.
 ## Evaluate it
 
 ```bash
-pytest                                   # 600 tests, model-free, ~95% branch coverage of modules/
+pytest                                   # 601 tests, model-free, ~95% branch coverage of modules/
 python3 evaluate_pipeline.py             # pipeline metrics, error budget (no weights)
 python3 evaluate_temporal.py             # temporal-rule experiment (no weights)
 python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results --name ocr_policy_simulation

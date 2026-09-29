@@ -1,7 +1,7 @@
 # Audit register — v1.1.0
 
-A hostile review of the v1.0.0 system (30 findings, plus one found later by a
-seed-variance run, E12), then an independent review of the fixes themselves
+A hostile review of the v1.0.0 system (30 findings, plus two found later: E12
+by a seed-variance run, E13 by a final cross-check of the docs), then an independent review of the fixes themselves
 (8 more, §"Found by an independent review"). Both were done with an AI coding
 assistant: the first taking four reviewer perspectives in turn (an ML engineer,
 a backend engineer, a computer-vision interviewer and a skeptical hiring
@@ -44,6 +44,7 @@ impact; **L** = hardening.
 | E11 | M | **Benchmark labelled CPU numbers "mps".** Ultralytics only auto-selects CUDA; on Apple silicon every predict ran on the CPU while `benchmark.py` recorded the requested device. The app and CLIs never used the GPU either. | `model.predictor.device` after a default predict: `cpu` | `5e08614` — `DETECT_DEVICE` resolved and passed everywhere; results record the device used | `benchmark.md` measures CPU and MPS side by side |
 | E10 | M | **AP replica bug caught before use.** An older compute_ap formula credits a spurious triangle above max recall (0.75 vs 0.495). | pinned against `ultralytics.utils.metrics.compute_ap` | `9ec9813` | `test_detection_stats.py::test_ap_curve_matches_ultralytics_compute_ap` |
 | E12 | M | **A checkpoint-level test used as a recipe comparison.** The paired image bootstrap holds the weights fixed; M1–M3 verdicts ("v2 significantly worse on Plate") treated it as evidence about training changes. | v1's recipe retrained with only the seed changed is "significantly worse" on test (mAP@50 −0.076 [−0.155, −0.003]); its Plate shift (−0.024) matches v2's "regression" | promotion needs ≥ 3 seeds per recipe; M1–M3 re-graded; headline numbers labelled as the better of two seeds | `uncertainty_val.md`, `uncertainty_test.md` (`traffic_model_seed1`) |
+| E13 | M | **Error-budget shares divided by the sum of overlapping recoveries.** "Rider recall 54% of lost F1" for a stage whose fix alone closes the whole gap. | fixing rider recall alone recovers 0.015 of a 0.015 gap; recoveries sum to ~1.9× the gap | `8507c87` — each stage reported as the share of the gap it recovers alone; ranking unchanged | `test_error_budget_reports_each_stage_against_the_gap_not_the_sum` |
 
 ## Application and data integrity
 

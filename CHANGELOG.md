@@ -99,7 +99,7 @@ withdrawn; the replacements are below.
 - Review modal shows how each violation was decided; `GET
   /api/violations/<id>/verify` re-hashes its evidence.
 - `tests/test_end_to_end.py` (real video/photo/API paths through multi-error
-  scenarios) and `tests/test_hardening.py`; 466 → 600 tests.
+  scenarios) and `tests/test_hardening.py`; 466 → 601 tests.
 - Docs: AUDIT, ERROR_ANALYSIS (taxonomy + budget; replaces ERROR_BUDGET),
   INTERVIEW; rewritten README, MODEL_EVALUATION, END_TO_END_EVALUATION,
   EVALUATION, RESUME.
