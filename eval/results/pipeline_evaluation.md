@@ -1,6 +1,6 @@
 # Pipeline evaluation (model-free)
 
-- Generated: 2026-09-29T00:13:14.337811+00:00
+- Generated: 2026-09-29T00:37:17.646814+00:00
 - Inputs: deterministic synthetic scenarios driven through the **shipped** `ViolationPipeline` (the object the video job runs per frame, with its defaults) and the real speed estimator.
 - No model weights, no dataset, no network. Every number is reproducible with `python3 evaluate_pipeline.py`.
 
@@ -76,30 +76,36 @@ Each stage fails at its per-frame rate measured on the validation split (OCR, un
 
 **OCR read-error rate 10%** — all faults on: F1 0.9547 (gap to no-fault 0.015)
 
-| stage made perfect | F1 | recovered | share |
+| stage made perfect | F1 | recovered | % of gap, alone |
 |---|---:|---:|---:|
-| `rider_recall` — detector misses the rider box | 0.9697 | **0.015** | 54% |
-| `helmet_class` — detector labels the rider with the wrong helmet/triple class | 0.9666 | **0.0119** | 42% |
-| `plate_recall` — detector misses the plate box (nothing to OCR) | 0.9558 | **0.0011** | 4% |
+| `rider_recall` — detector misses the rider box | 0.9697 | **0.015** | 100% |
+| `helmet_class` — detector labels the rider with the wrong helmet/triple class | 0.9666 | **0.0119** | 80% |
+| `plate_recall` — detector misses the plate box (nothing to OCR) | 0.9558 | **0.0011** | 7% |
 | `ocr` — OCR reads the plate with a wrong glyph | 0.9547 | **0.0** | 0% |
+
+Stages overlap (a rider both missed and misclassified is recovered by fixing either), so the last column does not sum to 100%.
 
 **OCR read-error rate 30%** — all faults on: F1 0.9557 (gap to no-fault 0.014)
 
-| stage made perfect | F1 | recovered | share |
+| stage made perfect | F1 | recovered | % of gap, alone |
 |---|---:|---:|---:|
-| `rider_recall` — detector misses the rider box | 0.9697 | **0.014** | 54% |
-| `helmet_class` — detector labels the rider with the wrong helmet/triple class | 0.9666 | **0.0109** | 42% |
-| `plate_recall` — detector misses the plate box (nothing to OCR) | 0.9567 | **0.0011** | 4% |
+| `rider_recall` — detector misses the rider box | 0.9697 | **0.014** | 100% |
+| `helmet_class` — detector labels the rider with the wrong helmet/triple class | 0.9666 | **0.0109** | 78% |
+| `plate_recall` — detector misses the plate box (nothing to OCR) | 0.9567 | **0.0011** | 8% |
 | `ocr` — OCR reads the plate with a wrong glyph | 0.9547 | **0.0** | 0% |
+
+Stages overlap (a rider both missed and misclassified is recovered by fixing either), so the last column does not sum to 100%.
 
 **OCR read-error rate 50%** — all faults on: F1 0.9546 (gap to no-fault 0.0151)
 
-| stage made perfect | F1 | recovered | share |
+| stage made perfect | F1 | recovered | % of gap, alone |
 |---|---:|---:|---:|
-| `rider_recall` — detector misses the rider box | 0.9697 | **0.0151** | 56% |
-| `helmet_class` — detector labels the rider with the wrong helmet/triple class | 0.9655 | **0.0109** | 40% |
-| `plate_recall` — detector misses the plate box (nothing to OCR) | 0.9557 | **0.0011** | 4% |
-| `ocr` — OCR reads the plate with a wrong glyph | 0.9547 | **0.0001** | 0% |
+| `rider_recall` — detector misses the rider box | 0.9697 | **0.0151** | 100% |
+| `helmet_class` — detector labels the rider with the wrong helmet/triple class | 0.9655 | **0.0109** | 72% |
+| `plate_recall` — detector misses the plate box (nothing to OCR) | 0.9557 | **0.0011** | 7% |
+| `ocr` — OCR reads the plate with a wrong glyph | 0.9547 | **0.0001** | 1% |
+
+Stages overlap (a rider both missed and misclassified is recovered by fixing either), so the last column does not sum to 100%.
 
 Largest owner at the central OCR assumption: **`rider_recall`** (holds across the whole OCR sweep).
 

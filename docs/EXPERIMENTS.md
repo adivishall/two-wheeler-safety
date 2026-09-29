@@ -117,7 +117,7 @@ de-duplicated train `sha256:5ba9cee6da3943dd`; helmet-only subset
   ≥70% of ≥12 observed frames: 1.2% worst case on the held-out seed. Same choice
   at 4× the sample.
 - **Decision.** Shipped for the helmet decision. Cost: riders seen < 12 frames
-  are never fined.
+  are never fined for no helmet.
 
 ### D2 — OCR vote thresholds
 

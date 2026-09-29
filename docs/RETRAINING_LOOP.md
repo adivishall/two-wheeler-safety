@@ -115,8 +115,9 @@ The last row matters, but it cuts both ways. The temporal gate absorbs
 *independent* per-frame helmet flips well; it does not absorb a rider the model
 misreads consistently, and the error budget
 ([ERROR_ANALYSIS.md](ERROR_ANALYSIS.md) §2) says that after the pipeline has done
-its work, what remains is the detector: missed rider boxes and helmet class
-confusion own ~96% of the lost end-to-end F1, missed plate boxes the rest.
+its work, what remains is the detector: a perfect rider detector alone would
+recover all of the lost end-to-end F1, perfect helmet classification alone
+72–80% of it (the two overlap).
 
 ### What the current failures say
 

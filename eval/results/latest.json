@@ -14,27 +14,27 @@
     "stages": [
       {
         "recovered_f1": 0.014,
-        "share": 0.5385,
+        "share_of_gap": 0.9985,
         "stage": "rider_recall"
       },
       {
         "recovered_f1": 0.0109,
-        "share": 0.4192,
+        "share_of_gap": 0.7774,
         "stage": "helmet_class"
       },
       {
         "recovered_f1": 0.0011,
-        "share": 0.0423,
+        "share_of_gap": 0.0785,
         "stage": "plate_recall"
       },
       {
         "recovered_f1": 0.0,
-        "share": 0.0,
+        "share_of_gap": 0.0,
         "stage": "ocr"
       }
     ]
   },
-  "generated_at": "2026-09-29T00:13:14.337811+00:00",
+  "generated_at": "2026-09-29T00:37:17.646814+00:00",
   "ocr_policy": {
     "best_conf": {
       "answered_accuracy": 0.7,

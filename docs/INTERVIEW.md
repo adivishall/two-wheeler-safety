@@ -140,7 +140,7 @@ errors are correlated — a helmeted rider seen for 2 s gets many chances at one
 lucky run of 5 flips. k-of-n voting is worse. What fixes it is a track-level
 condition that converges instead of accumulating chances: ≥ 70% no-helmet frames
 over ≥ 12 observed frames, on top of the streak. The cost is explicit: a rider
-seen for fewer than 12 frames is never fined.
+seen for fewer than 12 frames is never fined for no helmet.
 
 ### Why Hungarian association?
 
@@ -224,18 +224,20 @@ frame) is what's left, because no vote can out-vote it.
 - Tell a rider from a person standing next to a parked bike, or a cyclist.
 - Read plates reliably: on clean *synthetic* renders EasyOCR reads 37.5% exactly
   (`eval/results/ocr_sanity_check.json`, n = 8); real accuracy is unmeasured.
-- Fine riders in view for under ~0.5 s (12 frames).
-- Measure speed like radar: ±11 km/h even with a homography, in simulation.
+- Fine riders in view for under ~0.5 s (12 frames) for no helmet.
+- Measure speed like radar: MAE ~11 km/h (biased high) for approaching bikes even
+  with a homography, in simulation.
 - Anything about generalisation to another city or camera: there is no external
   test set.
 
 ### What is the largest source of error?
 
 At the measured operating point, the **detector**: in the oracle-ablation error
-budget, missed rider boxes own 54–56% of the lost end-to-end F1 and helmet class
-confusion 40–42%, missed plate boxes 4% — across an OCR sweep up to half of all
-reads wrong, because the vote withholds instead of guessing
-(`ERROR_ANALYSIS.md` §2). OCR's cost shows up as coverage, not F1. Upstream of
+budget (synthetic scenarios), a perfect rider detector alone would recover the
+whole lost end-to-end F1, perfect helmet classification alone 72–80% of it,
+perfect plate detection 7–8% — the stages overlap, so those don't add up — and
+that holds across an OCR sweep up to half of all reads wrong, because the vote
+withholds instead of guessing (`ERROR_ANALYSIS.md` §2). OCR's cost shows up as coverage, not F1. Upstream of
 the detector, the largest source is the **data**: disjoint labels and 27
 WithHelmet instances.
 

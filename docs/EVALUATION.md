@@ -85,7 +85,7 @@ commit `8a68089` on a clean tree. Protocol:
 | measurement | result |
 |---|---|
 | model load, cold (YOLO + EasyOCR) | 3.6 s |
-| YOLO, one image, warm p50 | MPS 23.2 ms · CPU 20.5 ms (first MPS call 402 ms) |
+| YOLO, one image, warm p50 | MPS 23.2 ms · CPU 20.5 ms (first MPS call 402 ms; one run per device) |
 | EasyOCR, one plate crop | 13.5 ms mean |
 | **video, shipped settings (MPS)** | **36.7 FPS** (range 35.0–37.2); YOLO 65% of wall, OCR 24% |
 | video, OCR lock off | 19.4 FPS (range 15.3–20.5); OCR 56% of wall |
@@ -101,8 +101,10 @@ What these numbers do and don't say:
   benchmark checks it changed nothing: every run of both arms fined the same
   plate for the same violation. Locked plates are still re-read every 10 frames
   (AUDIT R2), which is where the 30 remaining calls come from.
-- **CPU vs MPS is a wash for one YOLOv8n pass on an M4.** This run has the CPU
-  ahead; earlier runs had MPS ahead. Nothing here supports "the GPU is faster".
+- **No claim that MPS is faster for one YOLOv8n pass on an M4.** The committed
+  run has the CPU slightly ahead, from one 50-call run per device, not
+  interleaved; earlier uncommitted runs had MPS ahead. Nothing here supports
+  "the GPU is faster".
   Before 1.1.0 inference silently ran on the CPU (AUDIT E11); the fix was about
   reporting the device honestly, not about speed.
 - **Separate invocations varied more than rounds within one.** Two earlier

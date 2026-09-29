@@ -24,7 +24,7 @@ withdrawn; the replacements are below.
   the web job, the CLI, the benchmark and every evaluator.
 - **Helmet confirmation**: 5-frame streak **and** ≥ 70% no-helmet over ≥ 12
   observed frames (was: streak only). Chosen by `evaluate_temporal.py`; riders
-  seen < 12 frames are no longer fined.
+  seen < 12 frames are no longer fined for no helmet.
 - **OCR vote**: the winner needs ≥ 3 valid readings of its own and a ≥ 0.3
   margin over any competing valid plate; exact ties abstain (was: 2 readings of
   any kind — one valid read among unreadable ones could elect — and ties broken
@@ -76,9 +76,9 @@ withdrawn; the replacements are below.
   above. Promotion now requires ≥ 3 seeds per recipe; the headline numbers are
   v1's checkpoint, the better of two seeds.
 - Error budget by oracle ablation at the measured operating point, paired random
-  streams: the detector owns essentially all lost end-to-end F1 — rider boxes
-  54–56%, helmet class 40–42%, plate boxes 4% (was "OCR is 76.8%", a units
-  artefact).
+  streams, each stage reported as the share of the F1 gap it recovers alone:
+  rider boxes 100%, helmet class 72–80%, plate boxes 7–8%, OCR ~0 (was "OCR is
+  76.8%", a units artefact).
 - OCR vote thresholds selected by simulation **scored at the moment a fine is
   committed** (the first election), not after all reads: there the 1.0.0 rule
   names the wrong plate for 40–62% of simulated vehicles at 4–12% character

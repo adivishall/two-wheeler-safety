@@ -115,7 +115,8 @@ Held-out seed, false-flag rate (share of **helmeted** riders flagged):
   (minimise the worst case) selected it. Re-run at 4× the riders, the same rule
   won; the runner-up differs only in streak length (3 vs 5), so the gate is the
   finding and 3 vs 5 frames is within noise.
-- **Price:** a rider in view for fewer than 12 frames is never fined.
+- **Price:** a rider in view for fewer than 12 frames is never fined for no
+  helmet. (Triple riding and overspeed keep the 5-frame streak.)
 
 ## 4. Choosing the OCR vote
 
@@ -171,10 +172,10 @@ plate.
 
 Oracle ablation at the measured operating point — see
 [ERROR_ANALYSIS.md](ERROR_ANALYSIS.md) §2. Summary: at the val-measured detector
-rates the pipeline loses ~1.5 F1 points on these scenarios, essentially all of it owned by
-the detector — missed rider boxes 54–56%, helmet class confusion 40–42%, missed
-plate boxes 4% — across the whole OCR sweep (10–50% of reads with a wrong
-glyph). OCR errors cost ~0 F1 here because the vote withholds rather than
+rates the pipeline loses ~1.5 F1 points on these scenarios, and the detector
+owns them: making rider detection perfect alone recovers the whole gap, helmet
+classification alone 72–80%, plate detection 7–8% (stages overlap, so these
+don't sum) — across the whole OCR sweep (10–50% of reads with a wrong glyph). OCR errors cost ~0 F1 here because the vote withholds rather than
 guessing, and these scenarios keep each plate in view long enough to collect
 agreeing reads; the OCR cost that remains is coverage and consistent misreads
 (§4), which F1 on this suite does not see.
@@ -190,7 +191,8 @@ perspective ground plane; MAE in km/h.
 | approach (toward the camera) | 41.8 | 40.1 | **11.3** |
 
 A constant pixels-per-metre calibration misses **every** approaching
-overspeeder. Even the best calibration is ±11 km/h in simulation, with no
+overspeeder. Even the best calibration has MAE 11.3 km/h (biased +8.4) for
+approaching bikes in simulation, with no
 surveyed ground truth — an estimate, not a radar reading. v1.1.0 also fixed
 calibration under frame downscaling (speeds read at 2/3 of truth on a 1920-px
 video processed at 1280).

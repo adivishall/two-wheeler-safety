@@ -10,7 +10,8 @@ records, and **declines to act when the evidence is weak**.
 > field footage; see [Limitations](#limitations).
 
 The detector is YOLOv8n and it is mediocre on the class that matters most (it
-calls a helmeted rider "no helmet" 15% of the time on validation frames). The
+calls a helmeted rider "no helmet" 15% of the time on validation — 4 of 26
+boxes, so a rough figure). The
 engineering is everything around it: which plate belongs to which rider, how
 long a violation must persist before it counts, when an OCR reading is
 trustworthy, how a fine is prevented from being issued twice — and measuring
@@ -82,7 +83,8 @@ standard protocol, with 95% bootstrap CIs
 Model choices were made on validation with paired bootstrap tests — and then
 checked against seed noise: retraining v1's exact recipe with a different seed
 moves mAP@50 by −0.04 on val (−0.08 on test, "significant" by the bootstrap),
-as much as any recipe change tried. No retrain beat v1 by more than that, so v1
+comparable to the recipe changes tried (−0.05 to +0.02). No retrain beat v1 by
+more than that, so v1
 ships; the numbers above describe the better of two seeds.
 
 ### 2. Pipeline — *how reliably do noisy detections become a correct record?*
@@ -95,22 +97,26 @@ ships; the numbers above describe the better of two seeds.
   vehicles, 0 wrong plates, 0 duplicate fines; the one miss is a rider in view
   for 0.3 s, a documented cost of the confirmation rule.
 - **vs. fining on any single frame**, at identical detections: precision ~1.0 vs
-  0.72–0.85 at every noise level; F1 +0.13–0.14 at the detector's measured flip
-  rates (reverses only at 40% symmetric flips).
+  0.72–0.85 at every noise level; F1 +0.13–0.14 at 10–20% simulated helmet flips
+  (the detector's measured rates are 8–15%), +0.06 with no flips, and it
+  reverses at 40%.
 - **Temporal rule, chosen by experiment** at the detector's *measured* val error
   rates: a plain 5-frame streak flags **31.5%** of helmeted riders seen for 2 s
   under moderately correlated errors; the shipped streak + "≥70% of ≥12 observed
-  frames" gate flags **1.2%** (held-out seed).
+  frames" gate flags **1.2%** (held-out seed). No rule met the 1% target in every
+  condition (this one: 1.3% worst on the dev seed), and how correlated real
+  errors are is unmeasured — swept, not known; at strong correlation it still
+  flags 6–7%.
 - **OCR vote, chosen by experiment** with consistent misreads in the noise
   model, scored at the moment a fine is committed: at 4–12% character noise the
   1.0.0 rule named the wrong plate for **40–62%** of simulated vehicles, the
   shipped rule (≥ 3 agreeing reads, margin ≥ 0.3) for **≤ 1.8%** (held-out
   seed) — by naming a plate for only 34–70% of them and withholding the rest.
   It misses the pre-stated 1% target; that is reported, not tuned away.
-- **Error budget** (oracle ablation at the measured operating point): the
-  detector owns the lost end-to-end F1 — missed rider boxes 54–56%, helmet
-  confusion 40–42%, missed plate boxes 4%; OCR errors cost ~0 F1 because the
-  vote withholds instead of guessing.
+- **Error budget** (oracle ablation at the measured operating point, synthetic
+  scenarios): the pipeline loses 1.5 F1 points to detector noise, and the
+  detector owns them — fixing rider detection alone would close the whole gap, helmet classification alone 72–80% of it, plate detection 7–8%, OCR ~0 (stages overlap, so these don't sum). OCR errors cost ~0 F1 because the vote
+  withholds instead of guessing; they cost coverage instead.
 
 ### 3. Application — *how fast?*
 
@@ -122,8 +128,8 @@ Apple M4, batch 1, `traffic-4class@1.0.0`
 - **OCR lock** (stop re-reading a settled plate; re-check every 10 frames):
   19.4 → 36.7 FPS, +88% (per round +80% to +139%), with the same fine in every
   run of both arms.
-- YOLO on one 1906×1078 image: ~20–23 ms warm on either CPU or MPS — on an M4
-  neither is reliably faster for YOLOv8n.
+- YOLO on one 1906×1078 image: 20.5 ms warm on the CPU, 23.2 ms on MPS (p50)
+  — one run per device, so no claim that either is faster for YOLOv8n.
 - The web layer is not the cost: `/analyze`'s HTTP + validation + DB overhead is
   below the call's own run-to-run noise; the decision core takes 0.04 ms per
   frame for three bikes.
@@ -184,7 +190,7 @@ applied, and a live SHA-256 check of its evidence files.
 ## Evaluate it
 
 ```bash
-pytest                                   # 600 tests, model-free, ~95% branch coverage
+pytest                                   # 600 tests, model-free, ~95% branch coverage of modules/
 python3 evaluate_pipeline.py             # pipeline metrics, error budget (no weights)
 python3 evaluate_temporal.py             # temporal-rule experiment (no weights)
 python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results --name ocr_policy_simulation
@@ -235,10 +241,12 @@ API reference: [docs/API.md](docs/API.md). Security review: [docs/SECURITY.md](d
 - **Triple riding is rarely fineable** on real footage: the plate is not
   detected on those vehicles (dataset label gap).
 - **OCR coverage is low by design.** In simulation the vote names a plate for
-  34% of vehicles at 12% character noise (70% at 4%); the rest are withheld
+  34% of vehicles at 12% character noise (63–70% at 4%); the rest are withheld
   for review.
-- **Riders in view for fewer than 12 frames are never fined.**
-- **Speed is an estimate** (±11 km/h with a homography, in simulation).
+- **Riders in view for fewer than 12 frames are never fined for no helmet**
+  (triple riding and overspeed confirm after 5).
+- **Speed is an estimate**: MAE ~11 km/h for bikes approaching the camera even
+  with a homography, biased high (+8 km/h), in simulation.
 - **Confidence is a ranking score, not a probability**, and only demonstrably
   ranks correctness for WithoutHelmet and Plate.
 - **Held-out ≠ generalisation**; single-region data; dataset licence unverified.
