@@ -190,29 +190,137 @@ def _metrics(probs, labels, n_bins: int) -> dict:
     }
 
 
-def fit_and_evaluate(scores, labels, *, n_bins: int = 10) -> dict:
-    """Fit Platt + isotonic on (score, 0/1) data and report before/after
-    calibration quality. ``best`` is the lowest-ECE option (which may be
-    ``raw`` — meaning calibration did not help and none should be applied)."""
-    raw = _metrics(scores, labels, n_bins)
+MIN_PER_CLASS = 30
 
-    platt = PlattCalibrator().fit(scores, labels)
-    platt_probs = [platt.predict(s) for s in scores]
-    platt_m = _metrics(platt_probs, labels, n_bins)
 
-    iso = IsotonicCalibrator().fit(scores, labels)
-    iso_probs = [iso.predict(s) for s in scores]
-    iso_m = _metrics(iso_probs, labels, n_bins)
+def _fold_ids(n: int, folds: int, groups, seed: int) -> list[int]:
+    """Fold index per sample. With ``groups`` (e.g. the session/video a review
+    came from) whole groups share a fold, so a calibrator is never evaluated on
+    samples from a video it was fitted on."""
+    import random
 
-    options = {"raw": raw["ece"], "platt": platt_m["ece"], "isotonic": iso_m["ece"]}
-    best = min(options, key=lambda k: options[k])
-    return {
-        "n": len(scores),
-        "raw": raw,
-        "platt": {**platt_m, "params": platt.to_dict()},
-        "isotonic": {**iso_m, "params": iso.to_dict()},
-        "best": best,
+    rng = random.Random(seed)
+    if groups is None:
+        order = list(range(n))
+        rng.shuffle(order)
+        ids = [0] * n
+        for rank, i in enumerate(order):
+            ids[i] = rank % folds
+        return ids
+    keys = sorted(set(groups), key=str)
+    rng.shuffle(keys)
+    fold_of = {k: r % folds for r, k in enumerate(keys)}
+    return [fold_of[g] for g in groups]
+
+
+def _out_of_fold(make, scores, labels, fold_ids, folds: int) -> list[float]:
+    probs = [0.0] * len(scores)
+    for f in range(folds):
+        train = [i for i, k in enumerate(fold_ids) if k != f]
+        test = [i for i, k in enumerate(fold_ids) if k == f]
+        if not test:
+            continue
+        cal = make().fit([scores[i] for i in train], [labels[i] for i in train])
+        for i in test:
+            probs[i] = cal.predict(scores[i])
+    return probs
+
+
+def _brier_gain(raw, cal, labels, *, n_boot: int, seed: int, level: float = 0.95) -> dict:
+    """Mean per-sample Brier improvement of ``cal`` over ``raw`` (positive =
+    better) with a bootstrap CI over samples."""
+    import random
+
+    d = [(r - y) ** 2 - (c - y) ** 2 for r, c, y in zip(raw, cal, labels)]
+    n = len(d)
+    if n == 0:
+        return {"mean": 0.0, "ci_low": 0.0, "ci_high": 0.0}
+    rng = random.Random(seed)
+    boots = sorted(sum(d[rng.randrange(n)] for _ in range(n)) / n for _ in range(n_boot))
+    lo = boots[int((1 - level) / 2 * n_boot)]
+    hi = boots[min(n_boot - 1, int((1 + level) / 2 * n_boot))]
+    return {"mean": round(sum(d) / n, 5), "ci_low": round(lo, 5), "ci_high": round(hi, 5)}
+
+
+def threshold_table(scores, labels, thresholds=None) -> list[dict]:
+    """If only violations scoring >= t were auto-accepted: how many, what share
+    of them are correct (precision), and what share of all correct ones they
+    keep (recall). The operating question a score must answer, calibrated or
+    not."""
+    thresholds = thresholds or [round(0.05 * i, 2) for i in range(1, 20)]
+    positives = sum(labels)
+    rows = []
+    for t in thresholds:
+        kept = [y for s, y in zip(scores, labels) if s >= t]
+        tp = sum(kept)
+        rows.append({
+            "threshold": t, "kept": len(kept),
+            "precision": round(tp / len(kept), 4) if kept else None,
+            "recall": round(tp / positives, 4) if positives else None,
+        })
+    return rows
+
+
+def fit_and_evaluate(scores, labels, *, n_bins: int = 10, folds: int = 5, groups=None,
+                     seed: int = 0, n_boot: int = 1000,
+                     min_per_class: int = MIN_PER_CLASS) -> dict:
+    """Is the raw score calibrated, and would Platt or isotonic calibration help
+    on data it was NOT fitted on?
+
+    Every calibrator is scored **out of fold** (k-fold; grouped by ``groups``
+    when given). Scoring a calibrator on the rows it was fitted to rewards
+    memorisation — isotonic regression can nearly reproduce the per-bin
+    accuracies in-sample — so the in-sample numbers are reported only to show
+    that optimism. A calibrator is adopted (``best``) only if its out-of-fold
+    Brier score beats the raw score's with a bootstrap CI excluding zero; Brier
+    is the selection metric because, unlike ECE, it is a proper scoring rule and
+    doesn't depend on binning. With fewer than ``min_per_class`` correct or
+    incorrect outcomes, the verdict is ``insufficient_data`` and nothing is
+    adopted."""
+    n = len(scores)
+    pos = sum(1 for y in labels if y)
+    neg = n - pos
+    raw = list(scores)
+    out: dict = {
+        "n": n, "correct": pos, "incorrect": neg, "folds": folds,
+        "grouped": groups is not None, "selection": "out-of-fold Brier, bootstrap CI",
+        "raw": _metrics(raw, labels, n_bins),
+        "reliability_raw": [b.__dict__ for b in reliability_curve(raw, labels, n_bins)],
+        "threshold_table": threshold_table(raw, labels),
     }
+    if min(pos, neg) < min_per_class:
+        out.update(verdict="insufficient_data", best="raw",
+                   reason=f"need >= {min_per_class} correct and incorrect outcomes; "
+                          f"have {pos} / {neg}")
+        return out
+
+    fold_ids = _fold_ids(n, folds, groups, seed)
+    effective_folds = len(set(fold_ids))
+    candidates: dict[str, type[PlattCalibrator] | type[IsotonicCalibrator]] = {
+        "platt": PlattCalibrator, "isotonic": IsotonicCalibrator}
+    gains = {}
+    for name, make in candidates.items():
+        oof = _out_of_fold(make, raw, labels, fold_ids, folds)
+        fitted = make().fit(raw, labels)
+        in_sample = [fitted.predict(x) for x in raw]
+        out[name] = {**_metrics(oof, labels, n_bins),
+                     "in_sample_ece": round(expected_calibration_error(in_sample, labels,
+                                                                       n_bins), 4),
+                     "params": fitted.to_dict()}
+        gains[name] = _brier_gain(raw, oof, labels, n_boot=n_boot, seed=seed)
+        out[name]["brier_gain_vs_raw"] = gains[name]
+    significant = {k: g for k, g in gains.items() if g["ci_low"] > 0}
+    if effective_folds < 2:
+        out.update(verdict="insufficient_data", best="raw",
+                   reason="fewer than two folds (too few groups)")
+    elif significant:
+        best = max(significant, key=lambda k: significant[k]["mean"])
+        out.update(verdict="calibration_helps", best=best)
+    else:
+        out.update(verdict="raw_is_as_good", best="raw",
+                   reason="no calibrator improved out-of-fold Brier with a CI "
+                          "excluding zero")
+    return out
 
 
 def save_calibrator(calibrator, path: str) -> None:
