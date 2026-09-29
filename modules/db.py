@@ -85,6 +85,12 @@ class Database:
                         reviewer_decision TEXT,
                         reviewed_at DATETIME,
                         review_notes TEXT,
+                        -- Structured outcome, so a review is also a label:
+                        -- why a dismissed violation was wrong, the true plate
+                        -- when the plate was wrong, and who decided.
+                        review_reason TEXT,
+                        corrected_plate TEXT,
+                        reviewed_by TEXT,
                         session_id TEXT REFERENCES sessions(id)
                     );
 
@@ -207,6 +213,9 @@ class Database:
             "review_notes": "TEXT",
             "detection_status": "TEXT NOT NULL DEFAULT 'confirmed'",
             "session_id": "TEXT",
+            "review_reason": "TEXT",
+            "corrected_plate": "TEXT",
+            "reviewed_by": "TEXT",
         })
         self._add_missing_columns(conn, "sessions", {
             "violations_withheld": "INTEGER DEFAULT 0",
@@ -804,6 +813,12 @@ class Database:
     # -- human review -------------------------------------------------------
 
     REVIEW_STATES = {"pending", "confirmed", "dismissed"}
+    # Why a dismissed violation was wrong — which stage failed. The stage
+    # matters: "wrong_plate" is an OCR label (with the true plate),
+    # "wrong_violation" a detector/decision label, "wrong_vehicle" an
+    # association/tracking label.
+    REVIEW_REASONS = {"wrong_violation", "wrong_plate", "wrong_vehicle", "duplicate",
+                      "evidence_unusable", "other"}
 
     def set_review(
         self,
@@ -813,15 +828,31 @@ class Database:
         reviewer_decision: str | None = None,
         notes: str | None = None,
         actor: str | None = None,
+        reason: str | None = None,
+        corrected_plate: str | None = None,
     ) -> bool:
         """Record a human review decision on a violation. Returns True if a row
         was updated, False if the id doesn't exist. Raises ValueError for an
-        unknown ``review_status`` so the API can 400 rather than store garbage."""
+        unknown ``review_status``, an unknown ``reason``, a reason on anything
+        but a dismissal, or a ``corrected_plate`` without ``reason="wrong_plate"``
+        — so the API can 400 rather than store a label that can't be used."""
         if review_status not in self.REVIEW_STATES:
             raise ValueError(
                 f"review_status must be one of {sorted(self.REVIEW_STATES)}"
             )
+        if reason is not None:
+            if reason not in self.REVIEW_REASONS:
+                raise ValueError(f"reason must be one of {sorted(self.REVIEW_REASONS)}")
+            if review_status != "dismissed":
+                raise ValueError("a reason is only recorded with a dismissal")
+        if corrected_plate is not None:
+            if reason != "wrong_plate":
+                raise ValueError('corrected_plate requires reason "wrong_plate"')
+            corrected_plate = normalize_plate(corrected_plate)
+            if not corrected_plate:
+                raise ValueError("corrected_plate is empty after normalisation")
         reviewed_at = None if review_status == "pending" else "CURRENT_TIMESTAMP"
+        reviewer = None if review_status == "pending" else actor
         conn = self._connect()
         try:
             with conn:
@@ -831,15 +862,19 @@ class Database:
                     cur = conn.execute(
                         """UPDATE violations
                            SET review_status = ?, reviewer_decision = ?,
-                               review_notes = ?, reviewed_at = CURRENT_TIMESTAMP
+                               review_notes = ?, reviewed_at = CURRENT_TIMESTAMP,
+                               review_reason = ?, corrected_plate = ?, reviewed_by = ?
                            WHERE id = ?""",
-                        (review_status, reviewer_decision, notes, violation_id),
+                        (review_status, reviewer_decision, notes, reason,
+                         corrected_plate, reviewer, violation_id),
                     )
                 else:
                     cur = conn.execute(
                         """UPDATE violations
                            SET review_status = ?, reviewer_decision = ?,
-                               review_notes = ?, reviewed_at = NULL
+                               review_notes = ?, reviewed_at = NULL,
+                               review_reason = NULL, corrected_plate = NULL,
+                               reviewed_by = NULL
                            WHERE id = ?""",
                         (review_status, reviewer_decision, notes, violation_id),
                     )
@@ -847,11 +882,56 @@ class Database:
                     self._log_event(
                         conn, f"violation_review_{review_status}", "violation",
                         str(violation_id), actor,
-                        {"reviewer_decision": reviewer_decision, "notes": notes},
+                        {"reviewer_decision": reviewer_decision, "notes": notes,
+                         "reason": reason, "corrected_plate": corrected_plate},
                     )
             return cur.rowcount > 0
         finally:
             conn.close()
+
+    DEMO_SOURCE_PREFIX = "[curated demo seed]"
+
+    def review_labels(self) -> list[dict]:
+        """Decided human reviews as labels, for calibration and error analysis.
+
+        One row per confirmed/dismissed violation that carries a pipeline score:
+        the score, the outcome (``correct`` = confirmed), the structured reason,
+        the corrected plate, the reviewer, and the session/model/pipeline that
+        produced it (``session_id`` is the grouping key that keeps one video's
+        reviews on one side of a train/test split).
+
+        Only violations the pipeline produced are labels: they carry an evidence
+        sidecar and a score. Rows recorded by hand (``/detect``), demo seeds —
+        including the pre-1.1.0 seeder, whose sessions look like real runs but
+        whose records have no sidecar and hand-picked scores — and sessions
+        marked as curated demo data are all excluded."""
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """SELECT v.id AS violation_id, v.type, v.confidence, v.review_status,
+                          v.review_reason, v.corrected_plate, v.reviewed_by,
+                          v.reviewed_at, v.track_id, v.session_id,
+                          ve.plate, s.source, s.model_version, s.pipeline_version,
+                          e.metadata_path
+                   FROM violations v
+                   JOIN vehicles ve ON ve.id = v.vehicle_id
+                   LEFT JOIN sessions s ON s.id = v.session_id
+                   LEFT JOIN evidence e ON e.violation_id = v.id
+                   WHERE v.review_status IN ('confirmed', 'dismissed')
+                     AND v.confidence IS NOT NULL
+                     AND e.metadata_path IS NOT NULL
+                     AND (s.source IS NULL OR s.source NOT LIKE ?)
+                   ORDER BY v.id""",
+                (self.DEMO_SOURCE_PREFIX + "%",),
+            ).fetchall()
+        finally:
+            conn.close()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["correct"] = 1 if d["review_status"] == "confirmed" else 0
+            out.append(d)
+        return out
 
     # -- payment lifecycle (Phase 18) ---------------------------------------
 

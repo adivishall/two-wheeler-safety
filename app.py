@@ -679,7 +679,9 @@ def api_violation_detail(violation_id):
 
 @app.route("/api/violations/<int:violation_id>/review", methods=["POST"])
 def api_review(violation_id):
-    """Record a human review decision. Body: {review_status, decision?, notes?}.
+    """Record a human review decision. Body: {review_status, decision?, notes?,
+    reason?, corrected_plate?} — ``reason`` (dismissals only) says which stage
+    was wrong; ``corrected_plate`` (with reason "wrong_plate") is the true plate.
 
     Separates automated detection from human confirmation — CV predictions are
     not ground truth, so a violation stays 'pending' until a person confirms or
@@ -703,6 +705,8 @@ def api_review(violation_id):
             reviewer_decision=data.get("decision"),
             notes=data.get("notes"),
             actor=actor,
+            reason=data.get("reason") or None,
+            corrected_plate=data.get("corrected_plate") or None,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
