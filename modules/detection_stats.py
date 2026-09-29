@@ -82,6 +82,48 @@ def match_for_ap(gt, preds, n_classes: int, iou_threshold: float = 0.5) -> Image
     )
 
 
+def match_for_ap_in_range(gt, preds, n_classes: int, in_range,
+                          iou_threshold: float = 0.5) -> ImageRecord:
+    """:func:`match_for_ap` restricted to boxes ``in_range(cls, box)`` accepts,
+    by the COCO area-range convention: ground truth outside the range is
+    *ignored* (a prediction matched to it is dropped, neither TP nor FP), and an
+    unmatched prediction counts as a false positive only if it is itself in
+    range. Otherwise "small objects" AP would charge the detector for every
+    large object it found."""
+    gt_counts = np.zeros(n_classes, dtype=np.int64)
+    for c, box in gt:
+        if 0 <= c < n_classes and in_range(c, box):
+            gt_counts[c] += 1
+    cls_out, score_out, tp_out = [], [], []
+    for c in range(n_classes):
+        g = [b for k, b in gt if k == c]
+        g_in = [in_range(c, b) for b in g]
+        used = [False] * len(g)
+        for _, box, score in sorted((p for p in preds if p[0] == c), key=lambda p: -p[2]):
+            best, best_j = iou_threshold, -1
+            for j, gb in enumerate(g):
+                if used[j]:
+                    continue
+                v = iou(box, gb)
+                if v >= best:
+                    best, best_j = v, j
+            if best_j >= 0:
+                used[best_j] = True
+                if not g_in[best_j]:
+                    continue  # matched an ignored (out-of-range) object
+                tp = 1.0
+            elif in_range(c, box):
+                tp = 0.0
+            else:
+                continue
+            cls_out.append(c)
+            score_out.append(score)
+            tp_out.append(tp)
+    return ImageRecord(np.asarray(cls_out, dtype=np.int64),
+                       np.asarray(score_out, dtype=np.float64),
+                       np.asarray(tp_out, dtype=np.float64), gt_counts)
+
+
 def _ap_from_curve(recall: np.ndarray, precision: np.ndarray) -> float:
     """Ultralytics ``compute_ap`` (8.4): precision envelope + 101-point
     interpolation, with precision dropping to 0 right after the last achieved
@@ -143,6 +185,16 @@ class _ClassIndex:
                 "gt": n_gt}
 
 
+def _nanmean(x, axis=None):
+    """nanmean that returns NaN quietly when every entry is NaN (a stratum with
+    no instances of any class) instead of warning."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return np.nanmean(x, axis=axis)
+
+
 def _std(samples: np.ndarray) -> float | None:
     """Std of the non-NaN samples; None for a class with no GT (all NaN)."""
     samples = samples[~np.isnan(samples)]
@@ -187,11 +239,47 @@ def bootstrap_ap(records: list[ImageRecord], class_names: list[str], *,
             "std": _std(boots[:, c]), "instances": int(idx[c].gt.sum()),
         }
     with np.errstate(all="ignore"):
-        m_boot = np.nanmean(boots, axis=1)
+        m_boot = _nanmean(boots, axis=1)
     lo, hi = _percentile_ci(m_boot, level)
-    out["map50"] = {"value": _r(np.nanmean(point)), "ci_low": _r(lo), "ci_high": _r(hi),
+    out["map50"] = {"value": _r(_nanmean(point)), "ci_low": _r(lo), "ci_high": _r(hi),
                     "std": _std(m_boot)}
     return out
+
+
+def unpaired_gap(rec_a: list[ImageRecord], rec_b: list[ImageRecord], class_names: list[str],
+                 *, n_boot: int = 2000, seed: int = 0, level: float = 0.95) -> dict:
+    """AP(A) - AP(B) for two DISJOINT image sets (e.g. dark images vs the
+    rest), each resampled independently. ``significant`` when the CI excludes
+    zero. For the same images under two models use :func:`paired_bootstrap`."""
+    k = len(class_names)
+    ia = [_ClassIndex(rec_a, c) for c in range(k)]
+    ib = [_ClassIndex(rec_b, c) for c in range(k)]
+    point = np.array([ia[c].ap() - ib[c].ap() for c in range(k)])
+    rng = np.random.default_rng(seed)
+    na, nb = len(rec_a), len(rec_b)
+    diffs = np.empty((n_boot, k))
+    for b in range(n_boot):
+        wa = np.bincount(rng.integers(0, na, na), minlength=na).astype(np.float64)
+        wb = np.bincount(rng.integers(0, nb, nb), minlength=nb).astype(np.float64)
+        diffs[b] = [ia[c].ap(wa) - ib[c].ap(wb) for c in range(k)]
+    out: dict = {"n_a": na, "n_b": nb, "per_class": {}}
+    for c, name in enumerate(class_names):
+        lo, hi = _percentile_ci(diffs[:, c], level)
+        out["per_class"][name] = {"diff": _r(point[c]), "ci_low": _r(lo), "ci_high": _r(hi),
+                                  "significant": bool(lo > 0 or hi < 0)}
+    with np.errstate(all="ignore"):
+        m = _nanmean(diffs, axis=1)
+    lo, hi = _percentile_ci(m, level)
+    out["map50"] = {"diff": _r(_nanmean(point)), "ci_low": _r(lo), "ci_high": _r(hi),
+                    "significant": bool(lo > 0 or hi < 0)}
+    return out
+
+
+def recall_at(records: list[ImageRecord], class_names: list[str], thresholds: dict) -> dict:
+    """Precision/recall per class at the operating threshold(s) — what a user of
+    the running system experiences, as opposed to AP's whole curve."""
+    return {name: _ClassIndex(records, c).pr_at(thresholds.get(name, 0.25))
+            for c, name in enumerate(class_names)}
 
 
 def paired_bootstrap(rec_a: list[ImageRecord], rec_b: list[ImageRecord],
@@ -221,9 +309,9 @@ def paired_bootstrap(rec_a: list[ImageRecord], rec_b: list[ImageRecord],
             "p_a_better": _r(float(np.mean(diffs[:, c] > 0)), 3),
             "significant": bool(lo > 0 or hi < 0),
         }
-    md = np.nanmean(diffs, axis=1)
+    md = _nanmean(diffs, axis=1)
     lo, hi = _percentile_ci(md, level)
-    out["map50"] = {"diff": _r(np.nanmean(point)), "ci_low": _r(lo), "ci_high": _r(hi),
+    out["map50"] = {"diff": _r(_nanmean(point)), "ci_low": _r(lo), "ci_high": _r(hi),
                     "p_a_better": _r(float(np.mean(md > 0)), 3),
                     "significant": bool(lo > 0 or hi < 0)}
     return out

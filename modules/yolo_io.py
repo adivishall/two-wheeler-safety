@@ -131,6 +131,33 @@ def predict_split(model, pairs, n_classes: int, *, conf: float = AP_CONF,
     return records
 
 
+def predict_boxes(model, pairs, *, conf: float = AP_CONF, nms_iou: float = AP_NMS_IOU,
+                  imgsz: int = 640, device: str | None = None) -> list[dict]:
+    """Raw per-image ground truth and predictions (pixel xyxy), for analyses
+    that re-match under different rules (size ranges, strata) without
+    re-running the model: ``{"image", "w", "h", "gt": [[c, x1, y1, x2, y2]],
+    "preds": [[c, x1, y1, x2, y2, score]]}``."""
+    import cv2
+
+    rows = []
+    for image_path, label_path in pairs:
+        img = cv2.imread(image_path)
+        if img is None:
+            continue
+        h, w = img.shape[:2]
+        kwargs: dict = dict(conf=conf, iou=nms_iou, imgsz=imgsz, verbose=False)
+        if device:
+            kwargs["device"] = device
+        result = model.predict(source=img, **kwargs)[0]
+        rows.append({
+            "image": image_path, "w": w, "h": h,
+            "gt": [[c, *box] for c, box in read_gt(label_path, w, h)],
+            "preds": [[int(b.cls[0]), *(float(v) for v in b.xyxy[0]), float(b.conf[0])]
+                      for b in result.boxes],
+        })
+    return rows
+
+
 def cache_key(**parts) -> str:
     """Stable short key for a prediction cache entry."""
     blob = json.dumps(parts, sort_keys=True, default=str).encode()
