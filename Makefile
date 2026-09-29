@@ -18,8 +18,8 @@ help:
 	@echo "  make eval         Pipeline evaluation — no weights or dataset needed"
 	@echo "  make eval-audit   Audit split hygiene + build de-leaked splits"
 	@echo "  make eval-model   Detector metrics + failure artifacts (needs weights)"
-	@echo "  make eval-compare A/B every checkpoint on the de-leaked test split"
-	@echo "  make eval-ocr     Single-frame vs temporal OCR (simulated noise)"
+	@echo "  make eval-compare Point-estimate A/B of every checkpoint on the de-leaked VAL split"
+	@echo "  make eval-ocr     Single-frame vs temporal OCR + vote-threshold selection (simulated)"
 	@echo "  make install-ci  Install the pinned model-free deps"
 
 demo:
@@ -60,8 +60,10 @@ CLEAN_DATA ?= eval/clean_splits/data.yaml
 eval:
 	python3 evaluate_pipeline.py
 
+# --policy-sweep is the vote-threshold selection experiment the docs cite;
+# without it this target would overwrite the committed result without it.
 eval-ocr:
-	python3 evaluate_ocr.py --simulate --sweep --out eval/results \
+	python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results \
 	    --name ocr_policy_simulation
 
 eval-audit:
@@ -74,5 +76,7 @@ eval-model:
 	    --split test --save-artifacts eval --benchmark \
 	    --name eval_$(notdir $(patsubst %/weights/best.pt,%,$(MODEL)))_test_clean
 
+# Models are compared on VAL: choosing on test is tuning on test
+# (docs/EVALUATION.md §1). Significance: evaluate_uncertainty.py.
 eval-compare:
-	python3 compare_models.py --data $(CLEAN_DATA) --split test
+	python3 compare_models.py --data $(CLEAN_DATA) --split val
