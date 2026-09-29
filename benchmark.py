@@ -114,8 +114,10 @@ def benchmark_video(model, reader, video_path, max_frames, *,
     from modules.profiling import StageProfiler
     from modules.video_detector import process_video
 
-    fd, out_path = tempfile.mkstemp(suffix=".mp4")
-    os.close(fd)
+    # process_video writes evidence next to its output video, so both live in a
+    # temporary directory that is removed afterwards.
+    tmp = tempfile.TemporaryDirectory()
+    out_path = os.path.join(tmp.name, "out.mp4")
     # A real profiler makes process_video time each stage (YOLO/OCR/track/
     # evidence/DB/encode/read); it's a no-op unless one is passed, so the web
     # path pays nothing. The evidence/DB stages only fire on a confirmed
@@ -144,10 +146,7 @@ def benchmark_video(model, reader, video_path, max_frames, *,
         )
         elapsed = time.perf_counter() - t0
     finally:
-        try:
-            os.remove(out_path)
-        except OSError:
-            pass
+        tmp.cleanup()
     frames = summary.get("frames", 0)
     return {
         "video": video_path,
@@ -163,6 +162,17 @@ def benchmark_video(model, reader, video_path, max_frames, *,
                                                .get("ocr", {}).get("calls", 0))),
         "ms_per_frame": round(elapsed * 1000.0 / frames, 2) if frames else 0.0,
         "stage_profile": summary.get("profile", {}),
+        # What the run decided, so an A/B can show a speed-up changed nothing.
+        "decisions": decisions_of(summary),
+    }
+
+
+def decisions_of(summary: dict) -> dict:
+    """The run's outcome: fines as (plate, violation) and withheld confirmations."""
+    return {
+        "fined": sorted([v.get("plate"), v.get("violation")]
+                        for v in summary.get("violations") or []),
+        "withheld": len(summary.get("unfined_confirmations") or []),
     }
 
 
@@ -352,6 +362,8 @@ def main(argv=None) -> int:
                 "locked_ocr_calls": payload["video_benchmark"]["ocr_calls"],
                 "unlocked_ocr_calls":
                     payload["video_benchmark_no_ocr_lock"]["ocr_calls"],
+                "same_decisions": (payload["video_benchmark"]["decisions"]
+                                   == payload["video_benchmark_no_ocr_lock"]["decisions"]),
             }
     elif args.video:
         log.warning("video not found: %s", args.video)
@@ -442,7 +454,14 @@ def render_markdown(p: dict) -> str:
     if ab:
         lines += [f"OCR lock A/B (same clip, same process): {ab['unlocked_fps']} → "
                   f"**{ab['locked_fps']} FPS ({ab['speedup_pct']:+.1f}%)**, "
-                  f"{ab['unlocked_ocr_calls']} → {ab['locked_ocr_calls']} OCR calls.", ""]
+                  f"{ab['unlocked_ocr_calls']} → {ab['locked_ocr_calls']} OCR calls."]
+        if "same_decisions" in ab:
+            dec = p["video_benchmark"]["decisions"]
+            fined = ", ".join(f"{pl} {vi}" for pl, vi in dec["fined"]) or "none"
+            lines.append(
+                f"Same decisions in both arms: **{'yes' if ab['same_decisions'] else 'NO'}** "
+                f"(fined: {fined}; withheld: {dec['withheld']}).")
+        lines.append("")
     mi = p.get("micro")
     if mi:
         lines += ["## Micro-benchmarks", "", "| operation | mean | p90 |", "|---|---:|---:|"]

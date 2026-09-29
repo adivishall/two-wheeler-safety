@@ -171,3 +171,21 @@ def test_evaluate_pipeline_is_reproducible(tmp_path):
         return d
 
     assert run("a") == run("b")
+
+
+def test_compare_models_latency_reports_the_median_after_warmup(monkeypatch):
+    """One slow call (a device hiccup) must not move the reported latency, and
+    warm-up calls are not timed."""
+    calls = []
+
+    class _Model:
+        def predict(self, source, **kw):
+            calls.append(source)
+
+    # Timed calls take 10, 10, 10, 10 and 1000 ms.
+    ticks = iter(t for i, d in enumerate([0.010] * 4 + [1.0]) for t in (i, i + d))
+    monkeypatch.setattr(compare_models.time, "perf_counter", lambda: next(ticks))
+    lat = compare_models.measure_latency(_Model(), ["a", "b", "c", "d", "e"], warmup=2)
+    assert len(calls) == 2 + 5 and lat["images"] == 5
+    assert lat["p50_ms"] == 10.0
+    assert lat["mean_ms"] > 200  # the mean is what the old table showed

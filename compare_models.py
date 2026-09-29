@@ -55,9 +55,12 @@ def model_label(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def measure_latency(model, images: list[str], warmup: int = 2,
+def measure_latency(model, images: list[str], warmup: int = 5,
                     device: str | None = None) -> dict:
-    """Mean/p90 single-image inference latency in ms over ``images``.
+    """Median/mean/p90 single-image ``predict()`` latency in ms over ``images``.
+
+    A sanity check, not a benchmark (``benchmark.py`` is): 25 calls on a shared
+    machine are noisy, so the table reports the median.
 
     The warm-up matters: the first forward pass pays lazy device/graph
     initialisation and would otherwise dominate a small sample and make whichever
@@ -77,6 +80,7 @@ def measure_latency(model, images: list[str], warmup: int = 2,
     mean = sum(times) / len(times)
     return {
         "images": len(times),
+        "p50_ms": round(times[len(times) // 2], 2),
         "mean_ms": round(mean, 2),
         "p90_ms": round(times[int(len(times) * 0.9)], 2),
         "fps": round(1000.0 / mean, 1) if mean else 0.0,
@@ -190,15 +194,19 @@ def render_markdown(payload: dict) -> str:
                   "image bootstrap).", ""]
 
     lines += ["| Model | version | mAP@50 | mAP@50-95 | precision | recall | "
-              "latency (ms) | size (MB) |", "|---|---|---:|---:|---:|---:|---:|---:|"]
+              "latency p50 (ms) | file (MB) |", "|---|---|---:|---:|---:|---:|---:|---:|"]
     for r in ok:
-        lat = r.get("latency", {}).get("mean_ms", "—")
+        lat = r.get("latency", {}).get("p50_ms", "—")
         lines.append(
             f"| `{r['label']}` | {r.get('model_version') or '—'} | {r['map50']} | "
             f"{r['map50_95']} | {r['mean_precision']} | {r['mean_recall']} | "
             f"{lat} | {r['size_mb']} |"
         )
-    lines.append("")
+    lines += ["", "Latency: median of single-image `predict()` calls (load + pre/post-"
+              "processing) after a warm-up, on the device above — a sanity check, not a "
+              "benchmark (`benchmark.md` is). Between checkpoints of the same "
+              "architecture a latency gap is measurement noise. File size includes "
+              "any optimizer state left in the checkpoint.", ""]
 
     classes = sorted({c for r in ok for c in r.get("per_class", {})})
     if classes:

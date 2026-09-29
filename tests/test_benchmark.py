@@ -62,3 +62,35 @@ def test_benchmark_reports_ocr_call_count(monkeypatch):
     out = benchmark.benchmark_video(None, None, "v.mp4", 10)
     assert out["ocr_calls"] == 7
     assert out["ocr_lock"] is True
+
+
+def test_benchmark_records_what_each_arm_decided(monkeypatch):
+    """A speed-up is only a speed-up if the decisions are unchanged; the A/B
+    report compares them, so each arm must carry its fines and withheld count."""
+    import benchmark
+
+    summary = {"frames": 10, "ocr_calls": 2,
+               "violations": [{"plate": "MH12AB1234", "violation": "no_helmet"}],
+               "unfined_confirmations": [{"track": 3}]}
+    monkeypatch.setattr("modules.video_detector.process_video", lambda *a, **k: summary)
+    out = benchmark.benchmark_video(None, None, "v.mp4", 10)
+    assert out["decisions"] == {"fined": [["MH12AB1234", "no_helmet"]], "withheld": 1}
+
+
+def test_benchmark_video_leaves_no_evidence_behind(monkeypatch):
+    """process_video writes evidence beside its output video; the benchmark's
+    output lives in a temporary directory that must be gone afterwards."""
+    import os
+
+    import benchmark
+
+    seen = {}
+
+    def fake_process_video(video, model, reader, output_path, **kw):
+        seen["dir"] = os.path.dirname(output_path)
+        open(os.path.join(seen["dir"], "evidence.jpg"), "w").close()
+        return {"frames": 1}
+
+    monkeypatch.setattr("modules.video_detector.process_video", fake_process_video)
+    benchmark.benchmark_video(None, None, "v.mp4", 1)
+    assert not os.path.exists(seen["dir"])
