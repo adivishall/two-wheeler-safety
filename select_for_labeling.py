@@ -4,12 +4,17 @@
         --train-data datasets/train_clean/data.yaml --eval-data eval/clean_splits/data.yaml \\
         --db traffic.db --budget 150 --device mps
 
-Sources: detector predictions on the training pool (-> ``training_relabel``) and
-on val/test (-> ``evaluation_relabel``: fixes held-out labels, never exported as
-training data); pending pipeline decisions with evidence sidecars and withheld
-violations from the database (-> ``review``). Writes
-``eval/results/labeling_queue.{jsonl,md}``; the report compares each signal's
-share in the queue with its base rate in the pool.
+Sources: detector predictions on the training pool (-> ``training_relabel``);
+pending pipeline decisions with evidence sidecars and withheld violations from
+the database (-> ``review``). Writes ``eval/results/labeling_queue.{jsonl,md}``;
+the report compares each signal's share in the queue with its base rate.
+
+Evaluation images are NEVER chosen by model signals. Relabelling only the
+held-out images where the model disagrees with the label inflates measured
+accuracy: model-favoured "corrections" get made, while errors the model and the
+label share are never found. Held-out labels are instead audited on a seeded,
+uniform-random sample (``--eval-audit``), to be labelled without seeing
+predictions (``evaluation_audit``, ``show_predictions: false``).
 """
 
 from __future__ import annotations
@@ -107,7 +112,20 @@ def review_candidates(db_path, evidence_dir):
     return out, len(items)
 
 
-def render(queue, pool, pool_sizes, budget, review_pool) -> str:
+def blind_audit(images: list[tuple[str, str]], n: int, seed: int, portable) -> list[dict]:
+    """A seeded uniform-random sample of evaluation images to relabel WITHOUT
+    looking at predictions — the only unbiased way to measure (and fix)
+    held-out label noise."""
+    import random
+
+    rng = random.Random(seed)
+    chosen = rng.sample(sorted(images), min(n, len(images)))
+    return [{"item_id": f"{split}:{os.path.basename(path)}", "image": portable(path),
+             "purpose": "evaluation_audit", "show_predictions": False,
+             "selection": f"uniform random, seed {seed}"} for split, path in chosen]
+
+
+def render(queue, pool, pool_sizes, budget, review_pool, audit_n=0) -> str:
     from modules.active_learning import RESOLVES
 
     def share(items, key):
@@ -122,8 +140,11 @@ def render(queue, pool, pool_sizes, budget, review_pool) -> str:
              f"{len(pool)}.",
              "- Priority ranks informativeness (`1 - Π(1 - signal)`), not a probability; "
              "selection decays repeats of a pattern and skips near-duplicate images.",
-             "- `evaluation_relabel` items come from val/test: labelling them fixes held-out "
-             "labels and can **never** make them training data.",
+             "- Evaluation images are **not** model-selected: they get a separate, "
+             "seeded uniform-random audit sample, labelled blind to predictions "
+             "(`labeling_queue_eval_audit.jsonl`). Model-guided relabelling of held-out "
+             "data would inflate measured accuracy.",
+             f"- Blind evaluation audit: **{audit_n}** val/test images.",
              "- Whether this queue beats random selection is **not yet measured** — that "
              "needs the labels back (docs/FIELD_EVALUATION.md §5).", "",
              "## Signal share: queue vs pool", "",
@@ -157,6 +178,9 @@ def main(argv=None) -> int:
     ap.add_argument("--db", default="traffic.db")
     ap.add_argument("--evidence-dir", default="evidence")
     ap.add_argument("--budget", type=int, default=150)
+    ap.add_argument("--eval-audit", type=int, default=50,
+                    help="uniform-random, model-blind audit sample of val/test images")
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--decay", type=float, default=0.6)
     ap.add_argument("--device", default="auto")
     ap.add_argument("--cache-dir", default="eval/cache")
@@ -172,20 +196,20 @@ def main(argv=None) -> int:
     device = yolo_io.resolve_device(args.device)
     op = operating_thresholds()
     rows_by_split, names = {}, []
-    plan = [(args.train_data, "train", "training_relabel"),
-            (args.eval_data, "val", "evaluation_relabel"),
-            (args.eval_data, "test", "evaluation_relabel")]
+    plan = [(args.train_data, "train"), (args.eval_data, "val"), (args.eval_data, "test")]
     have_model = os.path.exists(args.model)
-    for data, split, _purpose in plan:
+    for data, split in plan:
         if have_model and os.path.exists(data):
             rows_by_split[split], names = load_or_predict_boxes(
                 args.model, data, split, imgsz=640, device=device, cache_dir=args.cache_dir)
     source_classes = _source_classes(rows_by_split, names)
     pool = []
-    for data, split, purpose in plan:
-        if split in rows_by_split:
-            pool += detector_candidates(rows_by_split[split], split, purpose, names,
-                                        source_classes, op, portable_path)
+    if "train" in rows_by_split:
+        pool += detector_candidates(rows_by_split["train"], "train", "training_relabel",
+                                    names, source_classes, op, portable_path)
+    audit = blind_audit([(split, r["image"]) for split in ("val", "test")
+                         for r in rows_by_split.get(split, [])], args.eval_audit, args.seed,
+                        portable_path)
     review_pool = 0
     if os.path.exists(args.db):
         rc, review_pool = review_candidates(args.db, args.evidence_dir)
@@ -195,12 +219,16 @@ def main(argv=None) -> int:
     with open(os.path.join(args.out, f"{args.name}.jsonl"), "w") as fh:
         for c in queue:
             fh.write(json.dumps(c.as_dict(), sort_keys=True) + "\n")
+    with open(os.path.join(args.out, f"{args.name}_eval_audit.jsonl"), "w") as fh:
+        for item in audit:
+            fh.write(json.dumps(item, sort_keys=True) + "\n")
     sizes = {k: len(v) for k, v in rows_by_split.items()}
     with open(os.path.join(args.out, f"{args.name}.md"), "w") as fh:
-        fh.write(render(queue, pool, sizes, args.budget, review_pool))
+        fh.write(render(queue, pool, sizes, args.budget, review_pool, len(audit)))
     with open(os.path.join(args.out, f"{args.name}.provenance.json"), "w") as fh:
         json.dump(run_provenance(model_paths=[args.model] if have_model else [],
                                  config={"budget": args.budget, "decay": args.decay,
+                                         "eval_audit": args.eval_audit, "seed": args.seed,
                                          "op_thresholds": op,
                                          "source_classes": {k: sorted(v) for k, v in
                                                             source_classes.items()}}),

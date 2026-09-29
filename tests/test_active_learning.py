@@ -109,18 +109,15 @@ def test_review_queue_uses_pipeline_output_only_and_picks_up_withheld(tmp_path):
     assert withheld.signals["withheld"] == 1.0 and withheld.purpose == "review"
 
 
-def test_evaluation_images_are_routed_to_evaluation_relabelling(tmp_path):
-    import cv2
-    import numpy as np
+def test_evaluation_images_are_audited_blind_not_selected_by_the_model(tmp_path):
+    """Relabelling only the held-out images the model disagrees with would bias
+    evaluation toward the model; the audit sample ignores predictions entirely."""
+    from select_for_labeling import blind_audit
 
-    from select_for_labeling import detector_candidates
-
-    img = tmp_path / "ds1_000001.jpg"
-    cv2.imwrite(str(img), np.zeros((64, 64, 3), dtype=np.uint8))
-    rows = [{"image": str(img), "w": 64, "h": 64, "gt": [],
-             "preds": [[0, 1, 1, 30, 10, 0.9]]}]
-    names = ["Plate", "WithHelmet", "WithoutHelmet", "TripleRiding"]
-    out = detector_candidates(rows, "val", "evaluation_relabel", names,
-                              {"ds1": {"Plate"}}, OP, lambda p: p)
-    assert out[0].purpose == "evaluation_relabel"
-    assert out[0].pattern == "evaluation_relabel:possible_missing_label"
+    images = [("val", f"v{i}.jpg") for i in range(40)] + [("test", f"t{i}.jpg")
+                                                          for i in range(20)]
+    a = blind_audit(images, 10, 0, lambda p: p)
+    assert len(a) == 10 and a == blind_audit(images, 10, 0, lambda p: p)  # seeded
+    assert all(x["purpose"] == "evaluation_audit" and x["show_predictions"] is False
+               for x in a)
+    assert blind_audit(list(reversed(images)), 10, 0, lambda p: p) == a  # order-free

@@ -31,9 +31,10 @@ Priority is ``1 - prod(1 - s)`` over the signals (any strong signal suffices;
 several add up; bounded in [0, 1]) — a ranking, not a probability. Selection
 is greedy with diminishing returns per failure *pattern* (``decay ** n`` for
 the n-th pick of a pattern) and skips perceptual near-duplicates of anything
-already picked. Every item carries a ``purpose``: images from evaluation
-splits are queued for *evaluation relabelling* and can never be exported as
-training data.
+already picked. Model signals select from TRAINING data only: relabelling the
+held-out images the model disagrees with would bias the evaluation toward the
+model, so evaluation labels are audited on a uniform-random, model-blind sample
+instead (``select_for_labeling.blind_audit``).
 """
 
 from __future__ import annotations
@@ -53,7 +54,7 @@ DEFAULT_DECAY = 0.6
 class Candidate:
     item_id: str
     source: str  # detector_pool | review_queue | withheld
-    purpose: str  # training_relabel | evaluation_relabel | review
+    purpose: str  # training_relabel | review (evaluation images are never model-selected)
     signals: dict[str, float]
     pattern: str
     image: str | None = None
