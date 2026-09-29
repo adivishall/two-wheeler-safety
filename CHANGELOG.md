@@ -60,6 +60,10 @@ withdrawn; the replacements are below.
   configured.
 - A violation whose plate became readable only on frames without a rider box
   was never fined.
+- Evaluation results recorded absolute local paths (Ultralytics `save_dir`,
+  resolved image directories); they are now repo-relative.
+- `make eval-compare` compared models on the test split; `make eval-ocr`
+  omitted the vote-threshold selection and would overwrite its result.
 
 ### Evaluation — corrected
 
@@ -99,7 +103,7 @@ withdrawn; the replacements are below.
 - Review modal shows how each violation was decided; `GET
   /api/violations/<id>/verify` re-hashes its evidence.
 - `tests/test_end_to_end.py` (real video/photo/API paths through multi-error
-  scenarios) and `tests/test_hardening.py`; 466 → 601 tests.
+  scenarios) and `tests/test_hardening.py`; 466 → 602 tests.
 - Docs: AUDIT, ERROR_ANALYSIS (taxonomy + budget; replaces ERROR_BUDGET),
   INTERVIEW; rewritten README, MODEL_EVALUATION, END_TO_END_EVALUATION,
   EVALUATION, RESUME.
