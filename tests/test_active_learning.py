@@ -85,9 +85,8 @@ def test_review_signals_read_the_plate_vote_and_association():
 
 
 def test_review_queue_uses_pipeline_output_only_and_picks_up_withheld(tmp_path):
-    from select_for_labeling import review_candidates
-
     from modules.db import Database
+    from select_for_labeling import review_candidates
 
     ev = tmp_path / "evidence"
     ev.mkdir()
@@ -113,6 +112,7 @@ def test_review_queue_uses_pipeline_output_only_and_picks_up_withheld(tmp_path):
 def test_evaluation_images_are_routed_to_evaluation_relabelling(tmp_path):
     import cv2
     import numpy as np
+
     from select_for_labeling import detector_candidates
 
     img = tmp_path / "ds1_000001.jpg"
