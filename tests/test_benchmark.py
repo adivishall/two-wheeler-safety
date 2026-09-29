@@ -94,3 +94,39 @@ def test_benchmark_video_leaves_no_evidence_behind(monkeypatch):
     monkeypatch.setattr("modules.video_detector.process_video", fake_process_video)
     benchmark.benchmark_video(None, None, "v.mp4", 1)
     assert not os.path.exists(seen["dir"])
+
+
+def test_arms_are_interleaved_and_the_median_run_is_reported():
+    """Two back-to-back runs of one config differed by 20% FPS, so arms run
+    interleaved (A B, B A, ...) and the median run is what gets reported."""
+    order = []
+    fps = iter([30.0, 17.0, 16.0, 26.0, 33.0, 18.0])
+
+    def run(lock):
+        order.append(lock)
+        return {"throughput_fps": next(fps), "ocr_calls": 30 if lock else 120,
+                "decisions": {"fined": [["MH12AB1234", "no_helmet"]], "withheld": 0}}
+
+    locked, unlocked = bench.run_interleaved(run, [True, False], 3)
+    assert order == [True, False, False, True, True, False]
+    med = bench.median_run(locked)
+    assert med["throughput_fps"] == 30.0 and med["fps_min"] == 26.0 and med["fps_max"] == 33.0
+    ab = bench.lock_speedup(locked, unlocked)
+    assert ab["unlocked_fps"] == 17.0 and ab["speedup_pct"] == round(100 * 13 / 17, 1)
+    assert ab["same_decisions"] is True and ab["repeats"] == 3
+
+
+def test_a_changed_decision_is_reported_even_if_faster():
+    def arm(fps, fined):
+        return {"throughput_fps": fps, "ocr_calls": 1,
+                "decisions": {"fined": fined, "withheld": 0}}
+
+    ab = bench.lock_speedup([arm(30.0, [["A", "no_helmet"]])], [arm(15.0, [["B", "no_helmet"]])])
+    assert ab["same_decisions"] is False
+
+
+def test_paired_overhead_says_when_it_is_below_the_noise():
+    noisy = bench.paired_difference([45.0, 50.0, 44.0, 52.0, 47.0], [47.0, 46.0, 49.0, 48.0, 45.0])
+    assert noisy["distinguishable"] is False
+    clear = bench.paired_difference([55.0, 56.0, 54.0, 57.0, 55.0], [45.0, 46.0, 44.0, 47.0, 45.0])
+    assert clear["distinguishable"] is True and clear["median_ms"] == 10.0

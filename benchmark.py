@@ -19,6 +19,11 @@ processes frames one at a time), input resolution and a hash of each input
 file, model identity by weights hash, library versions and hardware. Output:
 ``eval/results/benchmark.{json,md}``.
 
+One run of a clip is not a measurement: two back-to-back runs of the same
+config differed by 20% FPS. Video arms therefore run ``--repeats`` times,
+interleaved (on/off, off/on, ...) so drift hits both arms alike, and report the
+median with the range; the API overhead is the median of *paired* differences.
+
 Sections are skipped cleanly when their input is absent (e.g. no ``--video``).
 The repo ships no weights or video; the input hashes say which files were used.
 """
@@ -176,6 +181,51 @@ def decisions_of(summary: dict) -> dict:
     }
 
 
+def run_interleaved(run, arms: list, repeats: int) -> list[list[dict]]:
+    """``repeats`` runs of each arm, alternating the order every round (A B, B A,
+    ...) so thermal or background drift is shared. Returns runs per arm."""
+    out: list[list[dict]] = [[] for _ in arms]
+    for r in range(repeats):
+        order = list(range(len(arms)))
+        if r % 2:
+            order.reverse()
+        for i in order:
+            out[i].append(run(arms[i]))
+    return out
+
+
+def median_run(runs: list[dict]) -> dict:
+    """The run with the median throughput, annotated with every run's FPS."""
+    ranked = sorted(runs, key=lambda b: b["throughput_fps"])
+    med = dict(ranked[len(ranked) // 2])
+    fps = [b["throughput_fps"] for b in runs]
+    med.update({"repeats": len(runs), "fps_runs": fps,
+                "fps_min": min(fps), "fps_max": max(fps)})
+    return med
+
+
+def lock_speedup(locked: list[dict], unlocked: list[dict]) -> dict:
+    """Median-to-median speed-up, the per-round range, and whether every run of
+    both arms decided the same thing (a speed-up that changes a fine is not
+    one)."""
+    lm, um = median_run(locked), median_run(unlocked)
+    per_round = [100 * (a["throughput_fps"] - b["throughput_fps"]) / b["throughput_fps"]
+                 for a, b in zip(locked, unlocked) if b["throughput_fps"]]
+    decisions = [b.get("decisions") for b in (*locked, *unlocked)]
+    return {
+        "repeats": len(locked),
+        "locked_fps": lm["throughput_fps"],
+        "unlocked_fps": um["throughput_fps"],
+        "speedup_pct": round(100 * (lm["throughput_fps"] - um["throughput_fps"])
+                             / um["throughput_fps"], 1) if um["throughput_fps"] else 0.0,
+        "speedup_pct_range": [round(min(per_round), 1), round(max(per_round), 1)]
+        if per_round else [0.0, 0.0],
+        "locked_ocr_calls": lm["ocr_calls"],
+        "unlocked_ocr_calls": um["ocr_calls"],
+        "same_decisions": all(d == decisions[0] for d in decisions),
+    }
+
+
 def _media_info(path: str) -> dict:
     """Resolution / fps / frames and a content hash of a local input file."""
     import cv2
@@ -200,7 +250,14 @@ def benchmark_micro(model, reader, image_path, device) -> dict:
     import tempfile
 
     out: dict = {}
-    tmp = tempfile.mkdtemp(prefix="bench_")
+    tmp_dir = tempfile.TemporaryDirectory(prefix="bench_")
+    try:
+        return _micro(out, tmp_dir.name, model, reader, image_path, device)
+    finally:
+        tmp_dir.cleanup()
+
+
+def _micro(out: dict, tmp: str, model, reader, image_path, device) -> dict:
 
     from modules.db import Database
 
@@ -256,20 +313,34 @@ def benchmark_micro(model, reader, image_path, device) -> dict:
         api_call()
         analyze_image(image_path, model, reader, evidence_dir=os.path.join(tmp, "e"),
                       device=device)
-        direct, api = [], []
-        for _ in range(10):
-            t0 = time.perf_counter()
+        def direct_call():
             analyze_image(image_path, model, reader, evidence_dir=os.path.join(tmp, "e"),
                           device=device)
-            direct.append((time.perf_counter() - t0) * 1000.0)
-            t0 = time.perf_counter()
-            api_call()
-            api.append((time.perf_counter() - t0) * 1000.0)
-        d, a = summarize_times(direct), summarize_times(api)
-        out["analyze_direct"] = d
-        out["analyze_via_api"] = a
-        out["api_overhead_ms"] = round(a["mean_ms"] - d["mean_ms"], 2)
+
+        direct, api = [], []
+        for i in range(30):
+            # Alternate which goes first so slow drift doesn't favour either.
+            order = ((direct_call, direct), (api_call, api))
+            for fn, sink in (order if i % 2 == 0 else order[::-1]):
+                t0 = time.perf_counter()
+                fn()
+                sink.append((time.perf_counter() - t0) * 1000.0)
+        out["analyze_direct"] = summarize_times(direct)
+        out["analyze_via_api"] = summarize_times(api)
+        out["api_overhead"] = paired_difference(api, direct)
     return out
+
+
+def paired_difference(a: list[float], b: list[float]) -> dict:
+    """Median and p10-p90 of per-pair ``a - b`` (ms). ``distinguishable`` is
+    False when that range spans zero: the overhead is then below the noise."""
+    diffs = sorted(x - y for x, y in zip(a, b))
+    if not diffs:
+        return {}
+    lo, hi = diffs[int(len(diffs) * 0.1)], diffs[min(len(diffs) - 1, int(len(diffs) * 0.9))]
+    return {"pairs": len(diffs), "median_ms": round(diffs[len(diffs) // 2], 2),
+            "p10_ms": round(lo, 2), "p90_ms": round(hi, 2),
+            "distinguishable": not (lo <= 0.0 <= hi)}
 
 
 def parse_args(argv=None):
@@ -285,6 +356,8 @@ def parse_args(argv=None):
     ap.add_argument("--ocr-lock-ab", action="store_true",
                     help="run the video benchmark twice (lock on and off) and "
                          "report the measured speedup")
+    ap.add_argument("--repeats", type=int, default=5,
+                    help="runs per video arm, interleaved; the median is reported")
     ap.add_argument("--device", default="auto",
                     help="device for the video benchmark: cuda | mps | cpu | auto")
     ap.add_argument("--devices", nargs="*", default=None,
@@ -341,30 +414,17 @@ def main(argv=None) -> int:
 
     if args.video and os.path.exists(args.video):
         payload["inputs"]["video"] = _media_info(args.video)
-        payload["video_benchmark"] = benchmark_video(
-            model, reader, args.video, args.max_frames,
-            ocr_lock=not args.no_ocr_lock, device=device,
-        )
+        # Arms: the shipped setting, plus (for the A/B) the lock disabled. Both
+        # in one process, interleaved, so neither gets a cooler machine.
+        arms = [not args.no_ocr_lock] + ([False] if args.ocr_lock_ab else [])
+        runs = run_interleaved(
+            lambda lock: benchmark_video(model, reader, args.video, args.max_frames,
+                                         ocr_lock=lock, device=device),
+            arms, max(1, args.repeats))
+        payload["video_benchmark"] = median_run(runs[0])
         if args.ocr_lock_ab:
-            # The baseline arm: same clip, same model, lock disabled. Both arms
-            # in one process so the comparison is not across machine states.
-            payload["video_benchmark_no_ocr_lock"] = benchmark_video(
-                model, reader, args.video, args.max_frames, ocr_lock=False,
-                device=device,
-            )
-            locked = payload["video_benchmark"]["throughput_fps"]
-            unlocked = payload["video_benchmark_no_ocr_lock"]["throughput_fps"]
-            payload["ocr_lock_speedup"] = {
-                "locked_fps": locked,
-                "unlocked_fps": unlocked,
-                "speedup_pct": round(100 * (locked - unlocked) / unlocked, 1)
-                if unlocked else 0.0,
-                "locked_ocr_calls": payload["video_benchmark"]["ocr_calls"],
-                "unlocked_ocr_calls":
-                    payload["video_benchmark_no_ocr_lock"]["ocr_calls"],
-                "same_decisions": (payload["video_benchmark"]["decisions"]
-                                   == payload["video_benchmark_no_ocr_lock"]["decisions"]),
-            }
+            payload["video_benchmark_no_ocr_lock"] = median_run(runs[1])
+            payload["ocr_lock_speedup"] = lock_speedup(runs[0], runs[1])
     elif args.video:
         log.warning("video not found: %s", args.video)
 
@@ -375,13 +435,16 @@ def main(argv=None) -> int:
     payload["provenance"] = run_provenance(model_paths=[args.model],
                                            config={"device": device, "batch": 1,
                                                    "iterations": args.iterations,
-                                                   "max_frames": args.max_frames})
+                                                   "max_frames": args.max_frames,
+                                                   "repeats": args.repeats})
 
     ab = payload.get("ocr_lock_speedup")
     if ab:
-        print(f"\nOCR lock A/B: {ab['unlocked_fps']} FPS "
+        print(f"\nOCR lock A/B (median of {ab['repeats']}): {ab['unlocked_fps']} FPS "
               f"({ab['unlocked_ocr_calls']} OCR calls) -> {ab['locked_fps']} FPS "
-              f"({ab['locked_ocr_calls']} OCR calls) = {ab['speedup_pct']:+.1f}%")
+              f"({ab['locked_ocr_calls']} OCR calls) = {ab['speedup_pct']:+.1f}% "
+              f"(per-pair range {ab['speedup_pct_range'][0]:+.1f}% to "
+              f"{ab['speedup_pct_range'][1]:+.1f}%); same decisions: {ab['same_decisions']}")
 
     os.makedirs(args.out, exist_ok=True)
     path = os.path.join(args.out, f"{args.name}.json")
@@ -441,10 +504,13 @@ def render_markdown(p: dict) -> str:
         if not vb:
             continue
         prof = vb.get("stage_profile") or {}
+        spread = (f" Median of {vb['repeats']} interleaved runs (range "
+                  f"{vb['fps_min']}–{vb['fps_max']} FPS); stage profile from that run."
+                  if vb.get("repeats", 1) > 1 else "")
         lines += [f"## Video — {title} — device {vb['device']}", "",
                   f"{vb['frames']} frames in {vb['wall_seconds']} s → "
                   f"**{vb['throughput_fps']} FPS** ({vb['ms_per_frame']} ms/frame), "
-                  f"{vb['ocr_calls']} OCR calls.", "",
+                  f"{vb['ocr_calls']} OCR calls.{spread}", "",
                   "| stage | % of wall | ms/call | calls |", "|---|---:|---:|---:|"]
         for name, st in (prof.get("stages") or {}).items():
             lines.append(f"| {name} | {st['pct_of_wall']}% | {st['ms_per_call']} | {st['calls']} |")
@@ -452,14 +518,18 @@ def render_markdown(p: dict) -> str:
         lines += [f"| unaccounted (draw, glue) | {other}% | | |", ""]
     ab = p.get("ocr_lock_speedup")
     if ab:
-        lines += [f"OCR lock A/B (same clip, same process): {ab['unlocked_fps']} → "
+        rng = ab.get("speedup_pct_range")
+        lines += [f"OCR lock A/B (same clip, same process, medians): {ab['unlocked_fps']} → "
                   f"**{ab['locked_fps']} FPS ({ab['speedup_pct']:+.1f}%)**, "
-                  f"{ab['unlocked_ocr_calls']} → {ab['locked_ocr_calls']} OCR calls."]
+                  f"{ab['unlocked_ocr_calls']} → {ab['locked_ocr_calls']} OCR calls"
+                  + (f"; per-round speed-up {rng[0]:+.1f}% to {rng[1]:+.1f}% over "
+                     f"{ab['repeats']} rounds." if rng else ".")]
         if "same_decisions" in ab:
             dec = p["video_benchmark"]["decisions"]
             fined = ", ".join(f"{pl} {vi}" for pl, vi in dec["fined"]) or "none"
             lines.append(
-                f"Same decisions in both arms: **{'yes' if ab['same_decisions'] else 'NO'}** "
+                f"Same decisions in every run of both arms: "
+                f"**{'yes' if ab['same_decisions'] else 'NO'}** "
                 f"(fined: {fined}; withheld: {dec['withheld']}).")
         lines.append("")
     mi = p.get("micro")
@@ -469,9 +539,13 @@ def render_markdown(p: dict) -> str:
                      "analyze_via_api"):
             if name in mi:
                 lines.append(f"| {name} | {mi[name]['mean_ms']} ms | {mi[name]['p90_ms']} ms |")
-        if "api_overhead_ms" in mi:
+        ov = mi.get("api_overhead")
+        if ov:
+            verdict = ("" if ov["distinguishable"] else
+                       " — the range spans zero: below the run-to-run noise of the call")
             lines += ["", f"HTTP + Flask + validation + DB overhead of `/analyze` over a direct "
-                      f"call: **{mi['api_overhead_ms']} ms**."]
+                      f"call, median of {ov['pairs']} paired calls: **{ov['median_ms']} ms** "
+                      f"(p10–p90 {ov['p10_ms']} to {ov['p90_ms']} ms){verdict}."]
         lines.append("")
     if p.get("peak_rss_mb") is not None:
         lines.append(f"Peak RSS: {p['peak_rss_mb']} MB.")
