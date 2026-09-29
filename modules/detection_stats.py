@@ -275,6 +275,84 @@ def unpaired_gap(rec_a: list[ImageRecord], rec_b: list[ImageRecord], class_names
     return out
 
 
+MIN_SEEDS = 3
+
+
+def recipe_comparison(recipes: dict[str, list[list[ImageRecord]]], baseline: str,
+                      class_names: list[str], *, n_boot: int = 2000, seed: int = 0,
+                      level: float = 0.95, min_seeds: int = MIN_SEEDS) -> dict:
+    """Compare training RECIPES, each trained with several seeds, on one split.
+
+    ``recipes[name]`` is one record list per seed (same images, same order).
+    A recipe's AP is the mean over its seeds; the uncertainty of a difference
+    resamples BOTH the images (shared by every checkpoint — paired) and each
+    recipe's seeds, so it contains the training randomness a single-checkpoint
+    bootstrap can't see (a new seed of v1 alone came out "significantly worse"
+    that way). With fewer than ``min_seeds`` seeds on either side the verdict is
+    ``insufficient seeds``: the seed term is then unmeasured, and the CI would
+    understate it. A candidate is ``promote`` only if its mAP@50 gain's CI
+    excludes zero and no class is significantly worse; any class significantly
+    worse makes it ``reject``."""
+    k = len(class_names)
+    names = list(recipes)
+    n_img = {len(r) for runs in recipes.values() for r in runs}
+    if len(n_img) != 1:
+        raise ValueError("every checkpoint must be scored on the same images")
+    n = n_img.pop()
+    idx = {r: [[_ClassIndex(run, c) for c in range(k)] for run in recipes[r]] for r in names}
+    per_seed = {r: np.array([[ix.ap() for ix in run] for run in idx[r]]) for r in names}
+    rng = np.random.default_rng(seed)
+    boot_mean = {r: np.empty((n_boot, k)) for r in names}
+    for b in range(n_boot):
+        w = np.bincount(rng.integers(0, n, n), minlength=n).astype(np.float64)
+        for r in names:
+            seeds = rng.integers(0, len(idx[r]), len(idx[r]))
+            boot_mean[r][b] = _nanmean(np.array([[ix.ap(w) for ix in idx[r][s]]
+                                                 for s in seeds]), axis=0)
+    out: dict = {"images": n, "baseline": baseline, "min_seeds": min_seeds, "recipes": {},
+                 "comparisons": {}}
+    for r in names:
+        ps = per_seed[r]
+        out["recipes"][r] = {
+            "seeds": len(ps),
+            "per_class": {name: {"mean_ap50": _r(_nanmean(ps[:, c])),
+                                 "between_seed_sd": (_r(np.std(ps[:, c], ddof=1))
+                                                     if len(ps) > 1 else None),
+                                 "per_seed": [_r(x) for x in ps[:, c]]}
+                          for c, name in enumerate(class_names)},
+            "map50": _r(_nanmean(_nanmean(ps, axis=1))),
+        }
+    for r in names:
+        if r == baseline:
+            continue
+        d = boot_mean[r] - boot_mean[baseline]
+        point = _nanmean(per_seed[r], axis=0) - _nanmean(per_seed[baseline], axis=0)
+        cmp: dict = {"per_class": {}}
+        worse = []
+        for c, name in enumerate(class_names):
+            lo, hi = _percentile_ci(d[:, c], level)
+            cmp["per_class"][name] = {"diff": _r(point[c]), "ci_low": _r(lo), "ci_high": _r(hi)}
+            if hi < 0:
+                worse.append(name)
+        md = _nanmean(d, axis=1)
+        lo, hi = _percentile_ci(md, level)
+        cmp["map50"] = {"diff": _r(_nanmean(point)), "ci_low": _r(lo), "ci_high": _r(hi)}
+        seeds_ok = min(len(per_seed[r]), len(per_seed[baseline])) >= min_seeds
+        if not seeds_ok:
+            verdict = (f"insufficient seeds ({len(per_seed[baseline])} vs {len(per_seed[r])}; "
+                       f"need {min_seeds} each)")
+        elif worse:
+            verdict = "reject: significantly worse on " + ", ".join(worse)
+        elif lo > 0:
+            verdict = "promote"
+        else:
+            verdict = "not distinguishable"
+        cmp["verdict"] = verdict
+        cmp["regresses"] = worse
+        out["comparisons"][r] = cmp
+    return out
+
+
 def recall_at(records: list[ImageRecord], class_names: list[str], thresholds: dict) -> dict:
     """Precision/recall per class at the operating threshold(s) — what a user of
     the running system experiences, as opposed to AP's whole curve."""
