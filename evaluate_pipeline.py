@@ -264,13 +264,15 @@ def render_markdown(p: dict) -> str:
         for rate, block in budget["by_ocr_rate"].items():
             lines += [f"**OCR read-error rate {float(rate):.0%}** — all faults on: F1 "
                       f"{block['all_faults_f1']} (gap to no-fault {block['ceiling_gap']})",
-                      "", "| stage made perfect | F1 | recovered | share |",
+                      "", "| stage made perfect | F1 | recovered | % of gap, alone |",
                       "|---|---:|---:|---:|"]
             for s in block["stages"]:
                 lines.append(f"| `{s['stage']}` — {s['description']} | "
                              f"{s['f1_if_perfect']} | **{s['recovered_f1']}** | "
-                             f"{s['share_of_recovered']:.0%} |")
-            lines.append("")
+                             f"{s['share_of_gap']:.0%} |")
+            lines += ["", "Stages overlap (a rider both missed and misclassified is "
+                      "recovered by fixing either), so the last column does not sum "
+                      "to 100%.", ""]
         robust = ("holds across the whole OCR sweep"
                   if budget["bottleneck_robust_to_ocr_assumption"]
                   else "does NOT hold across the whole OCR sweep — see the tables")
@@ -363,7 +365,7 @@ def build_summary(p: dict) -> dict:
             "robust_to_ocr_assumption": p["budget"]["bottleneck_robust_to_ocr_assumption"],
             "stages": [
                 {"stage": s["stage"], "recovered_f1": s["recovered_f1"],
-                 "share": s["share_of_recovered"]}
+                 "share_of_gap": s["share_of_gap"]}
                 for s in p["budget"]["stages"]
             ],
         }
@@ -462,7 +464,7 @@ def main(argv=None) -> int:
                   f"(robust to OCR assumption: {b['bottleneck_robust_to_ocr_assumption']})")
             for s in b["stages"]:
                 print(f"   {s['stage']:14s} recovers F1 {s['recovered_f1']:.4f} "
-                      f"({s['share_of_recovered']:.0%})")
+                      f"({s['share_of_gap']:.0%} of the gap, alone)")
         if payload.get("ocr"):
             print("OCR policy (default noise):")
             for pol, m in payload["ocr"]["default_noise"]["policies"].items():

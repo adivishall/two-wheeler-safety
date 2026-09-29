@@ -207,6 +207,19 @@ def test_error_budget_is_an_oracle_ablation_and_is_deterministic():
                    for s in block["stages"])
 
 
+def test_error_budget_reports_each_stage_against_the_gap_not_the_sum():
+    """Stages overlap, so single-stage recoveries can sum past the gap. The
+    report's share must be recovery / gap (what fixing that stage ALONE buys);
+    normalising by the sum of recoveries made "rider recall 54%" of a gap that
+    fixing rider recall alone closes completely."""
+    a = error_budget([_clean_scenario()], trials=4, seed=3, ocr_rates=(0.3,))
+    block = a["by_ocr_rate"]["0.30"]
+    gap = block["ceiling_gap"]
+    for s in block["stages"]:
+        expect = s["recovered_f1"] / gap if gap > 0 else 0.0
+        assert abs(s["share_of_gap"] - expect) < 0.01
+
+
 def test_error_budget_ocr_rate_is_swept_not_assumed():
     a = error_budget([_clean_scenario()], trials=2, seed=1, ocr_rates=(0.1, 0.5))
     assert set(a["by_ocr_rate"]) == {"0.10", "0.50"}

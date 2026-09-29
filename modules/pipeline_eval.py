@@ -479,8 +479,12 @@ def error_budget(
     per-BOX detector faults, so its "OCR is 77% of sensitivity" was a
     statement about units, not about the system.
 
-    Stage shares are not strictly additive (stages interact); the report gives
-    the ceiling gap alongside so the non-additivity is visible.
+    Stages overlap: a vehicle missed by the rider box AND misclassified is
+    recovered by fixing either, so single-stage recoveries sum to more than the
+    gap. Each stage is therefore reported as ``share_of_gap`` — the fraction of
+    the all-faults-to-no-fault gap that fixing it ALONE recovers — which does
+    not sum to 1. (``share_of_recovered``, recovery / sum of recoveries, ranks
+    the stages but is not a share of lost F1.)
     """
     op = operating_point or MEASURED_OPERATING_POINT
     base = {k: v for k, v in op.items() if k in ("rider_miss", "class_flip", "plate_miss")}
@@ -496,8 +500,10 @@ def error_budget(
                          "f1_if_perfect": round(fixed, 4),
                          "recovered_f1": round(max(0.0, fixed - all_f1), 4)})
         total = sum(r["recovered_f1"] for r in rows)
+        gap = ceiling - all_f1
         for r in rows:
             r["share_of_recovered"] = round(r["recovered_f1"] / total, 4) if total else 0.0
+            r["share_of_gap"] = round(r["recovered_f1"] / gap, 4) if gap > 0 else 0.0
         rows.sort(key=lambda r: r["recovered_f1"], reverse=True)
         by_rate[f"{rate:.2f}"] = {
             "ocr_read_error_rate": rate,
