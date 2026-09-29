@@ -1035,6 +1035,18 @@ class Database:
             conn.close()
         return [dict(r) for r in rows]
 
+    def audit_events(self, event: str) -> list:
+        """Every audit row of one event type, oldest first — for consumers that
+        must not silently stop at a page limit (e.g. withheld violations fed to
+        the labelling queue)."""
+        conn = self._connect()
+        try:
+            rows = conn.execute("SELECT * FROM audit_log WHERE event = ? ORDER BY id",
+                                (event,)).fetchall()
+        finally:
+            conn.close()
+        return [dict(r) for r in rows]
+
     # -- processing sessions (Phase 14) -------------------------------------
 
     def create_session(
