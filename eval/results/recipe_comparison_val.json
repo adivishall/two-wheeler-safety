@@ -1,0 +1,165 @@
+{
+  "baseline": "v1",
+  "checkpoints": {
+    "v1": [
+      "runs/detect/traffic_model-2/weights/best.pt",
+      "runs/detect/traffic_model_seed1/weights/best.pt"
+    ],
+    "v2_dedup": [
+      "runs/detect/traffic_model_v2_dedup/weights/best.pt"
+    ]
+  },
+  "comparisons": {
+    "v2_dedup": {
+      "map50": {
+        "ci_high": 0.1071,
+        "ci_low": -0.0134,
+        "diff": 0.0409
+      },
+      "per_class": {
+        "Plate": {
+          "ci_high": 0.013,
+          "ci_low": -0.0372,
+          "diff": -0.0103
+        },
+        "TripleRiding": {
+          "ci_high": 0.1506,
+          "ci_low": -0.0255,
+          "diff": 0.0554
+        },
+        "WithHelmet": {
+          "ci_high": 0.292,
+          "ci_low": -0.094,
+          "diff": 0.0766
+        },
+        "WithoutHelmet": {
+          "ci_high": 0.0812,
+          "ci_low": -0.0007,
+          "diff": 0.0418
+        }
+      },
+      "regresses": [],
+      "verdict": "insufficient seeds (2 vs 1; need 3 each)"
+    }
+  },
+  "images": 352,
+  "min_seeds": 3,
+  "provenance": {
+    "config": {
+      "n_boot": 2000
+    },
+    "dataset": {
+      "data_yaml": "eval/clean_splits/data.yaml",
+      "scheme": "names+sizes+label-contents",
+      "split": "val",
+      "split_images": 352,
+      "split_version": "sha256:032b9391d7cd2dc2",
+      "version": "sha256:e1be4f14028241d1"
+    },
+    "environment": {
+      "chip": "Apple M4",
+      "machine": "arm64",
+      "numpy": "2.4.6",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7"
+    },
+    "generated_at": "2026-09-29T05:46:26.762729+00:00",
+    "git": {
+      "commit": "89e5030",
+      "dirty": false
+    },
+    "models": [
+      {
+        "path": "runs/detect/traffic_model-2/weights/best.pt",
+        "sha256": "sha256:d49f79833cb86eda7d098b86679e02aced9c31c23b4eb20a18b06097fb712cbd",
+        "version": "traffic-4class@1.0.0"
+      },
+      {
+        "path": "runs/detect/traffic_model_seed1/weights/best.pt",
+        "sha256": "sha256:7b5090724e60b3ca0139807a02ee842cbb645ce9e4f5492d54662bcff10d4134",
+        "version": null
+      },
+      {
+        "path": "runs/detect/traffic_model_v2_dedup/weights/best.pt",
+        "sha256": "sha256:6339adafd4fb3633ed100166f86fcbd4990b8eed0179a48d72c679bf70a1b53d",
+        "version": "traffic_model_v2_dedup@2.0.0"
+      }
+    ]
+  },
+  "recipes": {
+    "v1": {
+      "map50": 0.7013,
+      "per_class": {
+        "Plate": {
+          "between_seed_sd": 0.0171,
+          "mean_ap50": 0.8606,
+          "per_seed": [
+            0.8727,
+            0.8485
+          ]
+        },
+        "TripleRiding": {
+          "between_seed_sd": 0.0333,
+          "mean_ap50": 0.8372,
+          "per_seed": [
+            0.8608,
+            0.8137
+          ]
+        },
+        "WithHelmet": {
+          "between_seed_sd": 0.0695,
+          "mean_ap50": 0.3675,
+          "per_seed": [
+            0.4166,
+            0.3184
+          ]
+        },
+        "WithoutHelmet": {
+          "between_seed_sd": 0.0066,
+          "mean_ap50": 0.74,
+          "per_seed": [
+            0.7353,
+            0.7447
+          ]
+        }
+      },
+      "seeds": 2
+    },
+    "v2_dedup": {
+      "map50": 0.7422,
+      "per_class": {
+        "Plate": {
+          "between_seed_sd": null,
+          "mean_ap50": 0.8503,
+          "per_seed": [
+            0.8503
+          ]
+        },
+        "TripleRiding": {
+          "between_seed_sd": null,
+          "mean_ap50": 0.8927,
+          "per_seed": [
+            0.8927
+          ]
+        },
+        "WithHelmet": {
+          "between_seed_sd": null,
+          "mean_ap50": 0.4441,
+          "per_seed": [
+            0.4441
+          ]
+        },
+        "WithoutHelmet": {
+          "between_seed_sd": null,
+          "mean_ap50": 0.7818,
+          "per_seed": [
+            0.7818
+          ]
+        }
+      },
+      "seeds": 1
+    }
+  },
+  "split": "val"
+}
