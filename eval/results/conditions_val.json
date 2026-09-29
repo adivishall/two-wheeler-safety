@@ -1,0 +1,2011 @@
+{
+  "image_sizes": [
+    "512x512",
+    "640x640"
+  ],
+  "image_strata": {
+    "glare": {
+      "glare": {
+        "ap": {
+          "images": 49,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.8806,
+            "ci_low": 0.6536,
+            "std": 0.058,
+            "value": 0.7564
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.875,
+              "ci_high": 0.9651,
+              "ci_low": 0.7674,
+              "instances": 43,
+              "std": 0.0511
+            },
+            "TripleRiding": {
+              "ap50": 0.995,
+              "ci_high": 0.995,
+              "ci_low": 0.995,
+              "instances": 5,
+              "std": 0.0
+            },
+            "WithHelmet": {
+              "ap50": 0.532,
+              "ci_high": 0.895,
+              "ci_low": 0.1899,
+              "instances": 7,
+              "std": 0.177
+            },
+            "WithoutHelmet": {
+              "ap50": 0.6237,
+              "ci_high": 0.8037,
+              "ci_low": 0.4531,
+              "instances": 33,
+              "std": 0.0873
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.878,
+            "fp": 3.0,
+            "gt": 43.0,
+            "precision": 0.9231,
+            "recall": 0.8372,
+            "threshold": 0.25,
+            "tp": 36.0
+          },
+          "TripleRiding": {
+            "f1": 1.0,
+            "fp": 0.0,
+            "gt": 5.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "threshold": 0.3,
+            "tp": 5.0
+          },
+          "WithHelmet": {
+            "f1": 0.4615,
+            "fp": 13.0,
+            "gt": 7.0,
+            "precision": 0.3158,
+            "recall": 0.8571,
+            "threshold": 0.25,
+            "tp": 6.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.6885,
+            "fp": 7.0,
+            "gt": 33.0,
+            "precision": 0.75,
+            "recall": 0.6364,
+            "threshold": 0.375,
+            "tp": 21.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.1705,
+            "ci_low": -0.096,
+            "diff": 0.0338,
+            "significant": false
+          },
+          "n_a": 49,
+          "n_b": 303,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.0978,
+              "ci_low": -0.1074,
+              "diff": 0.0028,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": 0.2414,
+              "ci_low": 0.0493,
+              "diff": 0.1473,
+              "significant": true
+            },
+            "WithHelmet": {
+              "ci_high": 0.5282,
+              "ci_low": -0.3191,
+              "diff": 0.1184,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.0561,
+              "ci_low": -0.3092,
+              "diff": -0.1332,
+              "significant": false
+            }
+          }
+        },
+        "images": 49
+      },
+      "no glare": {
+        "ap": {
+          "images": 303,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.7935,
+            "ci_low": 0.6606,
+            "std": 0.0333,
+            "value": 0.7226
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.8721,
+              "ci_high": 0.9171,
+              "ci_low": 0.8217,
+              "instances": 204,
+              "std": 0.024
+            },
+            "TripleRiding": {
+              "ap50": 0.8477,
+              "ci_high": 0.9434,
+              "ci_low": 0.7413,
+              "instances": 53,
+              "std": 0.0537
+            },
+            "WithHelmet": {
+              "ap50": 0.4136,
+              "ci_high": 0.6218,
+              "ci_low": 0.2154,
+              "instances": 19,
+              "std": 0.1058
+            },
+            "WithoutHelmet": {
+              "ap50": 0.7569,
+              "ci_high": 0.817,
+              "ci_low": 0.6942,
+              "instances": 176,
+              "std": 0.0319
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8557,
+            "fp": 18.0,
+            "gt": 204.0,
+            "precision": 0.9022,
+            "recall": 0.8137,
+            "threshold": 0.25,
+            "tp": 166.0
+          },
+          "TripleRiding": {
+            "f1": 0.8491,
+            "fp": 8.0,
+            "gt": 53.0,
+            "precision": 0.8491,
+            "recall": 0.8491,
+            "threshold": 0.3,
+            "tp": 45.0
+          },
+          "WithHelmet": {
+            "f1": 0.4615,
+            "fp": 21.0,
+            "gt": 19.0,
+            "precision": 0.3636,
+            "recall": 0.6316,
+            "threshold": 0.25,
+            "tp": 12.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.7588,
+            "fp": 35.0,
+            "gt": 176.0,
+            "precision": 0.7866,
+            "recall": 0.733,
+            "threshold": 0.375,
+            "tp": 129.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.0844,
+            "ci_low": -0.1702,
+            "diff": -0.0338,
+            "significant": false
+          },
+          "n_a": 303,
+          "n_b": 49,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.1033,
+              "ci_low": -0.0954,
+              "diff": -0.0028,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": -0.0472,
+              "ci_low": -0.253,
+              "diff": -0.1473,
+              "significant": true
+            },
+            "WithHelmet": {
+              "ci_high": 0.2914,
+              "ci_low": -0.5248,
+              "diff": -0.1184,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.3339,
+              "ci_low": -0.0389,
+              "diff": 0.1332,
+              "significant": false
+            }
+          }
+        },
+        "images": 303
+      }
+    },
+    "labelled rider boxes": {
+      "0": {
+        "ap": {
+          "images": 102,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.995,
+            "ci_low": 0.865,
+            "std": 0.0357,
+            "value": 0.9504
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.9504,
+              "ci_high": 0.995,
+              "ci_low": 0.865,
+              "instances": 29,
+              "std": 0.0357
+            },
+            "TripleRiding": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "WithHelmet": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "WithoutHelmet": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.9474,
+            "fp": 1.0,
+            "gt": 29.0,
+            "precision": 0.9643,
+            "recall": 0.931,
+            "threshold": 0.25,
+            "tp": 27.0
+          },
+          "TripleRiding": {
+            "f1": NaN,
+            "fp": 5.0,
+            "gt": 0.0,
+            "precision": 0.0,
+            "recall": NaN,
+            "threshold": 0.3,
+            "tp": 0.0
+          },
+          "WithHelmet": {
+            "f1": NaN,
+            "fp": 9.0,
+            "gt": 0.0,
+            "precision": 0.0,
+            "recall": NaN,
+            "threshold": 0.25,
+            "tp": 0.0
+          },
+          "WithoutHelmet": {
+            "f1": NaN,
+            "fp": 19.0,
+            "gt": 0.0,
+            "precision": 0.0,
+            "recall": NaN,
+            "threshold": 0.375,
+            "tp": 0.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.1617,
+            "ci_low": -0.0082,
+            "diff": 0.0879,
+            "significant": false
+          },
+          "n_a": 102,
+          "n_b": 250,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.1617,
+              "ci_low": -0.0082,
+              "diff": 0.0879,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            }
+          }
+        },
+        "images": 102
+      },
+      "1": {
+        "ap": {
+          "images": 214,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.8053,
+            "ci_low": 0.6514,
+            "std": 0.0395,
+            "value": 0.7084
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.87,
+              "ci_high": 0.9184,
+              "ci_low": 0.8176,
+              "instances": 158,
+              "std": 0.0258
+            },
+            "TripleRiding": {
+              "ap50": 0.8937,
+              "ci_high": 0.9707,
+              "ci_low": 0.7959,
+              "instances": 56,
+              "std": 0.0462
+            },
+            "WithHelmet": {
+              "ap50": 0.2337,
+              "ci_high": 0.5863,
+              "ci_low": 0.0424,
+              "instances": 9,
+              "std": 0.1411
+            },
+            "WithoutHelmet": {
+              "ap50": 0.8362,
+              "ci_high": 0.8888,
+              "ci_low": 0.7784,
+              "instances": 149,
+              "std": 0.029
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8525,
+            "fp": 17.0,
+            "gt": 158.0,
+            "precision": 0.8844,
+            "recall": 0.8228,
+            "threshold": 0.25,
+            "tp": 130.0
+          },
+          "TripleRiding": {
+            "f1": 0.9074,
+            "fp": 3.0,
+            "gt": 56.0,
+            "precision": 0.9423,
+            "recall": 0.875,
+            "threshold": 0.3,
+            "tp": 49.0
+          },
+          "WithHelmet": {
+            "f1": 0.32,
+            "fp": 12.0,
+            "gt": 9.0,
+            "precision": 0.25,
+            "recall": 0.4444,
+            "threshold": 0.25,
+            "tp": 4.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.8374,
+            "fp": 19.0,
+            "gt": 149.0,
+            "precision": 0.8643,
+            "recall": 0.8121,
+            "threshold": 0.375,
+            "tp": 121.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.3052,
+            "ci_low": -0.071,
+            "diff": 0.2061,
+            "significant": false
+          },
+          "n_a": 214,
+          "n_b": 138,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.0793,
+              "ci_low": -0.0895,
+              "diff": -0.0093,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": 0.8404,
+              "ci_low": 0.3957,
+              "diff": 0.7531,
+              "significant": true
+            },
+            "WithHelmet": {
+              "ci_high": 0.0968,
+              "ci_low": -0.5912,
+              "diff": -0.2852,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.5142,
+              "ci_low": 0.2203,
+              "diff": 0.3658,
+              "significant": true
+            }
+          }
+        },
+        "images": 214
+      },
+      "2-3": {
+        "ap": {
+          "images": 35,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.8151,
+            "ci_low": 0.5965,
+            "std": 0.0545,
+            "value": 0.7108
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.8551,
+              "ci_high": 0.9406,
+              "ci_low": 0.7445,
+              "instances": 57,
+              "std": 0.0505
+            },
+            "TripleRiding": {
+              "ap50": 0.8283,
+              "ci_high": 0.995,
+              "ci_low": 0.695,
+              "instances": 2,
+              "std": 0.0948
+            },
+            "WithHelmet": {
+              "ap50": 0.5961,
+              "ci_high": 0.8226,
+              "ci_low": 0.3976,
+              "instances": 17,
+              "std": 0.1086
+            },
+            "WithoutHelmet": {
+              "ap50": 0.5637,
+              "ci_high": 0.6994,
+              "ci_low": 0.4213,
+              "instances": 56,
+              "std": 0.071
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8462,
+            "fp": 3.0,
+            "gt": 57.0,
+            "precision": 0.9362,
+            "recall": 0.7719,
+            "threshold": 0.25,
+            "tp": 44.0
+          },
+          "TripleRiding": {
+            "f1": 0.6667,
+            "fp": 0.0,
+            "gt": 2.0,
+            "precision": 1.0,
+            "recall": 0.5,
+            "threshold": 0.3,
+            "tp": 1.0
+          },
+          "WithHelmet": {
+            "f1": 0.6364,
+            "fp": 13.0,
+            "gt": 17.0,
+            "precision": 0.5185,
+            "recall": 0.8235,
+            "threshold": 0.25,
+            "tp": 14.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.6207,
+            "fp": 4.0,
+            "gt": 56.0,
+            "precision": 0.871,
+            "recall": 0.4821,
+            "threshold": 0.375,
+            "tp": 27.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.1737,
+            "ci_low": -0.0874,
+            "diff": 0.0265,
+            "significant": false
+          },
+          "n_a": 35,
+          "n_b": 317,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.0651,
+              "ci_low": -0.1428,
+              "diff": -0.0275,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": 0.2056,
+              "ci_low": -0.1984,
+              "diff": -0.0421,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": 0.7064,
+              "ci_low": 0.0563,
+              "diff": 0.4199,
+              "significant": true
+            },
+            "WithoutHelmet": {
+              "ci_high": -0.0933,
+              "ci_low": -0.4007,
+              "diff": -0.2443,
+              "significant": true
+            }
+          }
+        },
+        "images": 35
+      },
+      "4+": {
+        "ap": {
+          "images": 1,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.995,
+            "ci_low": 0.995,
+            "std": 0.0,
+            "value": 0.995
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.995,
+              "ci_high": 0.995,
+              "ci_low": 0.995,
+              "instances": 3,
+              "std": 0.0
+            },
+            "TripleRiding": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "WithHelmet": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "WithoutHelmet": {
+              "ap50": 0.995,
+              "ci_high": 0.995,
+              "ci_low": 0.995,
+              "instances": 4,
+              "std": 0.0
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.5,
+            "fp": 0.0,
+            "gt": 3.0,
+            "precision": 1.0,
+            "recall": 0.3333,
+            "threshold": 0.25,
+            "tp": 1.0
+          },
+          "TripleRiding": {
+            "f1": NaN,
+            "fp": 0.0,
+            "gt": 0.0,
+            "precision": 1.0,
+            "recall": NaN,
+            "threshold": 0.3,
+            "tp": 0.0
+          },
+          "WithHelmet": {
+            "f1": NaN,
+            "fp": 0.0,
+            "gt": 0.0,
+            "precision": 1.0,
+            "recall": NaN,
+            "threshold": 0.25,
+            "tp": 0.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.6667,
+            "fp": 0.0,
+            "gt": 4.0,
+            "precision": 1.0,
+            "recall": 0.5,
+            "threshold": 0.375,
+            "tp": 2.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.2363,
+            "ci_low": 0.149,
+            "diff": 0.192,
+            "significant": true
+          },
+          "n_a": 1,
+          "n_b": 351,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.1674,
+              "ci_low": 0.0869,
+              "diff": 0.1249,
+              "significant": true
+            },
+            "TripleRiding": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.3202,
+              "ci_low": 0.1973,
+              "diff": 0.2591,
+              "significant": true
+            }
+          }
+        },
+        "images": 1
+      }
+    },
+    "lighting (luminance proxy)": {
+      "bright": {
+        "ap": {
+          "images": 31,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.995,
+            "ci_low": 0.742,
+            "std": 0.0705,
+            "value": 0.9285
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.9839,
+              "ci_high": 0.995,
+              "ci_low": 0.9604,
+              "instances": 18,
+              "std": 0.01
+            },
+            "TripleRiding": {
+              "ap50": 0.745,
+              "ci_high": 0.995,
+              "ci_low": 0.0,
+              "instances": 4,
+              "std": 0.2487
+            },
+            "WithHelmet": {
+              "ap50": 0.995,
+              "ci_high": 0.995,
+              "ci_low": 0.995,
+              "instances": 2,
+              "std": 0.0
+            },
+            "WithoutHelmet": {
+              "ap50": 0.99,
+              "ci_high": 0.995,
+              "ci_low": 0.9675,
+              "instances": 13,
+              "std": 0.0079
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.9444,
+            "fp": 1.0,
+            "gt": 18.0,
+            "precision": 0.9444,
+            "recall": 0.9444,
+            "threshold": 0.25,
+            "tp": 17.0
+          },
+          "TripleRiding": {
+            "f1": 0.75,
+            "fp": 1.0,
+            "gt": 4.0,
+            "precision": 0.75,
+            "recall": 0.75,
+            "threshold": 0.3,
+            "tp": 3.0
+          },
+          "WithHelmet": {
+            "f1": 1.0,
+            "fp": 0.0,
+            "gt": 2.0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "threshold": 0.25,
+            "tp": 2.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.963,
+            "fp": 1.0,
+            "gt": 13.0,
+            "precision": 0.9286,
+            "recall": 1.0,
+            "threshold": 0.375,
+            "tp": 13.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.3189,
+            "ci_low": -0.0602,
+            "diff": 0.2243,
+            "significant": false
+          },
+          "n_a": 31,
+          "n_b": 321,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.1688,
+              "ci_low": 0.0732,
+              "diff": 0.1212,
+              "significant": true
+            },
+            "TripleRiding": {
+              "ci_high": 0.1912,
+              "ci_low": -0.8336,
+              "diff": -0.1248,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": 0.7663,
+              "ci_low": 0.3914,
+              "diff": 0.6281,
+              "significant": true
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.3393,
+              "ci_low": 0.2052,
+              "diff": 0.2726,
+              "significant": true
+            }
+          }
+        },
+        "images": 31
+      },
+      "dark": {
+        "ap": {
+          "images": 22,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.9563,
+            "ci_low": 0.5074,
+            "std": 0.1501,
+            "value": 0.5809
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.9655,
+              "ci_high": 0.995,
+              "ci_low": 0.8981,
+              "instances": 20,
+              "std": 0.0269
+            },
+            "TripleRiding": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "WithHelmet": {
+              "ap50": 0.0,
+              "ci_high": 0.0,
+              "ci_low": 0.0,
+              "instances": 1,
+              "std": 0.0
+            },
+            "WithoutHelmet": {
+              "ap50": 0.7772,
+              "ci_high": 0.9495,
+              "ci_low": 0.594,
+              "instances": 14,
+              "std": 0.0942
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.9268,
+            "fp": 2.0,
+            "gt": 20.0,
+            "precision": 0.9048,
+            "recall": 0.95,
+            "threshold": 0.25,
+            "tp": 19.0
+          },
+          "TripleRiding": {
+            "f1": NaN,
+            "fp": 0.0,
+            "gt": 0.0,
+            "precision": 1.0,
+            "recall": NaN,
+            "threshold": 0.3,
+            "tp": 0.0
+          },
+          "WithHelmet": {
+            "f1": 0.0,
+            "fp": 0.0,
+            "gt": 1.0,
+            "precision": 1.0,
+            "recall": 0.0,
+            "threshold": 0.25,
+            "tp": 0.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.6923,
+            "fp": 3.0,
+            "gt": 14.0,
+            "precision": 0.75,
+            "recall": 0.6429,
+            "threshold": 0.375,
+            "tp": 9.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.1658,
+            "ci_low": -0.1905,
+            "diff": -0.0945,
+            "significant": false
+          },
+          "n_a": 22,
+          "n_b": 330,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.1614,
+              "ci_low": 0.0246,
+              "diff": 0.1021,
+              "significant": true
+            },
+            "TripleRiding": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": -0.244,
+              "ci_low": -0.6333,
+              "diff": -0.4283,
+              "significant": true
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.2107,
+              "ci_low": -0.1663,
+              "diff": 0.0427,
+              "significant": false
+            }
+          }
+        },
+        "images": 22
+      },
+      "normal": {
+        "ap": {
+          "images": 299,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.7671,
+            "ci_low": 0.6569,
+            "std": 0.0295,
+            "value": 0.706
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.8538,
+              "ci_high": 0.8979,
+              "ci_low": 0.8055,
+              "instances": 209,
+              "std": 0.0236
+            },
+            "TripleRiding": {
+              "ap50": 0.8698,
+              "ci_high": 0.9546,
+              "ci_low": 0.7676,
+              "instances": 54,
+              "std": 0.0486
+            },
+            "WithHelmet": {
+              "ap50": 0.3852,
+              "ci_high": 0.5883,
+              "ci_low": 0.2376,
+              "instances": 23,
+              "std": 0.0887
+            },
+            "WithoutHelmet": {
+              "ap50": 0.715,
+              "ci_high": 0.7812,
+              "ci_low": 0.6479,
+              "instances": 182,
+              "std": 0.034
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8448,
+            "fp": 18.0,
+            "gt": 209.0,
+            "precision": 0.9022,
+            "recall": 0.7943,
+            "threshold": 0.25,
+            "tp": 166.0
+          },
+          "TripleRiding": {
+            "f1": 0.8704,
+            "fp": 7.0,
+            "gt": 54.0,
+            "precision": 0.8704,
+            "recall": 0.8704,
+            "threshold": 0.3,
+            "tp": 47.0
+          },
+          "WithHelmet": {
+            "f1": 0.4384,
+            "fp": 34.0,
+            "gt": 23.0,
+            "precision": 0.32,
+            "recall": 0.6957,
+            "threshold": 0.25,
+            "tp": 16.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.7356,
+            "fp": 38.0,
+            "gt": 182.0,
+            "precision": 0.7711,
+            "recall": 0.7033,
+            "threshold": 0.375,
+            "tp": 128.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.1629,
+            "ci_low": -0.2818,
+            "diff": -0.1124,
+            "significant": false
+          },
+          "n_a": 299,
+          "n_b": 53,
+          "per_class": {
+            "Plate": {
+              "ci_high": -0.055,
+              "ci_low": -0.1703,
+              "diff": -0.1147,
+              "significant": true
+            },
+            "TripleRiding": {
+              "ci_high": 0.864,
+              "ci_low": -0.1999,
+              "diff": 0.1248,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": 0.5487,
+              "ci_low": -0.7127,
+              "diff": -0.2798,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": -0.0377,
+              "ci_low": -0.2866,
+              "diff": -0.1801,
+              "significant": true
+            }
+          }
+        },
+        "images": 299
+      }
+    },
+    "sharpness (Laplacian proxy)": {
+      "high": {
+        "ap": {
+          "images": 117,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.9058,
+            "ci_low": 0.5485,
+            "std": 0.0939,
+            "value": 0.694
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.8619,
+              "ci_high": 0.9255,
+              "ci_low": 0.7913,
+              "instances": 112,
+              "std": 0.0342
+            },
+            "TripleRiding": {
+              "ap50": 0.995,
+              "ci_high": 0.995,
+              "ci_low": 0.995,
+              "instances": 2,
+              "std": 0.0
+            },
+            "WithHelmet": {
+              "ap50": 0.165,
+              "ci_high": 0.995,
+              "ci_low": 0.0,
+              "instances": 2,
+              "std": 0.257
+            },
+            "WithoutHelmet": {
+              "ap50": 0.754,
+              "ci_high": 0.8361,
+              "ci_low": 0.6641,
+              "instances": 94,
+              "std": 0.0443
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8708,
+            "fp": 6.0,
+            "gt": 112.0,
+            "precision": 0.9381,
+            "recall": 0.8125,
+            "threshold": 0.25,
+            "tp": 91.0
+          },
+          "TripleRiding": {
+            "f1": 0.8,
+            "fp": 1.0,
+            "gt": 2.0,
+            "precision": 0.6667,
+            "recall": 1.0,
+            "threshold": 0.3,
+            "tp": 2.0
+          },
+          "WithHelmet": {
+            "f1": 0.1818,
+            "fp": 8.0,
+            "gt": 2.0,
+            "precision": 0.1111,
+            "recall": 0.5,
+            "threshold": 0.25,
+            "tp": 1.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.7416,
+            "fp": 18.0,
+            "gt": 94.0,
+            "precision": 0.7857,
+            "recall": 0.7021,
+            "threshold": 0.375,
+            "tp": 66.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.1596,
+            "ci_low": -0.1542,
+            "diff": -0.0361,
+            "significant": false
+          },
+          "n_a": 117,
+          "n_b": 235,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.0639,
+              "ci_low": -0.112,
+              "diff": -0.0167,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": 0.2468,
+              "ci_low": 0.0509,
+              "diff": 0.1332,
+              "significant": true
+            },
+            "WithHelmet": {
+              "ci_high": 0.4952,
+              "ci_low": -0.5811,
+              "diff": -0.2825,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.1367,
+              "ci_low": -0.0927,
+              "diff": 0.0217,
+              "significant": false
+            }
+          }
+        },
+        "images": 117
+      },
+      "low": {
+        "ap": {
+          "images": 117,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.8725,
+            "ci_low": 0.6719,
+            "std": 0.0495,
+            "value": 0.7829
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.8639,
+              "ci_high": 0.9432,
+              "ci_low": 0.7766,
+              "instances": 59,
+              "std": 0.0424
+            },
+            "TripleRiding": {
+              "ap50": 0.806,
+              "ci_high": 0.9411,
+              "ci_low": 0.6663,
+              "instances": 38,
+              "std": 0.0697
+            },
+            "WithHelmet": {
+              "ap50": 0.687,
+              "ci_high": 0.9539,
+              "ci_low": 0.3556,
+              "instances": 9,
+              "std": 0.1567
+            },
+            "WithoutHelmet": {
+              "ap50": 0.7747,
+              "ci_high": 0.8758,
+              "ci_low": 0.6618,
+              "instances": 51,
+              "std": 0.053
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8319,
+            "fp": 7.0,
+            "gt": 59.0,
+            "precision": 0.8704,
+            "recall": 0.7966,
+            "threshold": 0.25,
+            "tp": 47.0
+          },
+          "TripleRiding": {
+            "f1": 0.8611,
+            "fp": 3.0,
+            "gt": 38.0,
+            "precision": 0.9118,
+            "recall": 0.8158,
+            "threshold": 0.3,
+            "tp": 31.0
+          },
+          "WithHelmet": {
+            "f1": 0.6364,
+            "fp": 6.0,
+            "gt": 9.0,
+            "precision": 0.5385,
+            "recall": 0.7778,
+            "threshold": 0.25,
+            "tp": 7.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.7835,
+            "fp": 8.0,
+            "gt": 51.0,
+            "precision": 0.8261,
+            "recall": 0.7451,
+            "threshold": 0.375,
+            "tp": 38.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.1636,
+            "ci_low": -0.0574,
+            "diff": 0.0672,
+            "significant": false
+          },
+          "n_a": 117,
+          "n_b": 235,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.0743,
+              "ci_low": -0.1068,
+              "diff": -0.0085,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": -0.0073,
+              "ci_low": -0.3091,
+              "diff": -0.1509,
+              "significant": true
+            },
+            "WithHelmet": {
+              "ci_high": 0.6704,
+              "ci_low": -0.0198,
+              "diff": 0.3815,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.1565,
+              "ci_low": -0.0842,
+              "diff": 0.0467,
+              "significant": false
+            }
+          }
+        },
+        "images": 117
+      },
+      "mid": {
+        "ap": {
+          "images": 118,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.8011,
+            "ci_low": 0.6669,
+            "std": 0.0347,
+            "value": 0.7234
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.8937,
+              "ci_high": 0.9486,
+              "ci_low": 0.8249,
+              "instances": 76,
+              "std": 0.0316
+            },
+            "TripleRiding": {
+              "ap50": 0.9581,
+              "ci_high": 0.995,
+              "ci_low": 0.8923,
+              "instances": 18,
+              "std": 0.027
+            },
+            "WithHelmet": {
+              "ap50": 0.3441,
+              "ci_high": 0.5804,
+              "ci_low": 0.18,
+              "instances": 15,
+              "std": 0.1042
+            },
+            "WithoutHelmet": {
+              "ap50": 0.6976,
+              "ci_high": 0.8215,
+              "ci_low": 0.5674,
+              "instances": 64,
+              "std": 0.0607
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8649,
+            "fp": 8.0,
+            "gt": 76.0,
+            "precision": 0.8889,
+            "recall": 0.8421,
+            "threshold": 0.25,
+            "tp": 64.0
+          },
+          "TripleRiding": {
+            "f1": 0.8718,
+            "fp": 4.0,
+            "gt": 18.0,
+            "precision": 0.8095,
+            "recall": 0.9444,
+            "threshold": 0.3,
+            "tp": 17.0
+          },
+          "WithHelmet": {
+            "f1": 0.4444,
+            "fp": 20.0,
+            "gt": 15.0,
+            "precision": 0.3333,
+            "recall": 0.6667,
+            "threshold": 0.25,
+            "tp": 10.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.7302,
+            "fp": 16.0,
+            "gt": 64.0,
+            "precision": 0.7419,
+            "recall": 0.7188,
+            "threshold": 0.375,
+            "tp": 46.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": 0.0856,
+            "ci_low": -0.1243,
+            "diff": -0.0263,
+            "significant": false
+          },
+          "n_a": 118,
+          "n_b": 234,
+          "per_class": {
+            "Plate": {
+              "ci_high": 0.1083,
+              "ci_low": -0.057,
+              "diff": 0.0309,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": 0.2938,
+              "ci_low": 0.0013,
+              "diff": 0.1476,
+              "significant": true
+            },
+            "WithHelmet": {
+              "ci_high": 0.1336,
+              "ci_low": -0.5359,
+              "diff": -0.2261,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": 0.0807,
+              "ci_low": -0.1799,
+              "diff": -0.0575,
+              "significant": false
+            }
+          }
+        },
+        "images": 118
+      }
+    },
+    "source": {
+      "ds1": {
+        "ap": {
+          "images": 295,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.753,
+            "ci_low": 0.6201,
+            "std": 0.0354,
+            "value": 0.6824
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": 0.8764,
+              "ci_high": 0.9134,
+              "ci_low": 0.8297,
+              "instances": 247,
+              "std": 0.0209
+            },
+            "TripleRiding": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "WithHelmet": {
+              "ap50": 0.417,
+              "ci_high": 0.6102,
+              "ci_low": 0.2459,
+              "instances": 26,
+              "std": 0.0941
+            },
+            "WithoutHelmet": {
+              "ap50": 0.7536,
+              "ci_high": 0.8101,
+              "ci_low": 0.6926,
+              "instances": 209,
+              "std": 0.0299
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": 0.8651,
+            "fp": 18.0,
+            "gt": 247.0,
+            "precision": 0.9182,
+            "recall": 0.8178,
+            "threshold": 0.25,
+            "tp": 202.0
+          },
+          "TripleRiding": {
+            "f1": NaN,
+            "fp": 5.0,
+            "gt": 0.0,
+            "precision": 0.0,
+            "recall": NaN,
+            "threshold": 0.3,
+            "tp": 0.0
+          },
+          "WithHelmet": {
+            "f1": 0.4615,
+            "fp": 34.0,
+            "gt": 26.0,
+            "precision": 0.3462,
+            "recall": 0.6923,
+            "threshold": 0.25,
+            "tp": 18.0
+          },
+          "WithoutHelmet": {
+            "f1": 0.7557,
+            "fp": 38.0,
+            "gt": 209.0,
+            "precision": 0.7979,
+            "recall": 0.7177,
+            "threshold": 0.375,
+            "tp": 150.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": null,
+            "ci_low": null,
+            "diff": null,
+            "significant": false
+          },
+          "n_a": 295,
+          "n_b": 57,
+          "per_class": {
+            "Plate": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            }
+          }
+        },
+        "images": 295
+      },
+      "dst": {
+        "ap": {
+          "images": 57,
+          "level": 0.95,
+          "map50": {
+            "ci_high": 0.9703,
+            "ci_low": 0.7872,
+            "std": 0.0469,
+            "value": 0.8891
+          },
+          "n_boot": 1000,
+          "per_class": {
+            "Plate": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "TripleRiding": {
+              "ap50": 0.8891,
+              "ci_high": 0.9703,
+              "ci_low": 0.7872,
+              "instances": 58,
+              "std": 0.0469
+            },
+            "WithHelmet": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            },
+            "WithoutHelmet": {
+              "ap50": null,
+              "ci_high": null,
+              "ci_low": null,
+              "instances": 0,
+              "std": null
+            }
+          },
+          "seed": 0
+        },
+        "at_operating_threshold": {
+          "Plate": {
+            "f1": NaN,
+            "fp": 3.0,
+            "gt": 0.0,
+            "precision": 0.0,
+            "recall": NaN,
+            "threshold": 0.25,
+            "tp": 0.0
+          },
+          "TripleRiding": {
+            "f1": 0.9009,
+            "fp": 3.0,
+            "gt": 58.0,
+            "precision": 0.9434,
+            "recall": 0.8621,
+            "threshold": 0.3,
+            "tp": 50.0
+          },
+          "WithHelmet": {
+            "f1": NaN,
+            "fp": 0.0,
+            "gt": 0.0,
+            "precision": 1.0,
+            "recall": NaN,
+            "threshold": 0.25,
+            "tp": 0.0
+          },
+          "WithoutHelmet": {
+            "f1": NaN,
+            "fp": 4.0,
+            "gt": 0.0,
+            "precision": 0.0,
+            "recall": NaN,
+            "threshold": 0.375,
+            "tp": 0.0
+          }
+        },
+        "gap_vs_rest": {
+          "map50": {
+            "ci_high": null,
+            "ci_low": null,
+            "diff": null,
+            "significant": false
+          },
+          "n_a": 57,
+          "n_b": 295,
+          "per_class": {
+            "Plate": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "TripleRiding": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithHelmet": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            },
+            "WithoutHelmet": {
+              "ci_high": null,
+              "ci_low": null,
+              "diff": null,
+              "significant": false
+            }
+          }
+        },
+        "images": 57
+      }
+    }
+  },
+  "images": 352,
+  "object_size": {
+    "Plate": {
+      "large": {
+        "ap50": 0.8534,
+        "ci_high": 0.9286,
+        "ci_low": 0.7765,
+        "instances": 83,
+        "relative_size": [
+          0.0908,
+          null
+        ],
+        "std": 0.0392
+      },
+      "medium": {
+        "ap50": 0.8944,
+        "ci_high": 0.9481,
+        "ci_low": 0.8271,
+        "instances": 81,
+        "relative_size": [
+          0.0435,
+          0.0908
+        ],
+        "std": 0.0317
+      },
+      "small": {
+        "ap50": 0.8649,
+        "ci_high": 0.9285,
+        "ci_low": 0.795,
+        "instances": 83,
+        "relative_size": [
+          0.0,
+          0.0435
+        ],
+        "std": 0.0346
+      },
+      "small_minus_large": {
+        "ci_high": 0.1124,
+        "ci_low": -0.0868,
+        "diff": 0.0115,
+        "p_a_better": 0.57,
+        "significant": false
+      }
+    },
+    "TripleRiding": {
+      "large": {
+        "ap50": 0.9607,
+        "ci_high": 0.995,
+        "ci_low": 0.8997,
+        "instances": 19,
+        "relative_size": [
+          0.8117,
+          null
+        ],
+        "std": 0.0247
+      },
+      "medium": {
+        "ap50": 0.9453,
+        "ci_high": 0.995,
+        "ci_low": 0.8292,
+        "instances": 19,
+        "relative_size": [
+          0.6845,
+          0.8117
+        ],
+        "std": 0.0502
+      },
+      "small": {
+        "ap50": 0.69,
+        "ci_high": 0.8896,
+        "ci_low": 0.492,
+        "instances": 20,
+        "relative_size": [
+          0.0,
+          0.6845
+        ],
+        "std": 0.1017
+      },
+      "small_minus_large": {
+        "ci_high": -0.0699,
+        "ci_low": -0.478,
+        "diff": -0.2707,
+        "p_a_better": 0.007,
+        "significant": true
+      }
+    },
+    "WithHelmet": {
+      "large": {
+        "ap50": 0.1966,
+        "ci_high": 0.4976,
+        "ci_low": 0.0031,
+        "instances": 9,
+        "relative_size": [
+          0.2757,
+          null
+        ],
+        "std": 0.133
+      },
+      "medium": {
+        "ap50": 0.6931,
+        "ci_high": 0.995,
+        "ci_low": 0.3979,
+        "instances": 8,
+        "relative_size": [
+          0.1462,
+          0.2757
+        ],
+        "std": 0.149
+      },
+      "small": {
+        "ap50": 0.5314,
+        "ci_high": 0.8176,
+        "ci_low": 0.2374,
+        "instances": 9,
+        "relative_size": [
+          0.0,
+          0.1462
+        ],
+        "std": 0.1495
+      },
+      "small_minus_large": {
+        "ci_high": 0.689,
+        "ci_low": -0.0973,
+        "diff": 0.3348,
+        "p_a_better": 0.943,
+        "significant": false
+      }
+    },
+    "WithoutHelmet": {
+      "large": {
+        "ap50": 0.843,
+        "ci_high": 0.9132,
+        "ci_low": 0.7604,
+        "instances": 70,
+        "relative_size": [
+          0.5639,
+          null
+        ],
+        "std": 0.04
+      },
+      "medium": {
+        "ap50": 0.7261,
+        "ci_high": 0.8318,
+        "ci_low": 0.6223,
+        "instances": 69,
+        "relative_size": [
+          0.2845,
+          0.5639
+        ],
+        "std": 0.0536
+      },
+      "small": {
+        "ap50": 0.6866,
+        "ci_high": 0.7994,
+        "ci_low": 0.5739,
+        "instances": 70,
+        "relative_size": [
+          0.0,
+          0.2845
+        ],
+        "std": 0.0565
+      },
+      "small_minus_large": {
+        "ci_high": -0.0125,
+        "ci_low": -0.281,
+        "diff": -0.1564,
+        "p_a_better": 0.017,
+        "significant": true
+      }
+    }
+  },
+  "overall": {
+    "ap": {
+      "images": 352,
+      "level": 0.95,
+      "map50": {
+        "ci_high": 0.785,
+        "ci_low": 0.668,
+        "std": 0.0292,
+        "value": 0.7214
+      },
+      "n_boot": 1000,
+      "per_class": {
+        "Plate": {
+          "ap50": 0.8727,
+          "ci_high": 0.9091,
+          "ci_low": 0.8278,
+          "instances": 247,
+          "std": 0.021
+        },
+        "TripleRiding": {
+          "ap50": 0.8608,
+          "ci_high": 0.9515,
+          "ci_low": 0.7604,
+          "instances": 58,
+          "std": 0.0484
+        },
+        "WithHelmet": {
+          "ap50": 0.4166,
+          "ci_high": 0.61,
+          "ci_low": 0.2429,
+          "instances": 26,
+          "std": 0.0938
+        },
+        "WithoutHelmet": {
+          "ap50": 0.7353,
+          "ci_high": 0.7967,
+          "ci_low": 0.6736,
+          "instances": 209,
+          "std": 0.0314
+        }
+      },
+      "seed": 0
+    },
+    "at_operating_threshold": {
+      "Plate": {
+        "f1": 0.8596,
+        "fp": 21.0,
+        "gt": 247.0,
+        "precision": 0.9058,
+        "recall": 0.8178,
+        "threshold": 0.25,
+        "tp": 202.0
+      },
+      "TripleRiding": {
+        "f1": 0.8621,
+        "fp": 8.0,
+        "gt": 58.0,
+        "precision": 0.8621,
+        "recall": 0.8621,
+        "threshold": 0.3,
+        "tp": 50.0
+      },
+      "WithHelmet": {
+        "f1": 0.4615,
+        "fp": 34.0,
+        "gt": 26.0,
+        "precision": 0.3462,
+        "recall": 0.6923,
+        "threshold": 0.25,
+        "tp": 18.0
+      },
+      "WithoutHelmet": {
+        "f1": 0.7481,
+        "fp": 42.0,
+        "gt": 209.0,
+        "precision": 0.7812,
+        "recall": 0.7177,
+        "threshold": 0.375,
+        "tp": 150.0
+      }
+    },
+    "images": 352
+  },
+  "provenance": {
+    "config": {
+      "n_boot": 1000,
+      "op_thresholds": {
+        "Plate": 0.25,
+        "TripleRiding": 0.3,
+        "WithHelmet": 0.25,
+        "WithoutHelmet": 0.375
+      }
+    },
+    "dataset": {
+      "data_yaml": "eval/clean_splits/data.yaml",
+      "scheme": "names+sizes+label-contents",
+      "split": "val",
+      "split_images": 352,
+      "split_version": "sha256:032b9391d7cd2dc2",
+      "version": "sha256:e1be4f14028241d1"
+    },
+    "environment": {
+      "chip": "Apple M4",
+      "cv2": "4.13.0",
+      "machine": "arm64",
+      "numpy": "2.4.6",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7"
+    },
+    "generated_at": "2026-09-29T05:27:21.717919+00:00",
+    "git": {
+      "commit": "654d242",
+      "dirty": false
+    },
+    "models": [
+      {
+        "path": "runs/detect/traffic_model-2/weights/best.pt",
+        "sha256": "sha256:d49f79833cb86eda7d098b86679e02aced9c31c23b4eb20a18b06097fb712cbd",
+        "version": "traffic-4class@1.0.0"
+      }
+    ]
+  },
+  "split": "val",
+  "thresholds": {
+    "glare": {
+      "pixel": 250,
+      "share": 0.05
+    },
+    "luminance": {
+      "bright_above": 150.0,
+      "dark_below": 60.0
+    },
+    "sharpness_terciles": [
+      334.5,
+      621.7
+    ],
+    "size_terciles": {
+      "Plate": [
+        0.0435,
+        0.0908
+      ],
+      "TripleRiding": [
+        0.6845,
+        0.8117
+      ],
+      "WithHelmet": [
+        0.1462,
+        0.2757
+      ],
+      "WithoutHelmet": [
+        0.2845,
+        0.5639
+      ]
+    }
+  }
+}
