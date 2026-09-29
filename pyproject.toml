@@ -68,6 +68,7 @@ files = [
     "modules/provenance.py",
     "modules/detection_stats.py",
     "modules/temporal_eval.py",
+    "modules/field_data.py",
 ]
 explicit_package_bases = true
 namespace_packages = true

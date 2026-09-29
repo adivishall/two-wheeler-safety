@@ -79,7 +79,7 @@ def iter_image_label_pairs(img_root: str):
 
 def read_gt(label_path: str, w: int, h: int) -> list:
     """Parse a YOLO label file into ``[(cls, (x1,y1,x2,y2)), ...]`` pixels."""
-    gt = []
+    gt: list = []
     if not os.path.exists(label_path):
         return gt
     with open(label_path) as fh:
@@ -121,7 +121,7 @@ def predict_split(model, pairs, n_classes: int, *, conf: float = AP_CONF,
         gt = read_gt(label_path, w, h)
         if corrupt is not None:
             img = corrupt(img, os.path.basename(image_path))
-        kwargs = dict(conf=conf, iou=nms_iou, imgsz=imgsz, verbose=False)
+        kwargs: dict = dict(conf=conf, iou=nms_iou, imgsz=imgsz, verbose=False)
         if device:
             kwargs["device"] = device
         result = model.predict(source=img, **kwargs)[0]
