@@ -79,7 +79,8 @@ Every report in `eval/results/` carries a `provenance` block
 
 So a number can be traced to weights by hash (not by the ambiguous `best.pt`
 path), to data by content, and to code by commit — and a report produced from
-uncommitted code says so (`dirty: true`). Evidence packages carry the same
+uncommitted code or data says so (`dirty: true`; generated results and `*.md`
+docs don't count, untracked source files do). Evidence packages carry the same
 model version plus the pipeline version and the thresholds actually applied.
 
 ## How the runtime uses it

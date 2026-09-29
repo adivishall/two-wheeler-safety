@@ -79,7 +79,7 @@ All fixed in `3902441`, each with a regression test.
 | R4 | M | A violation whose plate stabilised only on frames without a rider box was never fined; its withheld reason was frozen. | emission retried every frame with the last rider box | `test_violation_fined_when_plate_stabilises_only_without_a_rider_box` |
 | R5 | M | The test report applied the baseline's val thresholds to every model. | per-model thresholds | `test_each_model_is_reported_at_its_own_val_thresholds` |
 | R6 | L | OCR time profiled per frame, not per call (benchmark under-counted calls with several plates). | per-call accounting | `test_profiler_counts_every_ocr_call_not_every_frame` |
-| R7 | L | Provenance `dirty` ignored untracked source files. | untracked code counts | `test_dirty_flag_ignores_generated_results` |
+| R7 | L | Provenance `dirty` ignored untracked source files — and (found while regenerating) counted edits to docs, so results regenerated during a docs edit were stamped dirty. | untracked code counts; `*.md` doesn't | `test_dirty_flag_ignores_generated_results` |
 | R8 | L | Error-budget OCR stream took a variable number of draws, so one oracle shifted another stage's outcomes. | constant draws per opportunity | — (noise, not bias) |
 
 ## What the review did not find

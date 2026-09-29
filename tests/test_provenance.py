@@ -150,8 +150,8 @@ def test_load_data_yaml_names(tmp_path, names):
 
 
 def test_dirty_flag_ignores_generated_results(tmp_path, monkeypatch):
-    """Regenerating tracked result files must not mark the code dirty; editing
-    code must."""
+    """Regenerating tracked result files or editing docs must not mark the code
+    dirty; editing code or a tracked data input must."""
     import subprocess
 
     def git(*a):
@@ -163,6 +163,9 @@ def test_dirty_flag_ignores_generated_results(tmp_path, monkeypatch):
     (tmp_path / "eval" / "results").mkdir(parents=True)
     (tmp_path / "eval" / "results" / "r.json").write_text("{}")
     (tmp_path / "code.py").write_text("x = 1\n")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "GUIDE.md").write_text("guide")
+    (tmp_path / "docs" / "input.json").write_text("{}")
     git("add", ".")
     git("commit", "-q", "-m", "init")
     monkeypatch.chdir(tmp_path)
@@ -173,6 +176,11 @@ def test_dirty_flag_ignores_generated_results(tmp_path, monkeypatch):
     assert git_state()["dirty"] is True
     git("checkout", "--", "code.py")
     assert git_state()["dirty"] is False
+    (tmp_path / "docs" / "GUIDE.md").write_text("edited")  # tracked docs: not dirty
+    assert git_state()["dirty"] is False
+    (tmp_path / "docs" / "input.json").write_text('{"b": 2}')  # tracked data: dirty
+    assert git_state()["dirty"] is True
+    git("checkout", "--", "docs")
     (tmp_path / "notes.md").write_text("scratch")  # untracked non-code: not dirty
     assert git_state()["dirty"] is False
     (tmp_path / "new_rule.py").write_text("x = 3\n")  # untracked source: dirty

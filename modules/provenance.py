@@ -117,12 +117,15 @@ def split_fingerprint(data_yaml: str, split: str) -> str | None:
 # Generated outputs: regenerating results must not mark the CODE as dirty.
 GENERATED_PATHS = ("eval/results", "data/dataset_manifest.json",
                    "data/DATASET_MANIFEST.md", "models/manifests")
+# Documentation no evaluator reads: editing it while results regenerate must not
+# stamp them dirty. Tracked data inputs (images, JSON) still count.
+DOC_PATTERNS = ("*.md",)
 
 
 def git_state() -> dict:
     """HEAD commit, and whether any tracked file OTHER than generated outputs
-    has uncommitted changes (``dirty`` means the code that produced a result
-    is not exactly the commit named)."""
+    and documentation has uncommitted changes (``dirty`` means the code that
+    produced a result is not exactly the commit named)."""
     def run(*args):
         try:
             out = subprocess.run(["git", *args], capture_output=True, text=True,
@@ -134,7 +137,7 @@ def git_state() -> dict:
     commit = run("rev-parse", "--short", "HEAD") or None
     if not commit:
         return {"commit": None, "dirty": None}
-    excludes = [f":(exclude){p}" for p in GENERATED_PATHS]
+    excludes = [f":(exclude){p}" for p in (*GENERATED_PATHS, *DOC_PATTERNS)]
     tracked = run("status", "--porcelain", "--untracked-files=no", "--", ".", *excludes)
     # Untracked SOURCE files count too: HEAD may import a module that exists
     # only in this working tree, and then the named commit can't reproduce the
