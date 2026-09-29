@@ -1,6 +1,6 @@
 # Labelling queue — active-learning selection
 
-- Budget 150; selected **150** from 6299 pool images (train 5772, val 352, test 175) and 5 pending reviews; candidates with any signal: 320.
+- Budget 150; selected **150** from the 5772-image training pool and 5 pending reviews (candidates with any signal: 320); val/test (527 images) feed only the blind audit below.
 - Priority ranks informativeness (`1 - Π(1 - signal)`), not a probability; selection decays repeats of a pattern and skips near-duplicate images.
 - Evaluation images are **not** model-selected: they get a separate, seeded uniform-random audit sample, labelled blind to predictions (`labeling_queue_eval_audit.json`). Model-guided relabelling of held-out data would inflate measured accuracy.
 - Blind evaluation audit: **50** val/test images.

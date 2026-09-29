@@ -11,4 +11,4 @@
 
 | candidate − baseline | Plate | WithHelmet | WithoutHelmet | TripleRiding | mAP@50 | verdict |
 |---|---|---|---|---|---|---|
-| v2_dedup | -0.010 [-0.037, +0.013] | +0.077 [-0.094, +0.292] | +0.042 [-0.001, +0.081] | +0.055 [-0.025, +0.151] | +0.041 [-0.013, +0.107] | **insufficient seeds (2 vs 1; need 3 each)** |
+| v2_dedup | -0.010 [-0.074, +0.053] | +0.077 [-0.125, +0.279] | +0.042 [+0.005, +0.079] | +0.055 [-0.044, +0.155] | +0.041 [-0.035, +0.117] | **insufficient seeds (2 vs 1; need 3 each)** |

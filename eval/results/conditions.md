@@ -6,7 +6,7 @@
 
 ## Findings
 
-Per class, strata whose AP differs from the rest of the split with a CI excluding zero on val, among **27** comparisons with ≥ 10 instances on both sides — at 95%, about 1 would clear the bar by chance, so **only `confirmed` rows** (test agrees in sign, its own CI excluding zero) should be read as findings.
+Per class, strata whose AP differs from the rest of the split with a CI excluding zero on val, among **25** comparisons with ≥ 10 instances on both sides — at 95%, about 1 would clear the bar by chance, so **only `confirmed` rows** (test agrees in sign, its own CI excluding zero) should be read as findings.
 
 | condition | class | val ΔAP [95% CI] | test ΔAP [95% CI] | status |
 |---|---|---|---|---|
