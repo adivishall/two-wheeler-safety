@@ -52,6 +52,8 @@ version of all of this: [AUDIT.md](AUDIT.md).
 
 `manual_error_review.{json,md}` is the one hand-made result: a visual review of
 the top-confidence val errors, listed crop by crop so anyone can re-check it.
+The reviewer was the AI coding assistant viewing the crops, not a human
+annotator; until a person re-checks it, cite it as that.
 
 ## 3. Confidence calibration — deliberately not applied
 
@@ -67,7 +69,49 @@ correctness flips sign between val and test ([MODEL_EVALUATION.md](MODEL_EVALUAT
 
 ## 4. Application performance
 
-<!-- BENCHMARK -->
+`eval/results/benchmark.md` (+ `.json`), one invocation of `benchmark.py` at
+commit `8a68089` on a clean tree. Protocol:
+
+| | |
+|---|---|
+| hardware | Apple M4, macOS 26.5 |
+| software | Python 3.13.7 · torch 2.12.1 · Ultralytics 8.4.71 · OpenCV 4.13.0 |
+| model | `traffic-4class@1.0.0` (YOLOv8n, sha256 `d49f7983…`), imgsz 640 |
+| inputs | `samples/test.jpg` 1906×1078; `demo_traffic.mp4` 334×596, 120 frames @ 25 fps, one plate — each identified by sha256 in the JSON |
+| batch | 1 (the pipeline is frame-by-frame) |
+| cold vs warm | model load and the first call reported separately; everything else warm |
+| repeats | image: 50 calls per device; video: 5 interleaved rounds per arm (A B, B A, …), median run reported with the range |
+
+| measurement | result |
+|---|---|
+| model load, cold (YOLO + EasyOCR) | 3.6 s |
+| YOLO, one image, warm p50 | MPS 23.2 ms · CPU 20.5 ms (first MPS call 402 ms) |
+| EasyOCR, one plate crop | 13.5 ms mean |
+| **video, shipped settings (MPS)** | **36.7 FPS** (range 35.0–37.2); YOLO 65% of wall, OCR 24% |
+| video, OCR lock off | 19.4 FPS (range 15.3–20.5); OCR 56% of wall |
+| OCR lock A/B | **+88%** (per round +80% to +139%); 120 → 30 OCR calls; same fine in all 10 runs |
+| decision core, one frame, three bikes | 0.04 ms |
+| recording a fine (SQLite) | 0.42 ms |
+| `/analyze` HTTP + validation + DB overhead | 1.4 ms median of 30 paired calls, p10–p90 −7 to +8 ms: below the call's own noise |
+| peak RSS | 942 MB |
+
+What these numbers do and don't say:
+
+- **The OCR lock is the only optimization measured as an A/B**, and the
+  benchmark checks it changed nothing: every run of both arms fined the same
+  plate for the same violation. Locked plates are still re-read every 10 frames
+  (AUDIT R2), which is where the 30 remaining calls come from.
+- **CPU vs MPS is a wash for one YOLOv8n pass on an M4.** This run has the CPU
+  ahead; earlier runs had MPS ahead. Nothing here supports "the GPU is faster".
+  Before 1.1.0 inference silently ran on the CPU (AUDIT E11); the fix was about
+  reporting the device honestly, not about speed.
+- **Separate invocations varied more than rounds within one.** Two earlier
+  single-round runs on the same machine gave 32.6 and 26.9 FPS for the shipped
+  arm — which is why the benchmark now repeats and interleaves. Treat
+  throughput as roughly ±15% between sessions.
+- **One small clip with one plate.** OCR cost scales with plates in view; this
+  is not a throughput claim for a busy junction or a full-HD camera.
+
 
 ## 5. Regenerating everything
 
@@ -95,4 +139,5 @@ python3 benchmark.py --model $M --image samples/test.jpg --video demo_traffic.mp
 
 Performance numbers are only comparable on an otherwise idle machine; the
 benchmark records the hardware and software it ran on, not what else was
-running — so don't run it next to a training job.
+running — so don't run it next to a training job. `--repeats` (default 5) sets
+the interleaved rounds per video arm.

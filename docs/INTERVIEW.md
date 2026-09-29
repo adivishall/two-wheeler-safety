@@ -12,7 +12,8 @@ something is not measured, the answer says so. Numbers are for
 ### Why YOLO?
 
 A one-stage detector gives boxes for all four classes in one forward pass
-(latency on an Apple M4: `<!-- BENCH-LATENCY -->`) — fast enough to run every
+(~20–23 ms warm for a 1906×1078 image on an Apple M4, CPU or MPS —
+`benchmark.md`) — fast enough to run every
 frame of a video, which the temporal logic depends on. YOLOv8n specifically because the dataset is small (the
 held-out WithHelmet class has 27 instances): a bigger model would mostly
 memorise. Ultralytics also gives a reproducible training/validation loop and the
@@ -47,7 +48,8 @@ In order of consequence (`docs/DATASET.md`, `eval/results/label_audit.md`):
    is [0.20, 0.73].
 3. **Labels are noisy both ways**: 11 of the 16 highest-confidence val "false
    positives" are real, unlabelled riders or plates; at least 3 of the 16 top
-   class confusions are mislabelled (`manual_error_review.md`).
+   class confusions are mislabelled (`manual_error_review.md` — an AI-assisted
+   visual review; re-check the crops yourself before quoting it).
 4. **80% of training images are offline-augmented copies**, and 8–10% of
    val/test were near-duplicates of training images before de-leaking.
 5. Source and licence are unverified; everything is one region's roads.
@@ -88,8 +90,13 @@ Data before architecture, because the error analysis says so
 4. Glare and motion-blur augmentation (the two transforms that hurt most).
 I tested the obvious data-cleaning idea: training on a de-duplicated split (v2).
 With CIs it is statistically indistinguishable from v1 overall — better on
-WithoutHelmet, worse on Plate — so it was not promoted. Seed-to-seed variance of
-the same recipe is in `MODEL_EVALUATION.md`.
+WithoutHelmet, worse on Plate — so it was not promoted. Then I retrained v1's
+exact recipe with a different seed: the paired bootstrap called *that*
+"significantly worse" on test (mAP@50 −0.076), and its shifts are as big as
+v2's. The bootstrap resamples images with the weights fixed, so it can't see
+training randomness — comparing recipes needs several seeds each. v2's
+WithoutHelmet gain (+0.05, several times the seed shift) is the one lead worth
+that run; its Plate "regression" isn't evidence of anything.
 
 ### How do you detect leakage?
 
@@ -111,6 +118,9 @@ so it wasn't — a threshold tuned on 26 instances is noise. For decisions, the
 objective is not F1: it is "don't fine innocent people", so the temporal rule and
 the OCR vote were chosen by *constrained* objectives (max recall/coverage subject
 to ≤ 1% false flags / wrong plates), on a dev seed, reported on another seed.
+Neither rule met 1% in every condition; the reports say so and name the
+fallback used (lowest worst case — for OCR, anything within 2 standard errors of
+it, added after a plain arg-min was decided by a single sequence).
 And a choice must be stable to sample size: the first OCR selection flipped when
 I re-ran it at 5× the sequences (`DECISIONS.md` #16).
 
@@ -187,14 +197,20 @@ exact weights, thresholds and pixels that produced it.
 
 ### What happens if OCR fails?
 
-Nothing is fined against a guess. The stabilizer needs 3 readings, ≥ 35% of vote
-weight and a 0.3 margin over any competing valid plate; an exact tie abstains.
+Nothing is fined against a guess. The winning plate needs 3 valid readings of
+its own, ≥ 35% of vote weight and a 0.3 margin over any competing valid plate;
+an exact tie abstains. Once settled, the plate is still re-read every 10 frames,
+and a fine needs a reading that agreed with it in the last 25 frames — so an
+identity switch can't carry one rider's plate onto another.
 A confirmed violation without a trustworthy plate is *withheld*: reported in the
 job result with a reason (`contested`, `low_agreement`, …), written to the audit
 log, and counted on the session. On a photo, an unreadable or malformed plate
-returns the violation under `abstained` with the reason. The trade was measured:
-in simulation the conservative vote names the wrong plate for ~1% of vehicles
-versus ~3% for the old rule, at the cost of naming *any* plate less often.
+returns the violation under `abstained` with the reason. The trade was measured
+in simulation, scored at the moment a fine is committed: at 4–12% character
+noise the 1.0.0 rule named the wrong plate for 40–62% of vehicles, the shipped
+one for ≤ 1.8% — by naming a plate for only 34–70% of them. It still misses
+the 1% target I set, and a *consistent* misread (the same glyph wrong on every
+frame) is what's left, because no vote can out-vote it.
 
 ---
 
@@ -216,10 +232,12 @@ versus ~3% for the old rule, at the cost of naming *any* plate less often.
 ### What is the largest source of error?
 
 At the measured operating point, the **detector**: in the oracle-ablation error
-budget, rider-box recall is the largest owner of lost end-to-end F1, followed by
-helmet class confusion — unless OCR is wrong on half of all reads, when OCR
-becomes the largest owner (`ERROR_ANALYSIS.md` §2). Upstream of the detector, the
-largest source is the **data**: disjoint labels and 27 WithHelmet instances.
+budget, missed rider boxes own 54–56% of the lost end-to-end F1 and helmet class
+confusion 40–42%, missed plate boxes 4% — across an OCR sweep up to half of all
+reads wrong, because the vote withholds instead of guessing
+(`ERROR_ANALYSIS.md` §2). OCR's cost shows up as coverage, not F1. Upstream of
+the detector, the largest source is the **data**: disjoint labels and 27
+WithHelmet instances.
 
 ### What part is model-limited?
 
@@ -234,8 +252,21 @@ The decisions made *given* the detections: how long a violation must persist
 (and the short-dwell blind spot that creates), association when two riders fully
 overlap, whether a parked vehicle should be eligible, speed calibration, and how
 conservative the OCR vote is. These are where the audit found real bugs — stale
-plate boxes, duplicate fines, unapplied thresholds, speed under downscaling — all
-fixed and pinned by tests.
+plate boxes, duplicate fines, unapplied thresholds, speed under downscaling, and
+(in the second review) a plate that one valid read could elect or an identity
+switch could carry to another rider — all fixed and pinned by tests.
+
+### What did reviewing your own fixes find?
+
+Eight more defects (`AUDIT.md` R1–R8), and the two serious ones were in the
+layer I had just called safe: plate identity. `min_observations` counted
+unreadable reads, so one valid read plus two junk ones elected a plate; and my
+OCR experiment scored the plate after all ten reads, while the pipeline commits
+at the *first* election — so it under-counted wrong plates several-fold. The review was
+a separate AI agent given only the branch, not my reasoning — which is the
+point: it had none of my assumptions. The lesson I took: score a decision rule
+at the moment the system acts on it, and have something that didn't write the
+fix try to break it.
 
 ### What would be required before deployment?
 

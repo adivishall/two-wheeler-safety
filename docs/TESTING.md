@@ -10,7 +10,7 @@ weights, or the ~2 GB DL stack; it runs in well under a minute on a laptop.
 
 ```bash
 pip install -r requirements-ci.txt -c constraints-ci.txt   # pinned, model-free
-pytest                        # 567 tests
+pytest                        # 600 tests
 pytest --cov --cov-report=term-missing   # with branch coverage
 ```
 
@@ -34,7 +34,7 @@ plate a crop shows. An OCR call on a crop that is not a plate â€” a stale box â€
 reads nothing and is counted. That is how the stale-plate-box bug was caught and
 how it stays fixed.
 
-## What is covered (567 tests across 42 files)
+## What is covered (600 tests across 44 files)
 
 | Area | Files | Focus |
 |------|-------|-------|
@@ -55,8 +55,8 @@ how it stays fixed.
 
 Coverage is measured with **branch** tracking (`pytest --cov`), gated at
 `fail_under = 90` in `pyproject.toml`. Measured: **95%** overall; the decision
-core `pipeline.py` 90%, `violation_state` 98%, `plate_recognizer` 97%,
-`association` 97%, `db` 97%, `video_detector` 89%.
+core `pipeline.py` 91%, `violation_state` 98%, `plate_recognizer` 98%,
+`association` 97%, `db` 97%, `video_detector` 93%.
 
 The two model-only modules (`detector.py` loads YOLO/EasyOCR; `plate_ocr.py`
 wraps them) are **omitted** from the headline: the model-free suite structurally

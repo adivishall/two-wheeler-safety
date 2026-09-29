@@ -125,9 +125,12 @@ On test (reported once, `uncertainty_test.md`) the WithHelmet difference is
 
 **Decision: not promoted** under the stated rule (promote only if the mAP gain's
 CI excludes zero and no class regresses significantly): no significant overall
-gain, and a significant Plate regression — the class every fine depends on. v1
-remains `traffic-4class@1.0.0`; no v2 manifest is committed. What the experiment
-did establish is that de-duplication by itself neither helps nor clearly hurts:
+gain, and a Plate regression the bootstrap calls significant. A later
+seed-variance run showed a new seed alone shifts Plate as much (−0.024), so the
+regression is not evidence either way ([MODEL_EVALUATION.md](MODEL_EVALUATION.md)
+§6). v1 remains `traffic-4class@1.0.0`; no v2 manifest is committed. What the
+experiment did establish is that de-duplication by itself neither clearly helps
+nor clearly hurts:
 more *unique* WithHelmet data, and the label fixes in
 [ERROR_ANALYSIS.md](ERROR_ANALYSIS.md), are the next steps.
 

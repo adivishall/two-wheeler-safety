@@ -23,8 +23,10 @@ de-duplicated train `sha256:5ba9cee6da3943dd`; helmet-only subset
 - **Result** (`uncertainty_val.md`). mAP@50 +0.021 [−0.022, +0.063];
   WithHelmet +0.028 [−0.107, +0.167]; WithoutHelmet **+0.046** [+0.005, +0.087];
   Plate **−0.022** [−0.044, −0.003].
-- **Conclusion.** No significant overall gain; significant Plate regression → not
-  promoted. The hypothesis is neither supported nor refuted at this sample size.
+- **Conclusion.** No significant overall gain; a Plate regression that the
+  bootstrap calls significant but that is no larger than a seed change (M5) →
+  not promoted, not rejected. The hypothesis is neither supported nor refuted;
+  the WithoutHelmet gain is worth a multi-seed run.
   (First judged on test point estimates as a WithHelmet regression — that was
   noise; see [AUDIT.md](AUDIT.md) E4.)
 
@@ -34,15 +36,17 @@ de-duplicated train `sha256:5ba9cee6da3943dd`; helmet-only subset
 - **Config.** v1 `last.pt` fine-tuned 2 epochs, same data and settings.
 - **Result.** mAP@50 **−0.051** [−0.095, −0.006]; Plate −0.041, TripleRiding
   −0.074 (significant).
-- **Conclusion.** Worse. An earlier test-split "promote it" recommendation is
-  withdrawn.
+- **Conclusion.** A worse checkpoint; whether longer training hurts is not
+  established (the deficit is close to M5's seed shift). An earlier test-split
+  "promote it" recommendation is withdrawn.
 
 ### M3 — seven more epochs from v1 (`traffic_model_r2`)
 
 - **Config.** `probe` fine-tuned 5 more epochs.
 - **Result.** mAP@50 −0.030 [−0.067, +0.007]; Plate **−0.085** (significant).
-- **Conclusion.** Not promoted. With M2, longer training from v1 does not help on
-  this data.
+- **Conclusion.** Not promoted. Its Plate drop is 3.5× M5's seed shift in that
+  class — the one regression here likely to be real. With M2: no sign that longer
+  training from v1 helps.
 
 ### M4 — helmet-only fine-tune (`traffic_model_helmetfix`)
 
@@ -55,7 +59,25 @@ de-duplicated train `sha256:5ba9cee6da3943dd`; helmet-only subset
 
 ### M5 — seed variance of the v1 recipe (`traffic_model_seed1`)
 
-<!-- SEED-EXPERIMENT -->
+- **Question.** How much does the training seed alone move per-class AP — and
+  are M1–M3's differences bigger than that?
+- **Config.** v1's `args.yaml` with only `seed: 0 → 1`; Ultralytics 8.4.71, MPS,
+  same `data.yaml` (v1's torch version and training-time data fingerprint were
+  not recorded).
+- **Result** (`uncertainty_val.md`, `uncertainty_test.md`, paired vs v1).
+  mAP@50 −0.040 [−0.108, +0.025] val, **−0.076 [−0.155, −0.003] test**;
+  WithHelmet −0.098 val, −0.203 test; Plate −0.024 val; TripleRiding −0.077 test
+  (significant). Official `val()` mAP@50 0.766 → 0.718.
+- **Conclusion.** The paired image bootstrap cannot see training randomness: a
+  seed change alone is "significantly worse" on test. One replica is one draw,
+  not a spread, but it is as large as M1's Plate regression and M2's deficit —
+  so those verdicts are re-graded (MODEL_EVALUATION §6): M1's Plate regression
+  is not evidence, its WithoutHelmet gain is the one lead worth testing; M2 is
+  a worse checkpoint, not proof that more epochs hurt; M3's Plate −0.085 (3.5×
+  the seed shift) stands. v1 is the better of two seeds, so the headline
+  detector numbers are probably optimistic for the recipe.
+- **Decision.** Promotion now needs ≥ 3 seeds per recipe
+  ([RETRAINING_LOOP.md](RETRAINING_LOOP.md) §7). v1 stays.
 
 ## Evaluation protocol
 
@@ -99,13 +121,26 @@ de-duplicated train `sha256:5ba9cee6da3943dd`; helmet-only subset
 
 ### D2 — OCR vote thresholds
 
-- **Config** (`evaluate_ocr.py --simulate --policy-sweep`). 16 configs
-  (observations × agreement × margin); character substitution 4–12%, with and
-  without consistent misreads; 1,000 sequences per condition; dev/test seeds.
-- **Result** (`ocr_stabilizer_selection.md`). Old rule wrong-plate up to 3.2%;
-  selected (≥3 reads, ≥35%, margin ≥0.3): ~1% (1.2% worst on the held-out seed),
-  ~30% less coverage. At 200 sequences the experiment had picked a different,
-  costlier config; it did not survive 5× the sample.
+- **Question.** Which vote thresholds keep wrong plates ≤ 1% at the least
+  coverage cost?
+- **Config** (`evaluate_ocr.py --simulate --policy-sweep`). 24 configs (winner's
+  own valid reads 1–3 × agreement 0.35/0.5 × margin 0–0.3) plus the 1.0.0 rule;
+  character substitution 4–12%, with and without consistent misreads; 1,000
+  sequences per condition; dev seed 1234, test seed 5678; objective: max
+  coverage s.t. ≤ 1% wrong plates in every design condition; **scored at the
+  first election**, the moment a held violation is fined.
+- **Result** (`ocr_stabilizer_selection.md`). No config met 1% (lowest dev
+  worst case 2.0%). Selected by the noise-aware fallback (most coverage within
+  2 SE of that minimum): ≥ 3 valid reads, ≥ 35%, margin ≥ 0.3. Held-out: wrong
+  plate 0.1% without consistent misreads, 0.9–1.8% with them, at 34–70%
+  coverage; the 1.0.0 rule, 40–62% wrong at 100% coverage. The support
+  requirement did more than the margin: every config allowing a single valid
+  read had a worst case ≥ 7%.
+- **History.** At 200 sequences the experiment picked a different, costlier
+  config that did not survive 5× the sample. It then scored plates after all
+  ten reads — later than the pipeline commits — and reported the old rule at
+  3.2% and the selected one at 1.2%; an independent review found that
+  (AUDIT R1), and those numbers are withdrawn.
 - **Decision.** Shipped; exact ties abstain unconditionally.
 
 ### D3 — association merge thresholds
@@ -130,6 +165,11 @@ de-duplicated train `sha256:5ba9cee6da3943dd`; helmet-only subset
 ### R2 — OCR lock (performance)
 
 - **Hypothesis.** Once the vote has settled a plate, further OCR is wasted work.
-- **Result** (`benchmark.md`, same clip, same process, lock on vs off): see
-  [EVALUATION.md](EVALUATION.md) §4. Recorded fine identical in both arms
-  (`tests/test_pipeline_integration.py`).
+- **Config** (`benchmark.py --ocr-lock-ab`). `demo_traffic.mp4` (334×596, 120
+  frames), MPS, lock on (shipped: lock at ≥ 0.90 after 5 reads, re-read every
+  10 frames) vs off; 5 rounds per arm, interleaved A B / B A.
+- **Result** (`benchmark.md`). 19.4 → 36.7 FPS median, **+88%** (per round +80%
+  to +139%); OCR calls 120 → 30; same fine (MH02DL4596, no helmet) in all 10
+  runs, also pinned on a stub video by `tests/test_pipeline_integration.py`.
+- **Caveat.** Two earlier single-run benchmarks of the same config gave 32.6 and
+  26.9 FPS; the repeat/interleave protocol exists because of that spread.

@@ -107,7 +107,8 @@ Paired differences vs `traffic-4class@1.0.0`, **val**:
 
 **Decision: keep v1.** Rule (stated before looking): promote only if the mAP@50
 gain's CI excludes zero *and* no class regresses significantly. v2 fails both;
-probe is significantly worse.
+probe is significantly worse. (The seed-variance run below re-grades these: only
+r2's Plate regression is clearly larger than what a new seed alone produces.)
 
 This reverses the *reasons* recorded earlier, not the outcome for v2:
 
@@ -119,9 +120,45 @@ This reverses the *reasons* recorded earlier, not the outcome for v2:
   point estimate. On val it is significantly worse overall. That recommendation
   is withdrawn.
 
-### Seed variance
+### Seed variance — what the bootstrap above cannot see
 
-<!-- SEED-VARIANCE -->
+`traffic_model_seed1` is v1's recipe trained again: `args.yaml` identical except
+`seed: 1` (v1 used 0), same Ultralytics 8.4.71, same device (MPS), same
+`data.yaml`. (v1's torch version and training-time data fingerprint were not
+recorded.) Paired against v1 (`uncertainty_val.md`, `uncertainty_test.md`):
+
+| class | Δ AP@50, val [95% CI] | Δ AP@50, test [95% CI] |
+|---|---|---|
+| Plate | −0.024 [−0.048, +0.002] | −0.004 [−0.033, +0.026] |
+| WithHelmet | −0.098 [−0.347, +0.129] | −0.203 [−0.483, +0.041] |
+| WithoutHelmet | +0.009 [−0.035, +0.059] | −0.018 [−0.091, +0.057] |
+| TripleRiding | −0.047 [−0.114, +0.009] | **−0.077** [−0.158, −0.015] |
+| mAP@50 | −0.040 [−0.108, +0.025] | **−0.076** [−0.155, −0.003] |
+
+Official `val()` mAP@50 on val: 0.766 (v1) vs 0.718 (seed 1)
+(`model_comparison.md`).
+
+- **The paired image bootstrap holds the weights fixed**, so it measures which
+  *checkpoint* is better on this population of images — not which *recipe*. On
+  test, changing nothing but the seed comes out "significantly worse". Had a
+  recipe change come with it, the bootstrap would have credited the recipe.
+- One replica is one draw of the seed-to-seed difference, not an estimate of its
+  spread. But that one draw is as large as the recipe differences above: v2's
+  Plate "regression" (−0.022) is the size of this seed's Plate shift (−0.024);
+  probe's −0.051 is close to this seed's −0.040.
+- **Re-graded verdicts.** v2: its WithoutHelmet gain (+0.046 val, +0.059 test) is
+  several times this seed's shift in that class (+0.009, −0.018) — suggestive,
+  not proven; its Plate regression is within seed noise, so it is not a reason
+  to reject. Neither promotion nor rejection is supported; v1 stays as the
+  incumbent that nothing beat by more than a seed does. Probe: worse than v1 as a
+  checkpoint; "two more epochs hurt" is not established. r2: Plate −0.085 is
+  3.5× the seed shift — the most credible regression in the table.
+- **The headline numbers (§3) describe v1's checkpoint, the better of the two
+  seeds trained.** The recipe's expected performance is probably lower than
+  test mAP@50 0.769 — WithHelmet especially (0.415 vs 0.212 on test).
+- **Changed rule for future comparisons** ([RETRAINING_LOOP.md](RETRAINING_LOOP.md)):
+  ≥ 3 seeds per recipe, compare recipes by their seed means against the
+  between-seed spread; keep the paired bootstrap for claims about one checkpoint.
 
 ## 7. Robustness to image degradation (synthetic)
 
@@ -148,11 +185,13 @@ measurement on real night / rain footage.** Δ AP@50 (★ = CI excludes 0):
   false no-helmet call.
 - Resolution loss down to ¼ barely matters except for plates.
 
-## 8. What the errors actually are — manual review
+## 8. What the errors actually are — visual review
 
 `eval/results/manual_error_review.md`: the 16 highest-confidence false positives
 and 16 highest-confidence class confusions on val, inspected one by one (crops
-listed so anyone can re-check; judgements, not ground truth).
+listed so anyone can re-check; judgements, not ground truth). The reviewer was
+the AI coding assistant viewing each crop, not a human annotator; a person has
+not re-checked it yet.
 
 - **11 of 16 top "false positives" are real objects the labels omit** —
   bare-headed riders, plates (`TS 20 7607`, `MH34AJ 7050`), unlabelled riders.

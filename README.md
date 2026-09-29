@@ -26,7 +26,7 @@ flowchart LR
     V[video frame / photo] --> Y[YOLOv8n<br/>Plate · WithHelmet ·<br/>WithoutHelmet · TripleRiding]
     Y --> A[association<br/>merge rider boxes →<br/>Hungarian plate↔rider]
     A --> T[tracker<br/>Hungarian track↔vehicle<br/>tentative → confirmed → lost]
-    T --> O[OCR vote<br/>fresh plate box only ·<br/>≥3 reads · ≥0.3 margin · ties abstain]
+    T --> O[OCR vote<br/>fresh plate box only ·<br/>≥3 valid reads · ≥0.3 margin · ties abstain]
     T --> S[state machines<br/>streak + track-level gate]
     T --> SP[speed<br/>video time · calibrated]
     O --> D{confirmed AND<br/>trustworthy plate?}
@@ -79,9 +79,11 @@ standard protocol, with 95% bootstrap CIs
 | WithoutHelmet | 0.734 [0.655, 0.820] | 105 |
 | **WithHelmet** | **0.415 [0.204, 0.729]** | 27 |
 
-Model choices were made on validation with paired bootstrap tests; a
-de-duplicated-data retrain (v2) is statistically indistinguishable from v1 and
-significantly worse on plates, so v1 ships.
+Model choices were made on validation with paired bootstrap tests — and then
+checked against seed noise: retraining v1's exact recipe with a different seed
+moves mAP@50 by −0.04 on val (−0.08 on test, "significant" by the bootstrap),
+as much as any recipe change tried. No retrain beat v1 by more than that, so v1
+ships; the numbers above describe the better of two seeds.
 
 ### 2. Pipeline — *how reliably do noisy detections become a correct record?*
 
@@ -100,21 +102,40 @@ significantly worse on plates, so v1 ships.
   under moderately correlated errors; the shipped streak + "≥70% of ≥12 observed
   frames" gate flags **1.2%** (held-out seed).
 - **OCR vote, chosen by experiment** with consistent misreads in the noise
-  model: wrong-plate rate **3.0% → 1.2%** vs the previous rule, at ~30% less
-  coverage.
+  model, scored at the moment a fine is committed: at 4–12% character noise the
+  1.0.0 rule named the wrong plate for **40–62%** of simulated vehicles, the
+  shipped rule (≥ 3 agreeing reads, margin ≥ 0.3) for **≤ 1.8%** (held-out
+  seed) — by naming a plate for only 34–70% of them and withholding the rest.
+  It misses the pre-stated 1% target; that is reported, not tuned away.
 - **Error budget** (oracle ablation at the measured operating point): the
-  detector — missed rider boxes, then helmet confusion — owns ~90% of lost
-  end-to-end F1.
+  detector owns the lost end-to-end F1 — missed rider boxes 54–56%, helmet
+  confusion 40–42%, missed plate boxes 4%; OCR errors cost ~0 F1 because the
+  vote withholds instead of guessing.
 
 ### 3. Application — *how fast?*
 
-<!-- README-BENCH -->
+Apple M4, batch 1, `traffic-4class@1.0.0`
+([EVALUATION.md](docs/EVALUATION.md) §4, `eval/results/benchmark.md`):
+
+- **Video, shipped settings: 36.7 FPS** on a 334×596 clip (median of 5
+  interleaved runs, range 35.0–37.2). YOLO is 65% of frame time, OCR 24%.
+- **OCR lock** (stop re-reading a settled plate; re-check every 10 frames):
+  19.4 → 36.7 FPS, +88% (per round +80% to +139%), with the same fine in every
+  run of both arms.
+- YOLO on one 1906×1078 image: ~20–23 ms warm on either CPU or MPS — on an M4
+  neither is reliably faster for YOLOv8n.
+- The web layer is not the cost: `/analyze`'s HTTP + validation + DB overhead is
+  below the call's own run-to-run noise; the decision core takes 0.04 ms per
+  frame for three bikes.
+
+One small clip with one plate on one laptop — not a claim about a camera feed.
 
 ## What the audit found
 
 This version is the result of a hostile review of v1.0.0
 ([docs/AUDIT.md](docs/AUDIT.md)): 30 defects, each with evidence and its fix,
-and a regression test or regenerated result. The ones that mattered most:
+and a regression test or regenerated result — then an independent review of the
+fixes, which found 8 more. The ones that mattered most:
 
 - **The pipeline metrics didn't measure the shipped pipeline** — evaluators had
   private copies of the decision loop with different settings. Driving the real
@@ -132,6 +153,11 @@ and a regression test or regenerated result. The ones that mattered most:
   never label plates or heads, so the detector finds a plate on 6% of them (65%
   elsewhere) — on real footage, triple riding will mostly be *withheld*, and no
   held-out metric can show it.
+- **The fixes had defects of their own, where it mattered most.** The second
+  review found that one valid OCR read plus two unreadable ones could elect a
+  plate, that the OCR experiment scored plates after all reads while the
+  pipeline commits at the first election, and that the OCR lock let a rider
+  inherit another's plate after an identity switch.
 
 ## Try it
 
@@ -158,7 +184,7 @@ applied, and a live SHA-256 check of its evidence files.
 ## Evaluate it
 
 ```bash
-pytest                                   # 567 tests, model-free, ~95% branch coverage
+pytest                                   # 600 tests, model-free, ~95% branch coverage
 python3 evaluate_pipeline.py             # pipeline metrics, error budget (no weights)
 python3 evaluate_temporal.py             # temporal-rule experiment (no weights)
 python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results --name ocr_policy_simulation
@@ -209,7 +235,8 @@ API reference: [docs/API.md](docs/API.md). Security review: [docs/SECURITY.md](d
 - **Triple riding is rarely fineable** on real footage: the plate is not
   detected on those vehicles (dataset label gap).
 - **OCR coverage is low by design.** In simulation the vote names a plate for
-  ~28% of vehicles at 12% character noise; the rest are withheld for review.
+  34% of vehicles at 12% character noise (70% at 4%); the rest are withheld
+  for review.
 - **Riders in view for fewer than 12 frames are never fined.**
 - **Speed is an estimate** (±11 km/h with a homography, in simulation).
 - **Confidence is a ranking score, not a probability**, and only demonstrably

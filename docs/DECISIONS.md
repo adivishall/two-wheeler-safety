@@ -32,8 +32,8 @@ across frames and validates plate structure before electing a stable plate.
 
 **Why.** Frame-to-frame OCR is noisy (motion blur, angle, lighting). A single bad
 read would otherwise fine the wrong plate — and the plate is the primary key of
-the whole record. Voting + structural validation makes the elected plate robust,
-and the agreement score feeds the confidence engine.
+the whole record. With voting + structural validation one bad read cannot change
+the elected plate, and the agreement score feeds the confidence engine.
 
 ## 4. Video speed from video time, not wall-clock time
 
@@ -230,6 +230,11 @@ held violation is fined — and chooses on one seed, reports on another.
    wins — because a plain arg-min was, again, being decided by one sequence
    between configs six coverage points apart.
 
+**Result** (held-out seed, 4–12% character noise). Wrong plate 0.1% without
+consistent misreads and 0.9–1.8% with them, at 34–70% coverage; the 1.0.0 rule,
+40–62% at full coverage. It misses the 1% target in the consistent-misread
+conditions, and says so.
+
 ## 17. The photo path uses the same association, and is stricter than video
 
 **Decision.** `/analyze` decides per vehicle through `associate()`; a violation
@@ -257,12 +262,20 @@ OCR'd plate this under-fines — the safe direction.
 choices are made there. `evaluate_uncertainty.py` reports per-class AP@50 with
 image-bootstrap CIs and a *paired* bootstrap for differences. A candidate is
 promoted only if its mAP@50 gain has a CI excluding zero and no class has a
-significant regression.
+significant regression — **and**, since a seed-variance run, only if the gain
+exceeds the between-seed spread of ≥ 3 seeds per recipe.
 
 **Why.** Earlier decisions ("v2 rejected", "probe wins") compared test-split
 point estimates on a class with 27 instances. On val with CIs, v2 vs v1 is not
 distinguishable overall (and significantly worse on Plate); "probe" is
 significantly *worse*. Choosing on test is tuning on test.
+
+Then v1's recipe retrained with only the seed changed came out "significantly
+worse" on test by the same bootstrap (mAP@50 −0.076 [−0.155, −0.003]): the
+image bootstrap holds the weights fixed and cannot see training randomness. v2's
+Plate regression is no larger than that seed's Plate shift, so it is no longer a
+reason; v1 stays because nothing beat it by more than a seed does
+([MODEL_EVALUATION.md](MODEL_EVALUATION.md) §6).
 
 ## 20. mAP uses the standard protocol; the operating threshold is separate
 

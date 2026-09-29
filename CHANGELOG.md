@@ -12,7 +12,8 @@ weights whose provenance is recorded in the model manifest
 ## [1.1.0] — 2026-09-28 — audit, shared decision core, decisions by experiment
 
 A hostile review of 1.0.0 ([docs/AUDIT.md](docs/AUDIT.md)) found 30 defects in
-shipped behaviour and in published claims. This release fixes them, makes the
+shipped behaviour and in published claims, and an independent review of the
+fixes found 8 more. This release fixes them, makes the
 evaluation measure the shipped code, and replaces hand-set decision thresholds
 with ones chosen by stated experiments. Several 1.0.0 headline numbers are
 withdrawn; the replacements are below.
@@ -24,8 +25,14 @@ withdrawn; the replacements are below.
 - **Helmet confirmation**: 5-frame streak **and** ≥ 70% no-helmet over ≥ 12
   observed frames (was: streak only). Chosen by `evaluate_temporal.py`; riders
   seen < 12 frames are no longer fined.
-- **OCR vote**: ≥ 3 readings and a ≥ 0.3 margin over any competing valid plate;
-  exact ties abstain (was: 2 readings, ties broken by string order).
+- **OCR vote**: the winner needs ≥ 3 valid readings of its own and a ≥ 0.3
+  margin over any competing valid plate; exact ties abstain (was: 2 readings of
+  any kind — one valid read among unreadable ones could elect — and ties broken
+  by string order).
+- **Plate lock**: a locked plate is re-read every 10 frames, and a fine needs a
+  reading that agreed with the plate within the last 25 frames (was: locked for
+  the track's life, so after an identity switch a rider could be fined under
+  another rider's plate).
 - **No-helmet frame floor** `HELMET_MIN_CONF` 0.3 → 0.375 (val-selected).
 - **Photo path** decides per vehicle through the association layer and abstains,
   with a reason, when a plate is not a valid plate.
@@ -49,6 +56,10 @@ withdrawn; the replacements are below.
   update raced; `recent=-1` returned the whole table; rate-limiter memory grew
   without bound; RIFF/video uploads were not content-checked.
 - Demo data claimed a real model version and showed photos of other plates.
+- `/detect` honoured only `DETECT_API_KEY`, so it was open when role keys were
+  configured.
+- A violation whose plate became readable only on frames without a rider box
+  was never fined.
 
 ### Evaluation — corrected
 
@@ -59,11 +70,19 @@ withdrawn; the replacements are below.
   0.727 / 0.532 computed at conf 0.25).
 - Model selection on val with paired bootstrap CIs (`evaluate_uncertainty.py`):
   v2 "rejected for a WithHelmet regression" was noise (not distinguishable; not
-  promoted for a significant Plate regression); "promote probe" withdrawn
-  (significantly worse).
+  promoted); "promote probe" withdrawn (significantly worse).
+- Seed variance: v1's recipe retrained with seed 1 is "significantly worse" on
+  test by the same bootstrap (mAP@50 −0.076), as large as the recipe differences
+  above. Promotion now requires ≥ 3 seeds per recipe; the headline numbers are
+  v1's checkpoint, the better of two seeds.
 - Error budget by oracle ablation at the measured operating point, paired random
-  streams: the detector owns ~90% of lost end-to-end F1 (was "OCR is 76.8%", a
-  units artefact).
+  streams: the detector owns essentially all lost end-to-end F1 — rider boxes
+  54–56%, helmet class 40–42%, plate boxes 4% (was "OCR is 76.8%", a units
+  artefact).
+- OCR vote thresholds selected by simulation **scored at the moment a fine is
+  committed** (the first election), not after all reads: there the 1.0.0 rule
+  names the wrong plate for 40–62% of simulated vehicles at 4–12% character
+  noise, the 1.1.0 rule for ≤ 1.8%, at 34–70% coverage.
 - "Pipeline beats the detector at every noise level" restated precisely: more
   precise at every level; F1 advantage in the measured range, reversed at 40%.
 
@@ -73,13 +92,14 @@ withdrawn; the replacements are below.
   `audit_labels.py`, `evaluate_ocr.py --policy-sweep`; provenance on every
   result (`modules/provenance.py`); one content-based dataset fingerprint.
 - Label-coverage audit: the dataset's two sources have disjoint label sets.
-- Manual review of the top-confidence val errors (`manual_error_review.md`).
+- Visual review of the top-confidence val errors (`manual_error_review.md`;
+  AI-assisted, not yet re-checked by a person).
 - `benchmark.py`: explicit device, cold/warm, input hashes, micro-benchmarks
   (DB, decision core, API overhead), committed output.
 - Review modal shows how each violation was decided; `GET
   /api/violations/<id>/verify` re-hashes its evidence.
 - `tests/test_end_to_end.py` (real video/photo/API paths through multi-error
-  scenarios) and `tests/test_hardening.py`; 466 → 567 tests.
+  scenarios) and `tests/test_hardening.py`; 466 → 600 tests.
 - Docs: AUDIT, ERROR_ANALYSIS (taxonomy + budget; replaces ERROR_BUDGET),
   INTERVIEW; rewritten README, MODEL_EVALUATION, END_TO_END_EVALUATION,
   EVALUATION, RESUME.

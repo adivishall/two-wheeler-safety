@@ -115,8 +115,8 @@ The last row matters, but it cuts both ways. The temporal gate absorbs
 *independent* per-frame helmet flips well; it does not absorb a rider the model
 misreads consistently, and the error budget
 ([ERROR_ANALYSIS.md](ERROR_ANALYSIS.md) §2) says that after the pipeline has done
-its work, what remains is mostly the detector: missed rider boxes and helmet
-class confusion own ~90% of the lost end-to-end F1.
+its work, what remains is the detector: missed rider boxes and helmet class
+confusion own ~96% of the lost end-to-end F1, missed plate boxes the rest.
 
 ### What the current failures say
 
@@ -157,7 +157,8 @@ python3 train_traffic.py \
     --name traffic_model_v2 --model-version 1.1.0
 ```
 
-`--seed` with `deterministic=True` makes the run repeatable; the full config,
+`--seed` with `deterministic=True` makes the run as repeatable as the backend
+allows (GPU kernels, MPS included, need not be bit-exact); the full config,
 dataset content-hash, git commit and weights checksum are written automatically
 to a manifest ([MODEL_VERSIONING.md](MODEL_VERSIONING.md)).
 
@@ -189,17 +190,22 @@ Read every class, and the latency and size columns. A model that wins on mean
 mAP while dropping a class to zero is a regression, not an improvement
 (`traffic_model_helmetfix`: TripleRiding 0.000).
 
-Also compare against **seed noise**: retraining the same recipe with another
-seed moves per-class AP by itself ([MODEL_EVALUATION.md](MODEL_EVALUATION.md),
-Seed variance). A candidate that differs from the baseline by less than two
-seeds of the baseline differ from each other has not shown anything.
+Also compare against **seed noise** — the paired bootstrap holds the weights
+fixed, so it cannot see it. Retraining v1's exact recipe with seed 1 moved val
+mAP@50 by −0.040 and WithHelmet by −0.098, and on test came out "significantly
+worse" by the bootstrap ([MODEL_EVALUATION.md](MODEL_EVALUATION.md), Seed
+variance). A candidate that differs from the baseline by less than two seeds of
+the baseline differ from each other has not shown anything.
 
 ---
 
 ## 7. Promote, or don't — by a rule stated in advance
 
-The current rule: **promote only if the mAP@50 gain's paired CI excludes zero
-and no class regresses significantly.** Then:
+The current rule: **train ≥ 3 seeds of the candidate recipe (and of the
+baseline's, if it has fewer); promote only if the mean mAP@50 gain exceeds the
+between-seed spread, the chosen checkpoint's paired CI excludes zero, and no
+class regresses by more than seed noise.** (The earlier rule — paired CI alone —
+treated a new seed as a new model.) Then:
 
 1. Report the chosen model on test, once:
    `evaluate_uncertainty.py --split test --thresholds-from eval/results/uncertainty_val.json`.
@@ -213,10 +219,12 @@ and no class regresses significantly.** Then:
 5. Record the decision and its evidence in [DECISIONS.md](DECISIONS.md) and
    [MODEL_EVALUATION.md](MODEL_EVALUATION.md).
 
-Applied so far: `traffic_model_v2_dedup` — not distinguishable overall,
-significantly worse on Plate → not promoted. `traffic_model_probe` —
-significantly worse overall → not promoted (an earlier test-split
-"recommendation" to promote it is withdrawn).
+Applied so far, under the earlier rule: `traffic_model_v2_dedup` — not
+distinguishable overall, "significantly" worse on Plate by the bootstrap, but by
+less than a new seed moves Plate → not promoted, and not shown worse either;
+its WithoutHelmet gain is the one lead worth a multi-seed run.
+`traffic_model_probe` — worse than v1 as a checkpoint → not promoted (an
+earlier test-split "recommendation" to promote it is withdrawn).
 
 ---
 

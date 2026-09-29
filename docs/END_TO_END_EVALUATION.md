@@ -122,38 +122,62 @@ Held-out seed, false-flag rate (share of **helmeted** riders flagged):
 `ocr_stabilizer_selection.md`. Simulated plate sequences (10 reads each) with
 look-alike substitutions, dropped/extra characters, missed frames — and, in half
 the design conditions, a *consistent* misread (one glyph read the same wrong way
-on half the frames, as a real plate image does). 1,000 sequences per condition.
-Objective: maximise coverage s.t. ≤ 1% of vehicles get a wrong plate.
+on half the frames, as a real plate image does). 1,000 sequences per condition;
+selected on one seed, reported on another. Objective: maximise coverage s.t.
+≤ 1% of vehicles get a wrong plate in every design condition (4–12% character
+noise, with and without consistent misreads).
+
+**Scored at the moment the pipeline commits** — the first read after which the
+vote elects anything, which is when a violation held for want of a plate is
+fined. An earlier version scored the plate after all ten reads, a later and
+better-informed moment than the pipeline ever uses, and so under-counted wrong
+plates ([AUDIT.md](AUDIT.md) R1).
 
 Held-out seed:
 
-| condition | rule | coverage | **wrong plate** |
-|---|---|---:|---:|
-| 4% char noise | old (2 reads, no margin) | 0.80 | 0.4% |
-| 4% char noise | **shipped (3 reads, ≥35%, margin ≥0.3)** | 0.63 | 0.0% |
-| 4% + consistent misreads | old | 0.74 | **3.0%** |
-| 4% + consistent misreads | shipped | 0.57 | **1.2%** |
-| 12% + consistent misreads | old | 0.47 | 2.3% |
-| 12% + consistent misreads | shipped | 0.27 | 0.2% |
+| condition | 1.0.0 rule coverage | 1.0.0 rule **wrong plate** | shipped coverage | shipped **wrong plate** |
+|---|---:|---:|---:|---:|
+| 4% char noise | 1.00 | 40.2% | 0.70 | 0.1% |
+| 8% | 1.00 | 52.2% | 0.50 | 0.1% |
+| 12% | 1.00 | 62.2% | 0.34 | 0.1% |
+| 4% + consistent misreads | 1.00 | 43.6% | 0.63 | **1.8%** |
+| 8% + consistent misreads | 1.00 | 53.4% | 0.49 | 1.4% |
+| 12% + consistent misreads | 1.00 | 60.4% | 0.34 | 0.9% |
 
-The shipped vote trades roughly a third of its coverage for a 2–10× lower
-wrong-plate rate. The first run of this experiment (200 sequences) picked a
-different, far costlier config whose advantage was 2–4 sequences; at 5× the
-sample it did not survive (DECISIONS #16).
+1.0.0 rule: ≥ 2 reads *of any kind*, ≥ 35% agreement, no margin — so it could
+elect from its first readable read. Shipped: ≥ 3 valid reads for the winner,
+≥ 35% agreement, margin ≥ 0.3; exact ties abstain.
 
-Versus single-frame policies at the default noise model (12% substitution, no
-systematic misreads; `pipeline_evaluation.md` § OCR): the last frame's read is
-right 15% of the time, the most confident read 70%, the temporal vote answers
-28% of vehicles and is right on 100% of those. Every non-answer is an
-abstention, never an invalid plate.
+- **No config met the 1% target** on the dev seed (lowest worst case 2.0%). The
+  fallback treats every config within 2 standard errors of that minimum as
+  equally safe and takes the most coverage — a plain arg-min was being decided
+  by one sequence between configs six coverage points apart.
+- **The price is coverage**: the shipped vote names a plate for 34–70% of
+  vehicles and withholds the rest for review. The worst case left is the
+  consistent misread at low noise — a stable wrong glyph is exactly what a vote
+  cannot out-vote.
+- The first run of this experiment (200 sequences) picked a different config
+  whose advantage was 2–4 sequences; at 5× the sample it did not survive
+  (DECISIONS #16).
+
+Versus single-frame policies (`pipeline_evaluation.md` § OCR; 12% substitution,
+no systematic misreads, **scored after all ten reads** over 100 sequences — so
+its coverage is not the 34% above): the last frame's read is right 15% of the
+time, the most confident read 70%, the temporal vote answers 28% of vehicles and
+is right on 100% of those. Every non-answer is an abstention, never an invalid
+plate.
 
 ## 5. Error budget
 
 Oracle ablation at the measured operating point — see
 [ERROR_ANALYSIS.md](ERROR_ANALYSIS.md) §2. Summary: at the val-measured detector
-rates the pipeline loses ~2 F1 points on these scenarios, ~90% of it owned by the
-detector (rider-box recall, then helmet class confusion), across the whole OCR
-sweep.
+rates the pipeline loses ~1.5 F1 points on these scenarios, essentially all of it owned by
+the detector — missed rider boxes 54–56%, helmet class confusion 40–42%, missed
+plate boxes 4% — across the whole OCR sweep (10–50% of reads with a wrong
+glyph). OCR errors cost ~0 F1 here because the vote withholds rather than
+guessing, and these scenarios keep each plate in view long enough to collect
+agreeing reads; the OCR cost that remains is coverage and consistent misreads
+(§4), which F1 on this suite does not see.
 
 ## 6. Speed
 

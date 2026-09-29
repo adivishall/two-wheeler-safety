@@ -1,10 +1,13 @@
 # Audit register — v1.1.0
 
-A hostile review of the v1.0.0 system (30 findings), then an independent
-review of the fixes themselves (8 more, §"Found by an independent review"),
-run as four reviewers: an ML engineer,
+A hostile review of the v1.0.0 system (30 findings, plus one found later by a
+seed-variance run, E12), then an independent review of the fixes themselves
+(8 more, §"Found by an independent review"). Both were done with an AI coding
+assistant: the first taking four reviewer perspectives in turn (an ML engineer,
 a backend engineer, a computer-vision interviewer and a skeptical hiring
-manager. Each finding is a defect in shipped behaviour or in a published claim,
+manager), the second a separate AI agent given only the branch. No human
+reviewer was involved; every finding was confirmed by running code, and each
+row names its evidence. Each finding is a defect in shipped behaviour or in a published claim,
 with the evidence that it was real, the commit that fixed it, and the test or
 result file that keeps it fixed. Findings that are *limitations* rather than
 defects live in [ERROR_ANALYSIS.md](ERROR_ANALYSIS.md).
@@ -40,6 +43,7 @@ impact; **L** = hardening.
 | E9 | M | **Two "dataset versions" for one dataset, neither content-based.** Both hashed per-class *counts*; one also hashed the absolute path. | `sha256:8d09…` (model manifest) vs `sha256:bef0…` (dataset manifest) for the same data | `9ec9813` — one content fingerprint | `test_provenance.py::test_fingerprint_changes_when_a_box_moves_but_counts_do_not` |
 | E11 | M | **Benchmark labelled CPU numbers "mps".** Ultralytics only auto-selects CUDA; on Apple silicon every predict ran on the CPU while `benchmark.py` recorded the requested device. The app and CLIs never used the GPU either. | `model.predictor.device` after a default predict: `cpu` | `5e08614` — `DETECT_DEVICE` resolved and passed everywhere; results record the device used | `benchmark.md` measures CPU and MPS side by side |
 | E10 | M | **AP replica bug caught before use.** An older compute_ap formula credits a spurious triangle above max recall (0.75 vs 0.495). | pinned against `ultralytics.utils.metrics.compute_ap` | `9ec9813` | `test_detection_stats.py::test_ap_curve_matches_ultralytics_compute_ap` |
+| E12 | M | **A checkpoint-level test used as a recipe comparison.** The paired image bootstrap holds the weights fixed; M1–M3 verdicts ("v2 significantly worse on Plate") treated it as evidence about training changes. | v1's recipe retrained with only the seed changed is "significantly worse" on test (mAP@50 −0.076 [−0.155, −0.003]); its Plate shift (−0.024) matches v2's "regression" | promotion needs ≥ 3 seeds per recipe; M1–M3 re-graded; headline numbers labelled as the better of two seeds | `uncertainty_val.md`, `uncertainty_test.md` (`traffic_model_seed1`) |
 
 ## Application and data integrity
 
@@ -65,8 +69,9 @@ impact; **L** = hardening.
 
 ## Found by an independent review of the 1.1.0 changes
 
-After the fixes above, a separate reviewer audited *this* branch's code and
-found eight more defects, each confirmed by running code. They are recorded
+After the fixes above, a separate AI review agent — given the branch, not the
+reasoning behind it — audited *this* branch's code and found eight more
+defects, each confirmed by running code. They are recorded
 here because the most serious ones sat exactly where a fine lands on the wrong
 owner — the plate-identity layer — and two survived the first round of fixes.
 All fixed in `3902441`, each with a regression test.
