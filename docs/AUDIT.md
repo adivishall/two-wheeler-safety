@@ -1,13 +1,14 @@
 # Audit register — v1.1.0
 
 A hostile review of the v1.0.0 system (30 findings, plus two found later: E12
-by a seed-variance run, E13 by a final cross-check of the docs), then an independent review of the fixes themselves
-(8 more, §"Found by an independent review"). Both were done with an AI coding
-assistant: the first taking four reviewer perspectives in turn (an ML engineer,
-a backend engineer, a computer-vision interviewer and a skeptical hiring
-manager), the second a separate AI agent given only the branch. No human
-reviewer was involved; every finding was confirmed by running code, and each
-row names its evidence. Each finding is a defect in shipped behaviour or in a published claim,
+by a seed-variance run, E13 by a final cross-check of the docs); an independent
+review of those fixes (8 more, §"Found by an independent review"); and three
+found while building the field-evaluation layer (§"Found in the field-evaluation
+wave"). All of it was done with an AI coding assistant: the first review taking
+four reviewer perspectives in turn (an ML engineer, a backend engineer, a
+computer-vision interviewer and a skeptical hiring manager), the second a
+separate AI agent given only the branch. No human reviewer was involved; every
+finding was confirmed by running code, and each row names its evidence. Each finding is a defect in shipped behaviour or in a published claim,
 with the evidence that it was real, the commit that fixed it, and the test or
 result file that keeps it fixed. Findings that are *limitations* rather than
 defects live in [ERROR_ANALYSIS.md](ERROR_ANALYSIS.md).
@@ -87,6 +88,19 @@ All fixed in `3902441`, each with a regression test.
 | R6 | L | OCR time profiled per frame, not per call (benchmark under-counted calls with several plates). | per-call accounting | `test_profiler_counts_every_ocr_call_not_every_frame` |
 | R7 | L | Provenance `dirty` ignored untracked source files — and (found while regenerating) counted edits to docs, so results regenerated during a docs edit were stamped dirty. | untracked code counts; `*.md` doesn't | `test_dirty_flag_ignores_generated_results` |
 | R8 | L | Error-budget OCR stream took a variable number of draws, so one oracle shifted another stage's outcomes. | constant draws per opportunity | — (noise, not bias) |
+
+## Found in the field-evaluation wave
+
+Defects in shipped code found while building the field-evaluation layer. The
+design mistakes caught before anything shipped (model-guided relabelling of
+evaluation data, demo rows admitted as review labels, mAP compared across
+different class mixes) are recorded as decisions instead (DECISIONS #26–#27).
+
+| # | sev | finding | fix | pinned by |
+|---|---|---|---|---|
+| W1 | H | **Calibration was chosen in-sample.** `fit_and_evaluate` fitted Platt/isotonic on all rows and picked the lowest in-sample ECE; on already-calibrated scores it adopted a calibrator in ~30 of 40 simulated datasets, and `--save` would have shipped it. | `32b7060` — out-of-fold selection by Brier with a bootstrap CI; `insufficient_data` below 30/30 outcomes | `test_calibrated_scores_are_not_replaced_by_an_in_sample_winner` |
+| W2 | M | Committed results recorded absolute local paths (`/Users/<name>/…`: Ultralytics `save_dir`, resolved image dirs). | `9084003` — `portable_path()` | `test_portable_path_never_writes_the_local_home_into_a_result` |
+| W3 | M | `make eval-compare` compared models on the test split; `make eval-ocr` omitted the threshold selection and would overwrite its committed result. | `89fba50` | — (Makefile; `make eval-ocr` reproduced the committed result) |
 
 ## What the review did not find
 

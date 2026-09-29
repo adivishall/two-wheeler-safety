@@ -231,3 +231,49 @@ def test_field_dataset_cli_round_trip(tmp_path, capsys):
     field_fixture.build(str(bad), schema_version="0.9", write_images=False)
     assert field_dataset.main(["validate", str(bad)]) == 2
     assert "schema_version" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("mutate, fragment", [
+    (lambda m, v, f: m["cameras"].append(dict(m["cameras"][0])), "duplicate"),
+    (lambda m, v, f: m["cameras"][0].update(homography=[[1, 0], [0, 1]]), "homography must be 3x3"),
+    (lambda m, v, f: m["sequences"][0].update(camera_id="nope"), "unknown camera_id"),
+    (lambda m, v, f: m["sequences"][0].update(fps=0), "fps must be > 0"),
+    (lambda m, v, f: m["sequences"][0].update(frames_dir=None), "needs video_path or frames_dir"),
+    (lambda m, v, f: m["sequences"][0].update(lighting="dim"), "lighting="),
+    (lambda m, v, f: v[0].update(vehicle_id="bad id"), "vehicle_id missing"),
+    (lambda m, v, f: v.append(dict(v[0])), "duplicate vehicle"),
+    (lambda m, v, f: f.append(dict(f[0])), "duplicate frame"),
+    (lambda m, v, f: f[0]["objects"].append({"vehicle_id": "ghost", "role": "rider",
+                                             "box": [1, 1, 5, 5]}), "no vehicle 'ghost'"),
+    (lambda m, v, f: f[0]["objects"][0].update(box=[50, 50, 10, 10]), "x1<x2"),
+    (lambda m, v, f: f[0].update(frame_index=99), "outside the vehicle's first/last frame"),
+    (lambda m, v, f: f[0]["objects"][0].update(role="driver"), "role="),
+])
+def test_every_schema_rule_is_enforced(tmp_path, mutate, fragment):
+    import copy
+
+    root = tmp_path / "base"
+    field_fixture.build(str(root), write_images=False)
+    meta = json.load(open(root / "dataset.json"))
+    vehicles = [json.loads(line) for line in open(root / "vehicles.jsonl")]
+    frames = [json.loads(line) for line in open(root / "frames.jsonl")]
+    meta, vehicles, frames = copy.deepcopy(meta), copy.deepcopy(vehicles), copy.deepcopy(frames)
+    mutate(meta, vehicles, frames)
+    json.dump(meta, open(root / "dataset.json", "w"))
+    with open(root / "vehicles.jsonl", "w") as fh:
+        fh.writelines(json.dumps(v) + "\n" for v in vehicles)
+    with open(root / "frames.jsonl", "w") as fh:
+        fh.writelines(json.dumps(f) + "\n" for f in frames)
+    with pytest.raises(FieldDataError) as err:
+        load_dataset(str(root))
+    assert any(fragment in issue for issue in err.value.issues), err.value.issues
+
+
+def test_invalid_json_lines_and_a_missing_dataset_are_reported(tmp_path):
+    with pytest.raises(FieldDataError, match="no dataset.json"):
+        load_dataset(str(tmp_path / "nothing"))
+    root = field_fixture.build(str(tmp_path / "j"), write_images=False)
+    with open(os.path.join(root, "vehicles.jsonl"), "a") as fh:
+        fh.write("{not json\n")
+    with pytest.raises(FieldDataError, match="invalid JSON"):
+        load_dataset(root)

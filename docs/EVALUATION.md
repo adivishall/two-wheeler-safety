@@ -48,7 +48,12 @@ version of all of this: [AUDIT.md](AUDIT.md).
 | `evaluate_ocr.py --simulate --sweep --policy-sweep` | `ocr_policy_simulation.json`, `ocr_stabilizer_selection.md` | nothing |
 | `evaluate_ocr.py --labels data/ocr_sanity/labels.csv` | EasyOCR on synthetic plate renders (a tooling check, not accuracy) | easyocr |
 | `benchmark.py` | `benchmark.{json,md}` | weights + local image/video |
-| `calibrate_confidence.py` | reliability / ECE / Brier, Platt and isotonic fits | reviewed outcomes (none yet) |
+| `calibrate_confidence.py --db` | `calibration.{json,md}` — out-of-fold ECE/MCE/Brier, precision/recall by threshold; NOT MEASURED below 30/30 outcomes | reviewed pipeline output (none yet) |
+| `evaluate_conditions.py` | `conditions.md`, `conditions_{val,test}.json` — detector AP by measured image condition, replication on test | weights + dataset |
+| `compare_recipes.py` | `recipe_comparison_val.{json,md}` — recipes by seed means (images + seeds bootstrapped) | ≥ 3 checkpoints per recipe for a verdict |
+| `select_for_labeling.py` | `labeling_queue*.{json,md}` — active-learning queue + blind held-out audit sample | weights + dataset (+ database) |
+| `evaluate_field.py` | `field_evaluation.{json,md}` — OCR policies and per-condition end to end on labelled footage | a field dataset (none yet: NOT MEASURED) |
+| `field_dataset.py` | validate, split-lock, coverage, guarded training export | a field dataset |
 
 `manual_error_review.{json,md}` is the one hand-made result: a visual review of
 the top-confidence val errors, listed crop by crop so anyone can re-check it.

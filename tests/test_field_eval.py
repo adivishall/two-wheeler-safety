@@ -204,3 +204,41 @@ def test_field_report_renders_every_section(tmp_path):
         "matrix": condition_matrix(ds, [_run(ds)])})
     assert "Fine precision **1.0**, recall **1.0**" in md
     assert "### OCR by lighting" in md and "| lighting: night |" in md
+
+
+def test_frames_come_from_a_directory_by_index_or_from_a_video(tmp_path):
+    import cv2
+    import numpy as np
+
+    from modules.field_eval import iter_frames
+
+    root = field_fixture.build(str(tmp_path / "fr"))
+    ds = load_dataset(root)
+    idx = [i for i, _ in iter_frames(ds, "s1")]
+    assert idx == [0, 1, 2]  # numeric stems -> frame indices
+    video = tmp_path / "fr" / "clip.avi"
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"MJPG"), 25, (64, 48))
+    for k in range(5):
+        writer.write(np.full((48, 64, 3), k * 40, dtype=np.uint8))
+    writer.release()
+    ds.sequences["s1"].frames_dir = None
+    ds.sequences["s1"].video_path = "clip.avi"
+    assert [i for i, _ in iter_frames(ds, "s1")] == [0, 1, 2, 3, 4]
+
+
+def test_plate_reads_are_taken_on_labelled_boxes_in_frame_order_and_timed(tmp_path):
+    from modules.field_eval import collect_plate_reads
+
+    ds = _dataset(tmp_path)
+    seen = []
+
+    def read(image, box):
+        seen.append((image, box))
+        return ("MH12AB1234", 0.9) if box[0] < 300 else None
+
+    reads = collect_plate_reads(ds, [ds.vehicles[("s1", "v1")], ds.vehicles[("s1", "v2")]],
+                                read, lambda f: f.frame_index)
+    assert [s[0] for s in seen[:2]] == [0, 0]  # one image load serves both plates
+    assert len(reads[("s1", "v1")]) == 10 and reads[("s1", "v1")][0].text == "MH12AB1234"
+    assert reads[("s1", "v2")][0].text is None  # unreadable -> a missed read, not dropped
+    assert all(r.latency_ms >= 0 for r in reads[("s1", "v1")])

@@ -206,7 +206,10 @@ The current rule: **train ≥ 3 seeds of the candidate recipe (and of the
 baseline's, if it has fewer); promote only if the mean mAP@50 gain exceeds the
 between-seed spread, the chosen checkpoint's paired CI excludes zero, and no
 class regresses by more than seed noise.** (The earlier rule — paired CI alone —
-treated a new seed as a new model.) Then:
+treated a new seed as a new model.) The test is `compare_recipes.py`
+(`detection_stats.recipe_comparison`): recipe AP = mean over seeds, images and
+seeds bootstrapped together, `insufficient seeds` below three, any class
+significantly worse vetoes (docs/FIELD_EVALUATION.md §7). Then:
 
 1. Report the chosen model on test, once:
    `evaluate_uncertainty.py --split test --thresholds-from eval/results/uncertainty_val.json`.

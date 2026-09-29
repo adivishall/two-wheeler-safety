@@ -9,6 +9,42 @@ repo (all gitignored) — a release is the *code*, evaluated against locally-hel
 weights whose provenance is recorded in the model manifest
 ([docs/MODEL_VERSIONING.md](docs/MODEL_VERSIONING.md)).
 
+## [Unreleased] — field evaluation loop
+
+The layer that takes the project from synthetic evidence toward real
+traffic-camera evidence ([docs/FIELD_EVALUATION.md](docs/FIELD_EVALUATION.md),
+[docs/ROADMAP.md](docs/ROADMAP.md)). Pipeline decisions are unchanged
+(`PIPELINE_VERSION` stays 1.1.0); the database gains review-label columns
+(migrated in place).
+
+### Added
+
+- **Field dataset** (`modules/field_data.py`, `field_dataset.py`): camera /
+  sequence / vehicle / frame labels with annotator and reviewer provenance;
+  development / validation / held-out / external splits assigned per sequence
+  or camera-day and frozen in a hash-checked lock; a training export — and a
+  `train_traffic.py --field-dataset` guard — that refuse evaluation frames,
+  copies and near-duplicates.
+- **Field evaluation** (`modules/field_eval.py`, `evaluate_field.py`): OCR
+  policies on real plate crops by condition; the shipped pipeline over labelled
+  sequences with every error charged to the first failing stage. Writes NOT
+  MEASURED without a dataset (the current state).
+- **Detector by measured image condition** (`evaluate_conditions.py`) on the
+  real held-out images, with replication on test.
+- **Reviews as labels**: dismissal reason, corrected plate and reviewer
+  (`POST /api/violations/<id>/review`); `Database.review_labels()` exports only
+  pipeline-produced outcomes.
+- **Active learning** (`select_for_labeling.py`): information-ranked,
+  diversity-aware training queue and a blind random audit of held-out labels.
+- **Recipe comparison by seed means** (`compare_recipes.py`).
+
+### Fixed
+
+- Calibration was selected in-sample and adopted calibrators on
+  already-calibrated scores (AUDIT W1); now out of fold with a Brier CI.
+- Committed results carried absolute local paths (W2); `make eval-compare`
+  selected on test and `make eval-ocr` dropped the threshold selection (W3).
+
 ## [1.1.0] — 2026-09-28 — audit, shared decision core, decisions by experiment
 
 A hostile review of 1.0.0 ([docs/AUDIT.md](docs/AUDIT.md)) found 30 defects in

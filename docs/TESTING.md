@@ -10,7 +10,7 @@ weights, or the ~2 GB DL stack; it runs in well under a minute on a laptop.
 
 ```bash
 pip install -r requirements-ci.txt -c constraints-ci.txt   # pinned, model-free
-pytest                        # 602 tests
+pytest                        # 692 tests
 pytest --cov --cov-report=term-missing   # with branch coverage
 ```
 
@@ -34,7 +34,7 @@ plate a crop shows. An OCR call on a crop that is not a plate â€” a stale box â€
 reads nothing and is counted. That is how the stale-plate-box bug was caught and
 how it stays fixed.
 
-## What is covered (602 tests across 44 files)
+## What is covered (692 tests across 50 files)
 
 | Area | Files | Focus |
 |------|-------|-------|
@@ -48,7 +48,9 @@ how it stays fixed.
 | Pipeline evaluation | `test_system_eval.py`, `test_pipeline_eval.py`, `test_pipeline_integration.py` | scenarios through the shipped core, identity-split scoring, naive-vs-pipeline claim as stated, error-budget ablation (paired streams), OCR-lock equivalence |
 | Detector evaluation | `test_detection_stats.py`, `test_evaluation.py`, `test_eval_artifacts.py`, `test_confidence_analysis.py` | AP pinned to Ultralytics `compute_ap`, bootstrap/paired CIs, threshold transfer, matching |
 | Data & provenance | `test_dataset_audit.py`, `test_label_audit.py`, `test_provenance.py`, `test_model_manifest.py` | leakage, label integrity, disjoint-label detection, corruption determinism, content fingerprint (location-independent, box-sensitive) |
-| Speed & calibration | `test_speed.py`, `test_speed_eval.py`, `test_calibration.py` | video-time speed, homography, ECE/Brier |
+| Speed & calibration | `test_speed.py`, `test_speed_eval.py`, `test_calibration.py` | video-time speed, homography, ECE/Brier, out-of-fold calibrator selection |
+| Field data & evaluation | `test_field_data.py`, `test_field_eval.py`, `test_image_conditions.py`, `test_recipe_compare.py` | schema validation, frozen group splits, leakage guard (path/copy/re-encode), trainer guard, stage attribution per broken stage, NOT MEASURED paths, COCO range matching, replication rules, seed-aware recipe verdicts |
+| Review labels & active learning | `test_review_labels.py`, `test_active_learning.py` | structured dismissals, demo/legacy rows excluded from labels, calibration CLI, signals, diversity, blind held-out audit |
 | Evidence, jobs, perf, CLIs | `test_evidence.py`, `test_jobs.py`, `test_profiling.py`, `test_benchmark.py`, `test_evaluate_cli.py`, `test_evaluation_cli_smoke.py`, `test_main_helpers.py`, `test_make_ocr_sanity_set.py`, `test_eval_report.py` | tamper-evident packages, job lifecycle, profiler math, every CLI parses and produces well-formed reports |
 
 ## Branch coverage
