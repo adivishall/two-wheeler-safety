@@ -6,7 +6,7 @@
 
 Sources: detector predictions on the training pool (-> ``training_relabel``);
 pending pipeline decisions with evidence sidecars and withheld violations from
-the database (-> ``review``). Writes ``eval/results/labeling_queue.{jsonl,md}``;
+the database (-> ``review``). Writes ``eval/results/labeling_queue.{json,md}``;
 the report compares each signal's share in the queue with its base rate.
 
 Evaluation images are NEVER chosen by model signals. Relabelling only the
@@ -142,7 +142,7 @@ def render(queue, pool, pool_sizes, budget, review_pool, audit_n=0) -> str:
              "selection decays repeats of a pattern and skips near-duplicate images.",
              "- Evaluation images are **not** model-selected: they get a separate, "
              "seeded uniform-random audit sample, labelled blind to predictions "
-             "(`labeling_queue_eval_audit.jsonl`). Model-guided relabelling of held-out "
+             "(`labeling_queue_eval_audit.json`). Model-guided relabelling of held-out "
              "data would inflate measured accuracy.",
              f"- Blind evaluation audit: **{audit_n}** val/test images.",
              "- Whether this queue beats random selection is **not yet measured** — that "
@@ -231,12 +231,10 @@ def main(argv=None) -> int:
         pool += rc
     queue = select(pool, args.budget, decay=args.decay)
     os.makedirs(args.out, exist_ok=True)
-    with open(os.path.join(args.out, f"{args.name}.jsonl"), "w") as fh:
-        for c in queue:
-            fh.write(json.dumps(c.as_dict(), sort_keys=True) + "\n")
-    with open(os.path.join(args.out, f"{args.name}_eval_audit.jsonl"), "w") as fh:
-        for item in audit:
-            fh.write(json.dumps(item, sort_keys=True) + "\n")
+    with open(os.path.join(args.out, f"{args.name}.json"), "w") as fh:
+        json.dump([c.as_dict() for c in queue], fh, indent=1, sort_keys=True)
+    with open(os.path.join(args.out, f"{args.name}_eval_audit.json"), "w") as fh:
+        json.dump(audit, fh, indent=1, sort_keys=True)
     sizes = {k: len(v) for k, v in rows_by_split.items()}
     with open(os.path.join(args.out, f"{args.name}.md"), "w") as fh:
         fh.write(render(queue, pool, sizes, args.budget, review_pool, len(audit)))
