@@ -322,6 +322,10 @@ def load_dataset(root: str, *, check_files: bool = False) -> FieldDataset:
                            "plate_visibility", issues)
         if visibility == "none" and plate:
             issues.append(f"{where}: plate_text given for a plate labelled not visible")
+        if visibility == "full" and not plate:
+            issues.append(f"{where}: a fully visible plate needs its plate_text (use "
+                          "'partial' if a human can't read it) — otherwise a missed fine "
+                          "is scored as correctly withheld")
         if plate and not matches_structure(plate):
             warnings.append(f"{where}: plate {plate!r} is not shaped like an Indian plate — "
                             "the pipeline's structural check would reject it")
@@ -354,6 +358,12 @@ def load_dataset(root: str, *, check_files: bool = False) -> FieldDataset:
         path = _safe_rel(f.get("frame_path"), where, issues)
         if not path:
             issues.append(f"{where}: frame_path is required")
+        elif sequences[sid].frames_dir and os.path.dirname(path) == os.path.normpath(
+                sequences[sid].frames_dir):
+            stem = os.path.splitext(os.path.basename(path))[0]
+            if not stem.isdigit() or int(stem) != idx:
+                issues.append(f"{where}: files in a frames_dir must be named by frame index "
+                              f"({path!r} for frame {idx}); the evaluator indexes by name")
         elif check_files and not os.path.exists(os.path.join(root, path)):
             issues.append(f"{where}: file {path} not found")
         cam = cameras.get(sequences[sid].camera_id)
@@ -401,6 +411,9 @@ def load_dataset(root: str, *, check_files: bool = False) -> FieldDataset:
 # -- splits ---------------------------------------------------------------------
 
 LOCK_NAME = "splits.lock.json"
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+PERCEPTUAL_BITS = 5
+BOX_MATCH_IOU = 0.7
 
 
 def _hash_unit(salt: str, key: str) -> float:
@@ -409,7 +422,8 @@ def _hash_unit(salt: str, key: str) -> float:
 
 
 def _lock_digest(lock: dict) -> str:
-    body = {k: lock[k] for k in ("group_by", "salt", "external_cameras", "assignments")}
+    body = {k: lock.get(k) for k in ("group_by", "salt", "external_cameras", "assignments",
+                                     "sequences", "eval_content", "eval_objects")}
     return "sha256:" + hashlib.sha256(
         json.dumps(body, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -426,15 +440,132 @@ def read_lock(root: str) -> dict | None:
     return lock
 
 
+def verify_lock(ds: FieldDataset, lock: dict) -> list[str]:
+    """Problems that make the lock's view of the dataset untrustworthy: a locked
+    sequence whose group changed (its camera or date was edited — it would be
+    re-hashed into another split) or that disappeared (renamed or removed — its
+    frames could come back under a new name in another split)."""
+    problems = []
+    for sid, rec in sorted(lock.get("sequences", {}).items()):
+        if sid not in ds.sequences:
+            problems.append(f"sequence {sid} ({rec['split']}) is in the lock but no longer in "
+                            "the dataset — renamed or removed after assignment")
+        elif ds.group_key(sid, lock["group_by"]) != rec["group"]:
+            problems.append(f"sequence {sid} ({rec['split']}) moved from group {rec['group']} "
+                            f"to {ds.group_key(sid, lock['group_by'])} after assignment")
+    return problems
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _norm_box(box, w: int, h: int) -> list[float]:
+    return [round(box[0] / w, 4), round(box[1] / h, 4), round(box[2] / w, 4),
+            round(box[3] / h, 4)]
+
+
+def _crop_dhash(image, nbox) -> int | None:
+    """Perceptual hash of one object's crop (normalized box, 10% padding) — a
+    re-encoded or resized copy keeps it; another moment of the same fixed
+    camera doesn't, unlike a whole-frame hash that matches the background."""
+    from modules.dataset_audit import dhash
+
+    h, w = image.shape[:2]
+    x1, y1, x2, y2 = nbox
+    px, py = 0.1 * (x2 - x1), 0.1 * (y2 - y1)
+    c = image[max(0, int((y1 - py) * h)):min(h, int((y2 + py) * h)),
+              max(0, int((x1 - px) * w)):min(w, int((x2 + px) * w))]
+    if c.size == 0 or min(c.shape[:2]) < 4:
+        return None
+    return dhash(c)
+
+
+def object_signature(path: str, nboxes: list[list[float]]) -> list[list]:
+    """``[[x1, y1, x2, y2, dhash], ...]`` (normalized boxes) for one image."""
+    import cv2
+
+    img = cv2.imread(path)
+    if img is None:
+        return []
+    out = []
+    for nb in nboxes:
+        dh = _crop_dhash(img, nb)
+        if dh is not None:
+            out.append([*nb, dh])
+    return out
+
+
+def _signatures_match(train_sig: list, eval_sig: list, bits: int) -> bool:
+    """Same frame, re-encoded: every object in the training image has an
+    evaluation object at the same place (IoU >= 0.7) with a near-identical crop."""
+    from modules.evaluation import iou
+
+    if not train_sig or not eval_sig:
+        return False
+    for tb in train_sig:
+        if not any(iou(tb[:4], eb[:4]) >= BOX_MATCH_IOU and bin(tb[4] ^ eb[4]).count("1") <= bits
+                   for eb in eval_sig):
+            return False
+    return True
+
+
+def _sequence_files(ds: FieldDataset, sid: str) -> list[str]:
+    """Every file of a sequence: its labelled frames and, for a frame directory,
+    every image in it (unlabelled frames of an evaluation sequence are still
+    evaluation footage)."""
+    files = {ds.frame_file(f) for f in ds.frames if f.sequence_id == sid}
+    seq = ds.sequences[sid]
+    if seq.frames_dir:
+        d = os.path.join(ds.root, seq.frames_dir)
+        if os.path.isdir(d):
+            files |= {os.path.join(d, n) for n in os.listdir(d)
+                      if os.path.splitext(n)[1].lower() in IMAGE_EXTS}
+    return sorted(os.path.normpath(f) for f in files)
+
+
+def _record_eval_content(ds: FieldDataset, lock: dict) -> None:
+    """Append (never remove) the byte hash of every evaluation file and the
+    object signature of every labelled evaluation frame, so the guard still
+    works if a file is later renamed, moved or deleted."""
+    content = lock.setdefault("eval_content", {})
+    objects = lock.setdefault("eval_objects", {})
+    for sid in ds.sequences:
+        split = split_of(ds, lock, sid)
+        if split not in EVAL_SPLITS:
+            continue
+        for path in _sequence_files(ds, sid):
+            if os.path.exists(path):
+                content.setdefault(_sha256(path),
+                                   {"split": split, "path": os.path.relpath(path, ds.root)})
+        for f in ds.frames:
+            if f.sequence_id != sid or not f.objects:
+                continue
+            path = ds.frame_file(f)
+            rel = os.path.relpath(path, ds.root)
+            cam = ds.cameras.get(ds.sequences[sid].camera_id)
+            if rel in objects or not os.path.exists(path) or not cam or not cam.resolution:
+                continue
+            w, h = cam.resolution
+            objects[rel] = object_signature(path, [_norm_box(o.box, w, h) for o in f.objects])
+
+
 def assign_splits(ds: FieldDataset, *, salt: str | None = None, ratios: dict | None = None,
                   external_cameras=(), group_by: str = "sequence",
                   write: bool = True) -> dict:
-    """Assign every not-yet-assigned group to a split and return the lock.
+    """Assign every not-yet-assigned sequence to a split and return the lock.
 
-    Existing assignments are kept verbatim — changing ``ratios`` later only
-    affects new groups — and a group can never move. EXTERNAL cameras are fixed
-    when the lock is created; naming a camera EXTERNAL after its footage was
-    already assigned elsewhere is refused (its sequences may have been used)."""
+    The lock records each sequence's split and group; a sequence can never move,
+    and if one was renamed, removed or re-grouped (camera or date edited) after
+    assignment this refuses to continue (:func:`verify_lock`). Changing
+    ``ratios`` only affects new groups. EXTERNAL cameras are fixed when first
+    named; naming one after its footage was assigned elsewhere is refused. The
+    byte hashes and object signatures of evaluation files are appended to the
+    lock, so the guard doesn't depend on file names staying put."""
     if group_by not in GROUP_BY:
         raise ValueError(f"group_by must be one of {sorted(GROUP_BY)}")
     lock = read_lock(ds.root)
@@ -445,11 +576,15 @@ def assign_splits(ds: FieldDataset, *, salt: str | None = None, ratios: dict | N
     if lock is None:
         lock = {"schema_version": SCHEMA_VERSION, "group_by": group_by,
                 "salt": salt or hashlib.sha256(ds.name.encode()).hexdigest()[:12],
-                "external_cameras": sorted(external_cameras), "assignments": {}}
+                "external_cameras": sorted(external_cameras), "assignments": {},
+                "sequences": {}, "eval_content": {}, "eval_objects": {}}
     else:
         if group_by != lock["group_by"]:
             raise ValueError(f"lock groups by {lock['group_by']!r}; can't switch to "
                              f"{group_by!r} without re-splitting everything")
+        problems = verify_lock(ds, lock)
+        if problems:
+            raise LeakageError(problems)
         new_external = set(external_cameras) - set(lock["external_cameras"])
         for cam in sorted(new_external):
             used = sorted(k for k, a in lock["assignments"].items()
@@ -466,21 +601,24 @@ def assign_splits(ds: FieldDataset, *, salt: str | None = None, ratios: dict | N
              (HELD_OUT, ratios.get(HELD_OUT, 0.0))]
     now = datetime.now(timezone.utc).isoformat()
     for sid, seq in sorted(ds.sequences.items()):
-        key = ds.group_key(sid, lock["group_by"])
-        if key in lock["assignments"]:
+        if sid in lock["sequences"]:
             continue
-        if seq.camera_id in external:
-            split, rule = EXTERNAL, "external_camera"
-        else:
-            u, acc, split = _hash_unit(lock["salt"], key), 0.0, HELD_OUT
-            for name, share in order:
-                acc += share
-                if u < acc:
-                    split = name
-                    break
-            rule = "hash"
-        lock["assignments"][key] = {"split": split, "rule": rule, "assigned_at": now,
-                                    "camera_id": seq.camera_id}
+        key = ds.group_key(sid, lock["group_by"])
+        if key not in lock["assignments"]:
+            if seq.camera_id in external:
+                split, rule = EXTERNAL, "external_camera"
+            else:
+                u, acc, split = _hash_unit(lock["salt"], key), 0.0, HELD_OUT
+                for name, share in order:
+                    acc += share
+                    if u < acc:
+                        split = name
+                        break
+                rule = "hash"
+            lock["assignments"][key] = {"split": split, "rule": rule, "assigned_at": now,
+                                        "camera_id": seq.camera_id}
+        lock["sequences"][sid] = {"group": key, "split": lock["assignments"][key]["split"]}
+    _record_eval_content(ds, lock)
     lock["lock_hash"] = _lock_digest(lock)
     if write:
         with open(os.path.join(ds.root, LOCK_NAME), "w") as fh:
@@ -489,8 +627,9 @@ def assign_splits(ds: FieldDataset, *, salt: str | None = None, ratios: dict | N
 
 
 def split_of(ds: FieldDataset, lock: dict, sequence_id: str) -> str | None:
-    a = lock["assignments"].get(ds.group_key(sequence_id, lock["group_by"]))
-    return a["split"] if a else None
+    """The locked split of a sequence (None if it was never assigned)."""
+    rec = lock.get("sequences", {}).get(sequence_id)
+    return rec["split"] if rec else None
 
 
 def frames_in(ds: FieldDataset, lock: dict, split: str) -> list[FrameLabel]:
@@ -503,39 +642,35 @@ def vehicles_in(ds: FieldDataset, lock: dict, split: str) -> list[VehicleLabel]:
 
 # -- leakage guard and training export ------------------------------------------
 
-def _sha256(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _dhash_file(path: str) -> int | None:
-    import cv2
-
-    from modules.dataset_audit import dhash
-
-    img = cv2.imread(path)
-    return dhash(img) if img is not None else None
-
-
 def check_no_eval_leakage(train_files: list[str], ds: FieldDataset, lock: dict, *,
-                          near_duplicate_bits: int = 5, perceptual: bool = True) -> None:
+                          train_boxes: dict | None = None,
+                          near_duplicate_bits: int = PERCEPTUAL_BITS,
+                          perceptual: bool = True) -> dict:
     """Raise :class:`LeakageError` if any training file IS evaluation data.
 
-    Three independent checks, because each alone has a hole: the evaluation
-    split's group assignment (catches a frame exported from the wrong split),
-    a byte hash (catches the same file copied under another name) and a
-    perceptual dHash within ``near_duplicate_bits`` (catches a re-encode or
-    resize of an evaluation frame)."""
-    eval_frames = [f for f in ds.frames if split_of(ds, lock, f.sequence_id) in EVAL_SPLITS]
-    eval_paths = {os.path.normpath(ds.frame_file(f)) for f in eval_frames}
-    eval_existing = [p for p in eval_paths if os.path.exists(p)]
-    eval_sha = {_sha256(p): p for p in eval_existing}
-    eval_dh = ({p: h for p in eval_existing if (h := _dhash_file(p)) is not None}
-               if perceptual else {})
-    problems = []
+    Checks, because each alone has a hole: the lock is still consistent with
+    the dataset; the file is not an evaluation file (labelled frame, or any
+    image in an evaluation sequence's frame directory); its bytes match no
+    evaluation file ever recorded in the lock (a renamed copy; a deleted
+    original); and — when its boxes are known (``train_boxes``: path ->
+    normalized boxes) — its objects don't all reappear at the same places with
+    near-identical crops in one evaluation frame (a re-encode or resize). An
+    evaluation frame that is missing from disk and was never hashed makes the
+    check fail closed. Returns counts of what was checked."""
+    problems = verify_lock(ds, lock)
+    eval_seqs = [sid for sid in ds.sequences if split_of(ds, lock, sid) in EVAL_SPLITS]
+    eval_paths = {p for sid in eval_seqs for p in _sequence_files(ds, sid)}
+    known = dict(lock.get("eval_content", {}))
+    known_paths = {os.path.normpath(os.path.join(ds.root, v["path"])) for v in known.values()}
+    for p in sorted(eval_paths):
+        if os.path.exists(p):
+            known.setdefault(_sha256(p), {"path": os.path.relpath(p, ds.root)})
+        elif p not in known_paths:
+            problems.append(f"evaluation frame {p} is missing and was never hashed into the "
+                            "lock; can't verify training data against it")
+    eval_paths |= known_paths
+    eval_objects = lock.get("eval_objects", {}) if perceptual else {}
+    perceptual_checked = 0
     for tf in train_files:
         norm = os.path.normpath(tf)
         if norm in eval_paths:
@@ -544,27 +679,73 @@ def check_no_eval_leakage(train_files: list[str], ds: FieldDataset, lock: dict, 
         if not os.path.exists(tf):
             continue
         digest = _sha256(tf)
-        if digest in eval_sha:
-            problems.append(f"{tf} is byte-identical to evaluation frame {eval_sha[digest]}")
+        if digest in known:
+            problems.append(f"{tf} is byte-identical to evaluation file {known[digest]['path']}")
             continue
-        if eval_dh:
-            h = _dhash_file(tf)
-            if h is None:
-                continue
-            for p, eh in eval_dh.items():
-                if bin(h ^ eh).count("1") <= near_duplicate_bits:
-                    problems.append(f"{tf} is a near-duplicate of evaluation frame {p}")
-                    break
+        if eval_objects and train_boxes and train_boxes.get(tf):
+            perceptual_checked += 1
+            sig = object_signature(tf, train_boxes[tf])
+            hit = next((rel for rel, esig in eval_objects.items()
+                        if _signatures_match(sig, esig, near_duplicate_bits)), None)
+            if hit:
+                problems.append(f"{tf} is a near-duplicate of evaluation frame {hit}")
     if problems:
         raise LeakageError(problems)
+    return {"files": len(train_files), "perceptual_checked": perceptual_checked}
+
+
+def _yolo_sources(data: dict, split: str) -> list[str]:
+    """Every image a YOLO config's ``split`` entry names: a directory, a
+    ``.txt`` list of image paths, or a list of either."""
+    from modules import yolo_io
+
+    entry = data["cfg"].get(split)
+    if not entry:
+        return []
+    root = data["root"]
+    entries = entry if isinstance(entry, list) else [entry]
+    files: list[str] = []
+    for e in entries:
+        path = e if os.path.isabs(e) else os.path.join(root, e)
+        if os.path.isdir(path):
+            files += [img for img, _ in yolo_io.iter_image_label_pairs(path)]
+        elif path.endswith(".txt") and os.path.exists(path):
+            base = os.path.dirname(path)
+            with open(path) as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line:
+                        files.append(line if os.path.isabs(line) else
+                                     os.path.normpath(os.path.join(base, line)))
+        elif os.path.isfile(path):
+            files.append(path)
+    return files
+
+
+def _yolo_boxes(image_path: str) -> list[list[float]]:
+    """Normalized xyxy boxes from the YOLO label file beside an image."""
+    parts = image_path.replace("\\", "/").split("/")
+    if "images" in parts:
+        i = len(parts) - 1 - parts[::-1].index("images")
+        parts[i] = "labels"
+    label = os.path.splitext("/".join(parts))[0] + ".txt"
+    boxes = []
+    if os.path.exists(label):
+        with open(label) as fh:
+            for line in fh:
+                v = line.split()
+                if len(v) >= 5:
+                    cx, cy, bw, bh = (float(x) for x in v[1:5])
+                    boxes.append([cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2])
+    return boxes
 
 
 def guard_training_config(data_yaml: str, field_root: str, *,
                           perceptual: bool = True) -> int:
-    """Check a YOLO training config's ``train`` images against a field dataset's
-    evaluation splits (see :func:`check_no_eval_leakage`). Returns how many
-    images were checked; raises :class:`LeakageError` on any leak, or if the
-    field dataset has no split lock (nothing to check against is not a pass)."""
+    """Check every image a YOLO training config trains on (``train``) or selects
+    checkpoints with (``val``) against a field dataset's evaluation data. Raises
+    :class:`LeakageError` on a leak, on a missing split lock, or when no
+    training image can be found (a guard that checked nothing has not passed)."""
     from modules import yolo_io
 
     ds = load_dataset(field_root)
@@ -572,9 +753,12 @@ def guard_training_config(data_yaml: str, field_root: str, *,
     if lock is None:
         raise LeakageError([f"{field_root} has no {LOCK_NAME}; assign splits first"])
     data = yolo_io.load_data_yaml(data_yaml)
-    train_dir = yolo_io.split_dir(data, "train")
-    files = [img for img, _ in yolo_io.iter_image_label_pairs(train_dir)] if train_dir else []
-    check_no_eval_leakage(files, ds, lock, perceptual=perceptual)
+    train = _yolo_sources(data, "train")
+    if not train:
+        raise LeakageError([f"no training images found from {data_yaml}; nothing was checked"])
+    files = sorted(set(train) | set(_yolo_sources(data, "val")))
+    boxes = {f: _yolo_boxes(f) for f in files} if perceptual else None
+    check_no_eval_leakage(files, ds, lock, train_boxes=boxes, perceptual=perceptual)
     return len(files)
 
 
@@ -596,11 +780,20 @@ def training_frames(ds: FieldDataset, lock: dict, *, min_confidence: str = "prob
 
 
 def eval_fingerprint(ds: FieldDataset, lock: dict) -> str:
-    """Content hash of the evaluation side (group keys + frame paths), recorded
-    in every training export so a model can state what it was kept away from."""
-    rows = sorted((split_of(ds, lock, f.sequence_id) or "", f.frame_path)
-                  for f in ds.frames if split_of(ds, lock, f.sequence_id) in EVAL_SPLITS)
-    return "sha256:" + hashlib.sha256(json.dumps(rows).encode()).hexdigest()[:16]
+    """Content hash of the evaluation side (every evaluation file's bytes ever
+    recorded), stored in each training export so a model can state what it was
+    kept away from."""
+    body = sorted(lock.get("eval_content", {}))
+    return "sha256:" + hashlib.sha256(json.dumps(body).encode()).hexdigest()[:16]
+
+
+def _yolo_class(ds: FieldDataset, f: FrameLabel, o: FrameObject) -> str | None:
+    vehicle = ds.vehicles[(f.sequence_id, o.vehicle_id)]
+    if o.role == "plate":
+        return "Plate"
+    if vehicle.rider_count >= 3:
+        return "TripleRiding"
+    return {"helmet": "WithHelmet", "no_helmet": "WithoutHelmet"}.get(o.helmet_state or "")
 
 
 def export_training(ds: FieldDataset, lock: dict, out_dir: str, *,
@@ -611,20 +804,32 @@ def export_training(ds: FieldDataset, lock: dict, out_dir: str, *,
 
     Classes follow the detector: a plate box is ``Plate``; a rider box is
     ``WithHelmet``/``WithoutHelmet`` by its helmet state, or ``TripleRiding``
-    when its vehicle carries three or more riders (the detector's convention).
-    Riders with an unknown helmet state are skipped, not guessed."""
+    when its vehicle carries three or more riders. A frame with a rider whose
+    helmet state is unknown is skipped whole: dropping only that box would
+    teach the detector the rider is background."""
     import shutil
 
     frames = training_frames(ds, lock, min_confidence=min_confidence)
-    files = [ds.frame_file(f) for f in frames]
-    check_no_eval_leakage(files, ds, lock, perceptual=perceptual)
+    usable, unknown = [], 0
+    for f in frames:
+        if any(_yolo_class(ds, f, o) is None for o in f.objects):
+            unknown += 1
+        else:
+            usable.append(f)
+    files = [ds.frame_file(f) for f in usable]
+    boxes = {}
+    for f, path in zip(usable, files):
+        cam = ds.cameras[ds.sequences[f.sequence_id].camera_id]
+        if cam.resolution:
+            boxes[path] = [_norm_box(o.box, *cam.resolution) for o in f.objects]
+    checked = check_no_eval_leakage(files, ds, lock, train_boxes=boxes, perceptual=perceptual)
     idx = {n: i for i, n in enumerate(class_names)}
     img_dir = os.path.join(out_dir, "images")
     lbl_dir = os.path.join(out_dir, "labels")
     os.makedirs(img_dir, exist_ok=True)
     os.makedirs(lbl_dir, exist_ok=True)
     written = skipped = 0
-    for f, src in zip(frames, files):
+    for f, src in zip(usable, files):
         cam = ds.cameras[ds.sequences[f.sequence_id].camera_id]
         if not cam.resolution or not os.path.exists(src):
             skipped += 1
@@ -632,17 +837,7 @@ def export_training(ds: FieldDataset, lock: dict, out_dir: str, *,
         w, h = cam.resolution
         lines = []
         for o in f.objects:
-            vehicle = ds.vehicles[(f.sequence_id, o.vehicle_id)]
-            if o.role == "plate":
-                cls = "Plate"
-            elif vehicle.rider_count >= 3:
-                cls = "TripleRiding"
-            elif o.helmet_state == "helmet":
-                cls = "WithHelmet"
-            elif o.helmet_state == "no_helmet":
-                cls = "WithoutHelmet"
-            else:
-                continue
+            cls = _yolo_class(ds, f, o)
             x1, y1, x2, y2 = o.box
             lines.append(f"{idx[cls]} {(x1 + x2) / 2 / w:.6f} {(y1 + y2) / 2 / h:.6f} "
                          f"{(x2 - x1) / w:.6f} {(y2 - y1) / h:.6f}")
@@ -654,8 +849,11 @@ def export_training(ds: FieldDataset, lock: dict, out_dir: str, *,
     manifest = {
         "dataset": ds.name, "dataset_version": ds.version, "split": DEVELOPMENT,
         "frames": written, "skipped_no_resolution_or_file": skipped,
+        "skipped_unknown_helmet_state": unknown,
         "lock_hash": lock["lock_hash"], "eval_fingerprint": eval_fingerprint(ds, lock),
-        "leakage_checks": ["group", "sha256"] + (["dhash"] if perceptual else []),
+        "leakage_checks": ["lock consistency", "evaluation path", "sha256 (incl. lock history)"]
+        + (["object-crop dHash"] if perceptual else []),
+        "perceptual_checked": checked["perceptual_checked"],
         "min_label_confidence": min_confidence, "classes": list(class_names),
         "exported_at": datetime.now(timezone.utc).isoformat(),
     }

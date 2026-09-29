@@ -169,8 +169,10 @@ def test_the_guard_catches_an_eval_frame_by_path_copy_and_reencode(ds, tmp_path)
     img = cv2.imread(src)
     cv2.imwrite(str(reenc), cv2.resize(img, (img.shape[1] // 2, img.shape[0] // 2)),
                 [cv2.IMWRITE_JPEG_QUALITY, 70])
+    W, H = field_fixture.W, field_fixture.H
+    boxes = [[o.box[0] / W, o.box[1] / H, o.box[2] / W, o.box[3] / H] for o in eval_frame.objects]
     with pytest.raises(LeakageError, match="near-duplicate"):
-        check_no_eval_leakage([str(reenc)], ds, lock)
+        check_no_eval_leakage([str(reenc)], ds, lock, train_boxes={str(reenc): boxes})
     dev_frame = next(f for f in ds.frames if split_of(ds, lock, f.sequence_id) == DEVELOPMENT)
     check_no_eval_leakage([ds.frame_file(dev_frame)], ds, lock)  # a real dev frame passes
 
@@ -248,6 +250,8 @@ def test_field_dataset_cli_round_trip(tmp_path, capsys):
     (lambda m, v, f: f[0]["objects"][0].update(box=[50, 50, 10, 10]), "x1<x2"),
     (lambda m, v, f: f[0].update(frame_index=99), "outside the vehicle's first/last frame"),
     (lambda m, v, f: f[0]["objects"][0].update(role="driver"), "role="),
+    (lambda m, v, f: v[0].update(plate_text=""), "fully visible plate needs its plate_text"),
+    (lambda m, v, f: f[0].update(frame_path="frames/s1/000007.png"), "named by frame index"),
 ])
 def test_every_schema_rule_is_enforced(tmp_path, mutate, fragment):
     import copy
@@ -277,3 +281,142 @@ def test_invalid_json_lines_and_a_missing_dataset_are_reported(tmp_path):
         fh.write("{not json\n")
     with pytest.raises(FieldDataError, match="invalid JSON"):
         load_dataset(root)
+
+
+# -- holes found by the independent review ---------------------------------------
+
+def _lock_with_external(ds):
+    return assign_splits(ds, external_cameras=["camB"], salt="t")
+
+
+def _eval_frame(ds, lock):
+    return next(f for f in ds.frames if split_of(ds, lock, f.sequence_id) in EVAL_SPLITS)
+
+
+def test_a_renamed_evaluation_sequence_cannot_be_reassigned(tmp_path):
+    root = str(tmp_path / "ren")
+    field_fixture.build(root)
+    lock = _lock_with_external(load_dataset(root))
+    meta = json.load(open(os.path.join(root, "dataset.json")))
+    for seq in meta["sequences"]:
+        if seq["sequence_id"] == "x1":
+            seq["sequence_id"] = "x1_renamed"
+    json.dump(meta, open(os.path.join(root, "dataset.json"), "w"))
+    rows = [json.loads(line) for line in open(os.path.join(root, "vehicles.jsonl"))]
+    for r in rows:
+        if r["sequence_id"] == "x1":
+            r["sequence_id"] = "x1_renamed"
+    open(os.path.join(root, "vehicles.jsonl"), "w").writelines(json.dumps(r) + "\n" for r in rows)
+    rows = [json.loads(line) for line in open(os.path.join(root, "frames.jsonl"))]
+    for r in rows:
+        if r["sequence_id"] == "x1":
+            r["sequence_id"] = "x1_renamed"
+    open(os.path.join(root, "frames.jsonl"), "w").writelines(json.dumps(r) + "\n" for r in rows)
+    ds2 = load_dataset(root)
+    with pytest.raises(LeakageError, match="no longer in the dataset"):
+        assign_splits(ds2)
+    assert lock["sequences"]["x1"]["split"] == EXTERNAL
+
+
+def test_editing_a_locked_sequences_date_cannot_move_it(tmp_path):
+    root = str(tmp_path / "day")
+    field_fixture.build(root)
+    assign_splits(load_dataset(root), group_by="camera_day", salt="t")
+    meta = json.load(open(os.path.join(root, "dataset.json")))
+    meta["sequences"][0]["start_time"] = "2027-01-01T00:00:00"
+    json.dump(meta, open(os.path.join(root, "dataset.json"), "w"))
+    with pytest.raises(LeakageError, match="moved from group"):
+        assign_splits(load_dataset(root), group_by="camera_day")
+
+
+def test_a_deleted_evaluation_frame_is_still_caught_by_its_recorded_hash(ds, tmp_path):
+    lock = _lock_with_external(ds)
+    src = ds.frame_file(_eval_frame(ds, lock))
+    copy = tmp_path / "kept_copy.png"
+    copy.write_bytes(open(src, "rb").read())
+    os.remove(src)
+    with pytest.raises(LeakageError, match="byte-identical"):
+        check_no_eval_leakage([str(copy)], ds, lock)
+
+
+def test_a_missing_never_hashed_evaluation_frame_fails_closed(ds):
+    lock = _lock_with_external(ds)
+    ef = _eval_frame(ds, lock)
+    lock["eval_content"] = {}  # as if the file never existed at assignment
+    os.remove(ds.frame_file(ef))
+    with pytest.raises(LeakageError, match="never hashed"):
+        check_no_eval_leakage([], ds, lock)
+
+
+def test_an_unlabelled_frame_of_an_evaluation_sequence_is_evaluation_data(ds):
+    lock = _lock_with_external(ds)
+    ef = _eval_frame(ds, lock)
+    extra = os.path.join(os.path.dirname(ds.frame_file(ef)), "000099.png")
+    cv2.imwrite(extra, field_fixture.frame_image(999))
+    with pytest.raises(LeakageError, match="is an evaluation frame"):
+        check_no_eval_leakage([extra], ds, lock)
+
+
+def test_frames_of_one_fixed_camera_are_not_false_leaks(tmp_path):
+    """Whole-frame hashes match any two moments of a fixed camera (same
+    background). Object-level signatures only match the same objects."""
+    import numpy as np
+
+    from modules.field_data import object_signature
+
+    background = field_fixture.frame_image(1)
+    a, b = background.copy(), background.copy()
+    a[60:180, 100:160] = np.random.default_rng(2).integers(0, 255, (120, 60, 3))
+    b[40:160, 220:280] = np.random.default_rng(3).integers(0, 255, (120, 60, 3))
+    pa, pb = str(tmp_path / "a.png"), str(tmp_path / "b.png")
+    cv2.imwrite(pa, a)
+    cv2.imwrite(pb, b)
+    W, H = field_fixture.W, field_fixture.H
+    from modules.dataset_audit import dhash
+    assert bin(dhash(a) ^ dhash(b)).count("1") <= 12  # whole frames look alike
+    from modules.field_data import _signatures_match
+    sa = object_signature(pa, [[100 / W, 60 / H, 160 / W, 180 / H]])
+    sb = object_signature(pb, [[220 / W, 40 / H, 280 / W, 160 / H]])
+    assert not _signatures_match(sb, sa, 5)
+    assert _signatures_match(sa, sa, 5)
+
+
+def test_trainer_guard_reads_image_lists_and_val_and_refuses_to_check_nothing(ds, tmp_path):
+    from modules.field_data import guard_training_config
+
+    lock = _lock_with_external(ds)
+    src = ds.frame_file(_eval_frame(ds, lock))
+    dev = ds.frame_file(next(f for f in ds.frames
+                             if split_of(ds, lock, f.sequence_id) == DEVELOPMENT))
+    lst = tmp_path / "train.txt"
+    lst.write_text(f"{dev}\n{src}\n")
+    cfg = tmp_path / "list.yaml"
+    cfg.write_text(f"train: {lst}\nval: {lst}\nnames: [Plate]\n")
+    with pytest.raises(LeakageError, match="is an evaluation frame"):
+        guard_training_config(str(cfg), ds.root)
+    clean = tmp_path / "clean.txt"
+    clean.write_text(f"{dev}\n")
+    val_leak = tmp_path / "val.yaml"
+    val_leak.write_text(f"train: {clean}\nval: {lst}\nnames: [Plate]\n")
+    with pytest.raises(LeakageError):  # a held-out frame used to pick best.pt
+        guard_training_config(str(val_leak), ds.root)
+    empty = tmp_path / "empty.yaml"
+    empty.write_text(f"train: {tmp_path / 'nothing_here'}\nnames: [Plate]\n")
+    with pytest.raises(LeakageError, match="nothing was checked"):
+        guard_training_config(str(empty), ds.root)
+    ok = tmp_path / "ok.yaml"
+    ok.write_text(f"train: [{clean}]\nval: {clean}\nnames: [Plate]\n")
+    assert guard_training_config(str(ok), ds.root) == 1
+
+
+def test_a_frame_with_an_unknown_helmet_state_is_not_exported(tmp_path):
+    root = field_fixture.build(str(tmp_path / "unk"))
+    rows = [json.loads(line) for line in open(os.path.join(root, "frames.jsonl"))]
+    rows[0]["objects"][0]["helmet_state"] = "unknown"
+    open(os.path.join(root, "frames.jsonl"), "w").writelines(json.dumps(r) + "\n" for r in rows)
+    ds = load_dataset(root)
+    lock = assign_splits(ds, salt="t",
+                         ratios={"development": 1.0, "validation": 0.0, "held_out": 0.0})
+    m = export_training(ds, lock, str(tmp_path / "out"))
+    assert m["skipped_unknown_helmet_state"] == 1
+    assert m["frames"] == len(ds.frames) - 1
