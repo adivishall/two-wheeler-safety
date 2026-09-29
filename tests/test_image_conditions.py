@@ -116,3 +116,23 @@ def test_strata_follow_the_fitted_cut_points():
                      "dst")
     assert s["lighting (luminance proxy)"] == "dark" and s["glare"] == "glare"
     assert s["source"] == "dst" and s["labelled rider boxes"] == "2-3"
+
+
+def test_range_matching_prefers_the_in_range_object_like_coco():
+    small, large = (0, 0, 20, 20), (0, 0, 22, 22)  # overlapping: IoU ~0.83
+    gt = [(2, large), (2, small)]
+    pred = [(2, (0, 0, 21, 21), 0.9)]
+    is_small = lambda c, b: (b[2] - b[0]) < 21  # noqa: E731
+    rec = match_for_ap_in_range(gt, pred, 4, is_small)
+    assert list(rec.pred_tp) == [1.0]  # counted for the small object, not dropped
+
+
+def test_binary_conditions_are_tested_once_not_mirrored():
+    rows, props, sources = _synthetic_split()
+    for i, p in enumerate(props):
+        p["glare_share"] = 0.2 if i % 2 else 0.0
+    thr = fit_thresholds(rows, props, NAMES)
+    rep = evaluate(rows, props, sources, NAMES, thr, op_thresholds={}, n_boot=100)
+    findings, _ = notable_gaps(rep, NAMES)
+    glare_values = {f["value"] for f in findings if f["attribute"] == "glare"}
+    assert len(glare_values) <= 1

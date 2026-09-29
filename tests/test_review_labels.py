@@ -138,3 +138,13 @@ def test_rows_without_a_pipeline_sidecar_are_not_labels(tmp_path):
     for vid in (legacy, real):
         db.set_review(vid, "confirmed", actor="demo")
     assert [r["violation_id"] for r in db.review_labels()] == [real]
+
+
+def test_duplicate_and_unusable_evidence_are_not_correctness_labels(tmp_path):
+    db = _db(tmp_path)
+    for plate, reason in (("MH12AB1111", "duplicate"), ("MH12AB2222", "evidence_unusable"),
+                          ("MH12AB3333", "wrong_violation")):
+        vid = _fine(db, plate, 0.7, "run1")
+        db.set_review(vid, "dismissed", reason=reason, actor="rev")
+    by_reason = {r["review_reason"]: r["correct"] for r in db.review_labels()}
+    assert by_reason == {"duplicate": None, "evidence_unusable": None, "wrong_violation": 0}

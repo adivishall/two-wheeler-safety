@@ -177,7 +177,10 @@ def notable_gaps(report: dict, class_names: list[str]) -> tuple[list[dict], int]
     found, tested = [], 0
     overall = report["overall"]["ap"]["per_class"]
     for attr, values in report["image_strata"].items():
-        for value, st in values.items():
+        items = list(values.items())
+        if len(items) == 2:  # "glare vs rest" IS "no glare vs rest", mirrored: test once
+            items = items[:1]
+        for value, st in items:
             gap = st.get("gap_vs_rest")
             if not gap:
                 continue

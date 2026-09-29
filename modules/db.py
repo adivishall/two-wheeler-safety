@@ -819,6 +819,7 @@ class Database:
     # association/tracking label.
     REVIEW_REASONS = {"wrong_violation", "wrong_plate", "wrong_vehicle", "duplicate",
                       "evidence_unusable", "other"}
+    NOT_CORRECTNESS_REASONS = {"duplicate", "evidence_unusable"}
 
     def set_review(
         self,
@@ -929,7 +930,11 @@ class Database:
         out = []
         for r in rows:
             d = dict(r)
-            d["correct"] = 1 if d["review_status"] == "confirmed" else 0
+            # A duplicate or unusable-evidence dismissal says nothing about
+            # whether the violation was right: not a correctness label.
+            d["correct"] = (1 if d["review_status"] == "confirmed" else
+                            None if d["review_reason"] in self.NOT_CORRECTNESS_REASONS
+                            else 0)
             out.append(d)
         return out
 

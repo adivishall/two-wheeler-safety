@@ -57,7 +57,7 @@ def read_labels(path: str):
 def labels_from_db(path: str):
     from modules.db import Database
 
-    rows = Database(path).review_labels()
+    rows = [r for r in Database(path).review_labels() if r["correct"] is not None]
     return ([float(r["confidence"]) for r in rows], [r["correct"] for r in rows],
             [r["session_id"] or f"violation{r['violation_id']}" for r in rows], rows)
 

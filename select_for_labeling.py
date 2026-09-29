@@ -133,11 +133,11 @@ def render(queue, pool, pool_sizes, budget, review_pool, audit_n=0) -> str:
 
     keys = sorted({k for c in pool for k in c.signals})
     lines = ["# Labelling queue — active-learning selection", "",
-             f"- Budget {budget}; selected **{len(queue)}** from "
-             f"{sum(pool_sizes.values())} pool images "
-             f"({', '.join(f'{k} {v}' for k, v in pool_sizes.items())}) and {review_pool} "
-             "pending reviews; candidates with any signal: "
-             f"{len(pool)}.",
+             f"- Budget {budget}; selected **{len(queue)}** from the "
+             f"{pool_sizes.get('train', 0)}-image training pool and {review_pool} pending "
+             f"reviews (candidates with any signal: {len(pool)}); val/test "
+             f"({pool_sizes.get('val', 0) + pool_sizes.get('test', 0)} images) feed only the "
+             "blind audit below.",
              "- Priority ranks informativeness (`1 - Π(1 - signal)`), not a probability; "
              "selection decays repeats of a pattern and skips near-duplicate images.",
              "- Evaluation images are **not** model-selected: they get a separate, "

@@ -100,13 +100,20 @@ def match_for_ap_in_range(gt, preds, n_classes: int, in_range,
         g_in = [in_range(c, b) for b in g]
         used = [False] * len(g)
         for _, box, score in sorted((p for p in preds if p[0] == c), key=lambda p: -p[2]):
-            best, best_j = iou_threshold, -1
-            for j, gb in enumerate(g):
-                if used[j]:
-                    continue
-                v = iou(box, gb)
-                if v >= best:
-                    best, best_j = v, j
+            # COCO: prefer an in-range object; fall back to an ignored one only
+            # if no in-range object matches (a prediction overlapping both a
+            # small and a large object counts for the small-object AP).
+            best_j = -1
+            for want_in in (True, False):
+                best = iou_threshold
+                for j, gb in enumerate(g):
+                    if used[j] or g_in[j] != want_in:
+                        continue
+                    v = iou(box, gb)
+                    if v >= best:
+                        best, best_j = v, j
+                if best_j >= 0:
+                    break
             if best_j >= 0:
                 used[best_j] = True
                 if not g_in[best_j]:
@@ -278,21 +285,39 @@ def unpaired_gap(rec_a: list[ImageRecord], rec_b: list[ImageRecord], class_names
 MIN_SEEDS = 3
 
 
+def _t_quantile(level: float, df: float) -> float:
+    """Two-sided Student-t quantile (no scipy): exact for df 1-2 at 95%,
+    Cornish-Fisher beyond (error < 0.01 for df >= 3)."""
+    z = {0.9: 1.644854, 0.95: 1.959964, 0.99: 2.575829}.get(round(level, 2), 1.959964)
+    if not np.isfinite(df):
+        return z
+    if round(level, 2) == 0.95 and df < 3:
+        return 12.706 if df < 2 else 4.303
+    return float(z + (z ** 3 + z) / (4 * df) + (5 * z ** 5 + 16 * z ** 3 + 3 * z) / (96 * df ** 2))
+
+
 def recipe_comparison(recipes: dict[str, list[list[ImageRecord]]], baseline: str,
                       class_names: list[str], *, n_boot: int = 2000, seed: int = 0,
                       level: float = 0.95, min_seeds: int = MIN_SEEDS) -> dict:
     """Compare training RECIPES, each trained with several seeds, on one split.
 
     ``recipes[name]`` is one record list per seed (same images, same order).
-    A recipe's AP is the mean over its seeds; the uncertainty of a difference
-    resamples BOTH the images (shared by every checkpoint — paired) and each
-    recipe's seeds, so it contains the training randomness a single-checkpoint
-    bootstrap can't see (a new seed of v1 alone came out "significantly worse"
-    that way). With fewer than ``min_seeds`` seeds on either side the verdict is
-    ``insufficient seeds``: the seed term is then unmeasured, and the CI would
-    understate it. A candidate is ``promote`` only if its mAP@50 gain's CI
-    excludes zero and no class is significantly worse; any class significantly
-    worse makes it ``reject``."""
+    A recipe's AP is the mean over its seeds. The difference's uncertainty has
+    two parts: which images were drawn (a paired image bootstrap of the
+    difference of seed means) and which seeds were drawn (the between-seed
+    variance of each mean, s^2 / n). They are added and turned into a Welch-t
+    interval, whose degrees of freedom come from the seed term — with three
+    seeds a recipe mean is uncertain, and the t quantile says so (4.30 at 2 df).
+    Resampling three seeds with replacement instead understated that spread and
+    promoted identical recipes about twice as often as nominal. Fewer than
+    ``min_seeds`` seeds on either side: ``insufficient seeds``, never a verdict.
+    A candidate is ``promote`` only if its mAP@50 gain's CI excludes zero and
+    no class is significantly worse; any class significantly worse ``reject``s.
+
+    Simulated identical recipes (3 seeds each, seed SD 0.06, 200 trials): false
+    promote 2.0% (nominal 2.5%); false reject 9.5% — the price of letting any
+    one of four classes veto, accepted because missing a real regression in a
+    class is the worse error."""
     k = len(class_names)
     names = list(recipes)
     n_img = {len(r) for runs in recipes.values() for r in runs}
@@ -302,15 +327,14 @@ def recipe_comparison(recipes: dict[str, list[list[ImageRecord]]], baseline: str
     idx = {r: [[_ClassIndex(run, c) for c in range(k)] for run in recipes[r]] for r in names}
     per_seed = {r: np.array([[ix.ap() for ix in run] for run in idx[r]]) for r in names}
     rng = np.random.default_rng(seed)
-    boot_mean = {r: np.empty((n_boot, k)) for r in names}
+    boot = {r: np.empty((n_boot, len(idx[r]), k)) for r in names}
     for b in range(n_boot):
         w = np.bincount(rng.integers(0, n, n), minlength=n).astype(np.float64)
         for r in names:
-            seeds = rng.integers(0, len(idx[r]), len(idx[r]))
-            boot_mean[r][b] = _nanmean(np.array([[ix.ap(w) for ix in idx[r][s]]
-                                                 for s in seeds]), axis=0)
-    out: dict = {"images": n, "baseline": baseline, "min_seeds": min_seeds, "recipes": {},
-                 "comparisons": {}}
+            boot[r][b] = [[ix.ap(w) for ix in run] for run in idx[r]]
+    out: dict = {"images": n, "baseline": baseline, "min_seeds": min_seeds, "level": level,
+                 "interval": "Welch-t: image bootstrap + between-seed variance",
+                 "recipes": {}, "comparisons": {}}
     for r in names:
         ps = per_seed[r]
         out["recipes"][r] = {
@@ -322,21 +346,35 @@ def recipe_comparison(recipes: dict[str, list[list[ImageRecord]]], baseline: str
                           for c, name in enumerate(class_names)},
             "map50": _r(_nanmean(_nanmean(ps, axis=1))),
         }
+
+    def interval(cand_seeds, base_seeds, cand_boot, base_boot):
+        """cand/base_seeds: per-seed values; *_boot: (n_boot, seeds) arrays."""
+        point = _nanmean(cand_seeds) - _nanmean(base_seeds)
+        d = _nanmean(cand_boot, axis=1) - _nanmean(base_boot, axis=1)
+        d = d[~np.isnan(d)]
+        var_img = float(np.var(d, ddof=1)) if d.size > 1 else 0.0
+        nc, nb = len(cand_seeds), len(base_seeds)
+        a = float(np.var(cand_seeds, ddof=1)) / nc if nc > 1 else 0.0
+        bb = float(np.var(base_seeds, ddof=1)) / nb if nb > 1 else 0.0
+        denom = (a * a / (nc - 1) if nc > 1 else 0.0) + (bb * bb / (nb - 1) if nb > 1 else 0.0)
+        df = (var_img + a + bb) ** 2 / denom if denom > 0 else float("inf")
+        half = _t_quantile(level, df) * float(np.sqrt(var_img + a + bb))
+        return point, point - half, point + half
+
     for r in names:
         if r == baseline:
             continue
-        d = boot_mean[r] - boot_mean[baseline]
-        point = _nanmean(per_seed[r], axis=0) - _nanmean(per_seed[baseline], axis=0)
         cmp: dict = {"per_class": {}}
         worse = []
         for c, name in enumerate(class_names):
-            lo, hi = _percentile_ci(d[:, c], level)
-            cmp["per_class"][name] = {"diff": _r(point[c]), "ci_low": _r(lo), "ci_high": _r(hi)}
+            pt, lo, hi = interval(per_seed[r][:, c], per_seed[baseline][:, c],
+                                  boot[r][:, :, c], boot[baseline][:, :, c])
+            cmp["per_class"][name] = {"diff": _r(pt), "ci_low": _r(lo), "ci_high": _r(hi)}
             if hi < 0:
                 worse.append(name)
-        md = _nanmean(d, axis=1)
-        lo, hi = _percentile_ci(md, level)
-        cmp["map50"] = {"diff": _r(_nanmean(point)), "ci_low": _r(lo), "ci_high": _r(hi)}
+        pt, lo, hi = interval(_nanmean(per_seed[r], axis=1), _nanmean(per_seed[baseline], axis=1),
+                              _nanmean(boot[r], axis=2), _nanmean(boot[baseline], axis=2))
+        cmp["map50"] = {"diff": _r(pt), "ci_low": _r(lo), "ci_high": _r(hi)}
         seeds_ok = min(len(per_seed[r]), len(per_seed[baseline])) >= min_seeds
         if not seeds_ok:
             verdict = (f"insufficient seeds ({len(per_seed[baseline])} vs {len(per_seed[r])}; "

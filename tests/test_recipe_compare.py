@@ -59,3 +59,25 @@ def test_seed_spread_widens_the_interval():
                               n_boot=300)["comparisons"][name]["map50"]
         width[name] = m["ci_high"] - m["ci_low"]
     assert width["spread"] > width["agree"]
+
+
+def test_t_quantiles_widen_for_few_seeds():
+    from modules.detection_stats import _t_quantile
+
+    assert _t_quantile(0.95, 1) == 12.706 and _t_quantile(0.95, 2) == 4.303
+    assert abs(_t_quantile(0.95, 10) - 2.228) < 0.01
+    assert abs(_t_quantile(0.95, float("inf")) - 1.96) < 0.001
+
+
+def test_identical_recipes_are_not_promoted():
+    """Three seeds each of the same recipe (seed-to-seed spread 0.06): the old
+    seed-resampling interval promoted such pairs ~2x as often as nominal."""
+    rng = np.random.default_rng(7)
+    promoted = 0
+    for t in range(6):
+        runs = {name: [_run(np.clip(0.7 + rng.normal(0, 0.06, 4), 0.05, 0.99),
+                            n=60, seed=100 * t + 10 * i + j)
+                       for j in range(3)] for i, name in enumerate(("a", "b"))}
+        rep = recipe_comparison(runs, "a", NAMES, n_boot=100, seed=t)
+        promoted += rep["comparisons"]["b"]["verdict"] == "promote"
+    assert promoted == 0
