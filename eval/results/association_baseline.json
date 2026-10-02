@@ -1,0 +1,34 @@
+{
+  "builtin_suites": {
+    "frames": 151,
+    "frames_where_matchers_differ": 0,
+    "frames_with_2plus_bodies_and_plates": 104
+  },
+  "caveat": "Synthetic layouts and a hand-weighted cost; not a field measurement.",
+  "counts": {
+    "differ": 1201,
+    "frames": 9122,
+    "greedy_pairs": 28946,
+    "greedy_wrong_frames": 1703,
+    "greedy_wrong_pairs": 3215,
+    "hungarian_pairs": 28997,
+    "hungarian_wrong_frames": 659,
+    "hungarian_wrong_pairs": 1018
+  },
+  "frames_per_seed": 2000,
+  "generator": "2-5 riders per frame, width 40-90 px, height 1.8x width, top-left uniform in x 0-600, y 50-300; each rider's own plate present with p=0.85, width 0.6x the rider, offset x -15..+25 px and y -20..+15 px from the rider's bottom edge. Frames with fewer than 2 plates are skipped.",
+  "rates": {
+    "frames_where_matchers_differ": 0.1317,
+    "greedy_frames_with_a_wrong_pair": 0.1867,
+    "greedy_wrong_pair_rate": 0.1111,
+    "hungarian_frames_with_a_wrong_pair": 0.0722,
+    "hungarian_wrong_pair_rate": 0.0351
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ]
+}
