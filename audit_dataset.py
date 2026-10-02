@@ -130,6 +130,12 @@ def main(argv=None) -> int:
         for ex in r["examples"][:5]:
             print(f"        d={ex['distance']}  {os.path.basename(ex['held_out_image'])}"
                   f"  <->  {os.path.basename(ex['train_image'])}")
+    for pair, o in report.get("held_out_overlap", {}).items():
+        print(f"{pair:10s} {o['overlapping_images']} {o['split']} image(s) duplicate a "
+              f"{o['compared_with']} image ({o['overlap_rate']:.3%})")
+        for ex in o["examples"][:5]:
+            print(f"        d={ex['distance']}  {os.path.basename(ex['held_out_image'])}"
+                  f"  <->  {os.path.basename(ex['other_image'])}")
     print(f"\nCLEAN: {report['clean']}")
 
     if args.write_clean_split:

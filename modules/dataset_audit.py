@@ -19,10 +19,12 @@ hashing itself is pure and unit-tested, so the honest-evaluation claim is backed
 by code that runs in CI even though the images are gitignored.
 
 Caveat worth stating plainly: dHash is a *perceptual* hash, not a proof. It
-reliably catches recompression/resize/mild-photometric duplicates and it will
-miss a heavy geometric augmentation (a large rotation or crop). So a clean report
-is evidence of split hygiene, not a mathematical guarantee — see
-:func:`audit_splits`' ``method`` field, which records exactly that.
+reliably catches recompression/resize/mild-photometric duplicates and it misses
+geometric changes -- not only heavy ones: on the 14 bundled ``samples/`` photos
+a horizontal flip moved the hash by a median 31 bits (0 of 14 within 5) and a
+5% crop kept 2 of 14 within 5, while JPEG re-encoding kept all 14. Flips are a
+common export augmentation, so a clean report is evidence of split hygiene, not
+a guarantee -- see :func:`audit_splits`' ``method`` field.
 """
 
 from __future__ import annotations
@@ -194,27 +196,65 @@ def audit_splits(
     max_distance: int = 5,
     limit: int = 0,
 ) -> dict:
-    """Hash the training split once and compare every held-out split against it."""
+    """Hash the training split once and compare every held-out split against it,
+    and every held-out split against every other.
+
+    The second comparison matters because the splits are not used alike: val
+    chooses the checkpoint (Ultralytics keeps ``best.pt`` by val fitness), so a
+    test image that duplicates a val image is not independent of model
+    selection even when neither touches train. Overlaps are reported under
+    ``held_out_overlap`` and make ``clean`` false; they are *not* added to
+    ``leaked_paths``, so ``--write-clean-split`` output is unchanged by this
+    report and the decision to drop them stays explicit.
+    """
     train = hash_directory(train_dir, limit=limit)
     reports = {}
+    held_hashes: dict[str, dict[str, int]] = {}
     for split, directory in sorted(held_out_dirs.items()):
         held = hash_directory(directory, limit=limit)
+        held_hashes[split] = held
         rep = find_leaks(held, train, max_distance=max_distance, split=split)
         d = rep.as_dict()
+        # Exact-hash pairs only: a different threshold from the leak check
+        # above, so the report says which one it used.
         d["internal_duplicate_pairs"] = find_duplicates_within(held)
+        d["internal_duplicate_max_distance"] = 0
         d["leaked_paths"] = list(rep.leaked_paths)
         reports[split] = d
+
+    overlap = {}
+    names = sorted(held_hashes)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            rep = find_leaks(held_hashes[a], held_hashes[b],
+                             max_distance=max_distance, split=a)
+            overlap[f"{a}~{b}"] = {
+                "split": a,
+                "compared_with": b,
+                "max_distance": max_distance,
+                "overlapping_images": rep.leaked_images,
+                "overlap_rate": round(rep.leak_rate, 4),
+                "examples": [
+                    {"held_out_image": e.held_out_image, "other_image": e.train_image,
+                     "distance": e.distance}
+                    for e in rep.examples[:20]
+                ],
+            }
     return {
         "method": (
             f"dHash({HASH_SIZE}x{HASH_SIZE}, 64-bit) with Hamming distance <= "
             f"{max_distance}; catches recompression/resize/photometric duplicates, "
-            "not heavy geometric augmentation"
+            "misses flips, crops and shifts"
         ),
         "train_dir": train_dir,
         "train_images": len(train),
         "max_distance": max_distance,
         "splits": reports,
-        "clean": all(r["leaked_images"] == 0 for r in reports.values()),
+        "held_out_overlap": overlap,
+        "clean": (
+            all(r["leaked_images"] == 0 for r in reports.values())
+            and all(o["overlapping_images"] == 0 for o in overlap.values())
+        ),
     }
 
 

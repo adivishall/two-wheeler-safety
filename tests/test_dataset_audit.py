@@ -195,6 +195,39 @@ def test_clean_split_refuses_to_mix_with_real_files(tmp_path):
     assert os.path.isfile(stray)  # never deleted
 
 
+def test_audit_flags_an_image_shared_by_val_and_test(tmp_path):
+    """Regression: only val-vs-train and test-vs-train were compared. Val picks
+    the checkpoint (Ultralytics best.pt), so a test image that duplicates a val
+    image is not independent of model selection, and the audit called it clean."""
+    _write_split(str(tmp_path), "train", [1, 2, 3])
+    _write_split(str(tmp_path), "val", [40, 41])
+    _write_split(str(tmp_path), "test", [41, 90])
+    out = audit_splits(
+        os.path.join(str(tmp_path), "train", "images"),
+        {s: os.path.join(str(tmp_path), s, "images") for s in ("val", "test")},
+        max_distance=5,
+    )
+    assert out["splits"]["val"]["leaked_images"] == 0
+    assert out["splits"]["test"]["leaked_images"] == 0
+    overlap = out["held_out_overlap"]["test~val"]
+    assert overlap["overlapping_images"] == 1
+    assert "img41.jpg" in overlap["examples"][0]["held_out_image"]
+    assert out["clean"] is False
+
+
+def test_audit_reports_the_threshold_behind_internal_duplicate_counts(tmp_path):
+    _write_split(str(tmp_path), "train", [1])
+    _write_split(str(tmp_path), "test", [90])
+    out = audit_splits(
+        os.path.join(str(tmp_path), "train", "images"),
+        {"test": os.path.join(str(tmp_path), "test", "images")},
+        max_distance=5,
+    )
+    # internal duplicates are counted at exact dHash equality, leaks at <= 5:
+    # the report has to say so, or the two numbers read as comparable.
+    assert out["splits"]["test"]["internal_duplicate_max_distance"] == 0
+
+
 def test_iter_images_is_sorted_and_filters_extensions(tmp_path):
     d = tmp_path / "images"
     d.mkdir()
