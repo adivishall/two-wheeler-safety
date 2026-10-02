@@ -1,0 +1,64 @@
+name: Bug report
+description: Something behaves differently from what the code, docs or tests say it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problems: please use private vulnerability reporting (Security tab), not an issue. See SECURITY.md.
+        Do not attach images of real people or real number plates you do not have the right to share; `samples/` or synthetic boxes are enough.
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`, and the branch.
+      placeholder: "2ef6991 (main)"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Detection / model output
+        - Association or tracking (which plate belongs to which rider)
+        - OCR / plate voting
+        - Temporal confirmation / violation decision
+        - Speed
+        - Evidence or database
+        - Web API or dashboard
+        - Evaluation scripts or reported numbers
+        - Install / CI / docs
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: |
+        Exact commands or requests. For pipeline problems, give the input frame (or a synthetic one)
+        and the detector boxes as `[label, (x1, y1, x2, y2), confidence]` per frame: most bugs reproduce
+        from boxes alone, without the model (see tests/test_association.py).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What should have happened, and why (cite the doc, code comment or test that says so if there is one).
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What happened. Include output (plate, violation, confidence breakdown, HTTP status and body) and logs with paths and keys removed.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Python version, install profile (requirements-ci / requirements / Docker), device if the model ran.
+      placeholder: "macOS 15, Python 3.12, requirements-ci.txt"

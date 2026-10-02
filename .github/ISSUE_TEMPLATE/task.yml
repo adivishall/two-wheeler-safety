@@ -1,0 +1,43 @@
+name: Task or feature
+description: A self-contained piece of work with a way to check it is done.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing or wrong, in one paragraph.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: File:line, a result file in eval/results/, a failing command or test output. Say if something is a hypothesis.
+    validations:
+      required: true
+  - type: textarea
+    id: direction
+    attributes:
+      label: Suggested direction
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checkable statements, ideally tests or commands with expected output.
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Regression risk
+      description: What could get worse, and how a reviewer would notice.
+  - type: textarea
+    id: files
+    attributes:
+      label: Relevant files
+  - type: textarea
+    id: test
+    attributes:
+      label: How to test
+      description: Commands. Say whether the weights or the dataset are needed (they are not in the repository).
+      render: bash
