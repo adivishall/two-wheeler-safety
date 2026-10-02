@@ -270,6 +270,28 @@ point: it had none of my assumptions. The lesson I took: score a decision rule
 at the moment the system acts on it, and have something that didn't write the
 fix try to break it.
 
+### How would you know it works on a real traffic camera?
+
+Today I wouldn't: nothing past the detector has seen a labelled real frame, and
+the reports say NOT MEASURED rather than guess. What exists is the loop that
+would find out. A field dataset schema with annotator provenance. Splits frozen
+per sequence, with whole cameras held out, and an export that refuses any image
+that is — or copies — evaluation data. A harness that runs the shipped pipeline
+over labelled footage and charges every wrong fine to the first stage that
+failed, per condition. On the real still images I could stratify the detector
+by measured conditions: 25 comparisons, 11 significant on val, 2 replicated on
+test — and one of those rests on 3 test images. That taught me to require
+replication before calling anything a finding.
+
+### How do you decide what to label next?
+
+By what a label would change, not by volume: model contradictions, scores at
+the decision threshold, confident detections with no label, label gaps — with
+diminishing returns per pattern so the budget isn't spent on one failure. But
+only on training data. My first version also queued held-out images the model
+disagreed with; fixing only those would have made the model look better. Held-out
+labels get a blind, uniform-random audit instead.
+
 ### What would be required before deployment?
 
 1. A labelled, externally sourced **video** test set (other cameras and cities)

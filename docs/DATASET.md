@@ -172,7 +172,13 @@ There is no separate, independently-sourced external test set yet. The `test/`
 split above comes from the same pool as `train/valid` and therefore shares its
 biases. A genuinely external clip set (different cameras/cities) is the right
 next step for a trustworthy generalisation estimate and is listed as a known
-gap, not claimed as done.
+gap, not claimed as done. The schema, split lock and leakage guard for it exist
+(`modules/field_data.py`, docs/FIELD_EVALUATION.md §2); whole cameras can be
+held out as *external*.
+
+79% of the de-duplicated training pool (`datasets/train_clean`, 4,574 of 5,772)
+are offline-augmented `aug_*` copies whose original can't be recovered, so a
+label fixed on one image never reaches its copies (docs/ROADMAP.md #10).
 
 ## Machine-readable manifest
 

@@ -14,7 +14,7 @@ that way; none of them is field accuracy.
 > detector — Hungarian rider↔plate association, multi-object tracking, temporal
 > OCR voting, violation state machines, tamper-evident evidence (SHA-256) and a
 > Flask review dashboard — with one model-free decision core shared by the
-> production job and every evaluator, covered by 602 model-free tests at ~95%
+> production job and every evaluator, covered by 712 model-free tests at ~95%
 > branch coverage of the core modules.
 
 > **Chose decision thresholds by experiment instead of by hand**: simulated riders
@@ -75,7 +75,7 @@ that way; none of them is field accuracy.
 
 | number | file | command |
 |---|---|---|
-| 602 tests, ~95% branch coverage of `modules/` (model-loading modules excluded) | test run | `pytest --cov` |
+| 712 tests, ~95% branch coverage of `modules/` (model-loading modules excluded) | test run | `pytest --cov` |
 | 31.5% → 1.2% helmeted riders flagged | `temporal_confirmation.md` (held-out seed, stickiness 0.5, 2 s) | `python3 evaluate_temporal.py` |
 | wrong plate 40–62% → ≤ 1.8%, 34–70% coverage | `ocr_stabilizer_selection.md` (held-out seed, 4–12% character noise, scored at first election) | `python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results --name ocr_policy_simulation` |
 | 30 defects + 8 from the independent review | `docs/AUDIT.md` | — (each row names its fix and test) |

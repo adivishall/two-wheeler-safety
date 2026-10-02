@@ -88,3 +88,10 @@ Reading it:
 What training can fix: F1–F5. What only the pipeline can fix: F7–F11 (done where
 marked). What neither can fix without new data: the size of the WithHelmet
 uncertainty, real OCR accuracy, real temporal error correlation.
+
+The same list, with evidence, hypothesis, data requirement and acceptance test
+per item, is [ROADMAP.md](ROADMAP.md). Two leads from the stratified detector
+evaluation (`conditions.md`, real images) feed it: small riders are harder for
+WithoutHelmet and TripleRiding on val (same direction on test, not
+significant), and multi-rider images are much harder for WithoutHelmet on val
+(AP 0.56 vs 0.84) but not on test — neither is established.

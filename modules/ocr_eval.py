@@ -85,7 +85,8 @@ def evaluate(observations: list[OcrObservation]) -> OcrMetrics:
     if n == 0:
         return OcrMetrics()
 
-    exact = norm_match = char_acc = edit_sum = invalid = 0
+    exact = norm_match = edit_sum = invalid = 0
+    char_acc = 0.0
     conf_correct: list[float] = []
     conf_wrong: list[float] = []
 

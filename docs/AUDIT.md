@@ -1,13 +1,16 @@
 # Audit register — v1.1.0
 
 A hostile review of the v1.0.0 system (30 findings, plus two found later: E12
-by a seed-variance run, E13 by a final cross-check of the docs), then an independent review of the fixes themselves
-(8 more, §"Found by an independent review"). Both were done with an AI coding
-assistant: the first taking four reviewer perspectives in turn (an ML engineer,
-a backend engineer, a computer-vision interviewer and a skeptical hiring
-manager), the second a separate AI agent given only the branch. No human
-reviewer was involved; every finding was confirmed by running code, and each
-row names its evidence. Each finding is a defect in shipped behaviour or in a published claim,
+by a seed-variance run, E13 by a final cross-check of the docs); an independent
+review of those fixes (8 more, §"Found by an independent review"); three
+found while building the field-evaluation layer (§"Found in the field-evaluation
+wave"); and ten more from an independent review of that layer (§"Found by an
+independent review of the field-evaluation wave"). All of it was done with an
+AI coding assistant: the first review taking four reviewer perspectives in turn
+(an ML engineer, a backend engineer, a computer-vision interviewer and a
+skeptical hiring manager), each independent review a separate AI agent given
+only the branch. No human reviewer was involved; every
+finding was confirmed by running code, and each row names its evidence. Each finding is a defect in shipped behaviour or in a published claim,
 with the evidence that it was real, the commit that fixed it, and the test or
 result file that keeps it fixed. Findings that are *limitations* rather than
 defects live in [ERROR_ANALYSIS.md](ERROR_ANALYSIS.md).
@@ -87,6 +90,38 @@ All fixed in `3902441`, each with a regression test.
 | R6 | L | OCR time profiled per frame, not per call (benchmark under-counted calls with several plates). | per-call accounting | `test_profiler_counts_every_ocr_call_not_every_frame` |
 | R7 | L | Provenance `dirty` ignored untracked source files — and (found while regenerating) counted edits to docs, so results regenerated during a docs edit were stamped dirty. | untracked code counts; `*.md` doesn't | `test_dirty_flag_ignores_generated_results` |
 | R8 | L | Error-budget OCR stream took a variable number of draws, so one oracle shifted another stage's outcomes. | constant draws per opportunity | — (noise, not bias) |
+
+## Found in the field-evaluation wave
+
+Defects in shipped code found while building the field-evaluation layer. The
+design mistakes caught before anything shipped (model-guided relabelling of
+evaluation data, demo rows admitted as review labels, mAP compared across
+different class mixes) are recorded as decisions instead (DECISIONS #26–#27).
+
+| # | sev | finding | fix | pinned by |
+|---|---|---|---|---|
+| W1 | H | **Calibration was chosen in-sample.** `fit_and_evaluate` fitted Platt/isotonic on all rows and picked the lowest in-sample ECE; on already-calibrated scores it adopted a calibrator in ~30 of 40 simulated datasets, and `--save` would have shipped it. | `32b7060` — out-of-fold selection by Brier with a bootstrap CI; `insufficient_data` below 30/30 outcomes | `test_calibrated_scores_are_not_replaced_by_an_in_sample_winner` |
+| W2 | M | Committed results recorded absolute local paths (`/Users/<name>/…`: Ultralytics `save_dir`, resolved image dirs). | `9084003` — `portable_path()` | `test_portable_path_never_writes_the_local_home_into_a_result` |
+| W3 | M | `make eval-compare` compared models on the test split; `make eval-ocr` omitted the threshold selection and would overwrite its committed result. | `89fba50` | — (Makefile; `make eval-ocr` reproduced the committed result) |
+
+## Found by an independent review of the field-evaluation wave
+
+A separate AI review agent audited the field-evaluation branch before it was
+published and reproduced each of these with a script. All fixed in `19a2152`,
+`8898775` and `28b4a65`, each with a regression test.
+
+| # | sev | finding | fix | pinned by |
+|---|---|---|---|---|
+| V1 | H | **The split lock was keyed by a derived group key**: renaming a held-out sequence, or editing its camera/date, re-hashed it into development and the export trained on it. | lock records every sequence; renamed/removed/re-grouped sequences refused | `test_a_renamed_evaluation_sequence_cannot_be_reassigned`, `test_editing_a_locked_sequences_date_cannot_move_it` |
+| V2 | H | **The trainer guard failed open**: a `train.txt` image list was "checked 0" and passed; a list of dirs crashed; `val` (which picks `best.pt`) was never checked. | every YOLO source form; train + val; checking nothing fails | `test_trainer_guard_reads_image_lists_and_val_and_refuses_to_check_nothing` |
+| V3 | H | **Several fines on one vehicle collapsed into one outcome**: a correct and a wrong-plate fine read "precision 1.0". | one outcome per issued fine | `test_every_issued_fine_is_scored_not_just_one_per_vehicle` |
+| V4 | M | The guard only knew labelled evaluation frames on disk: a copy of a deleted original, or an unlabelled frame of a held-out sequence, passed. | lock accumulates evaluation file hashes (whole frame dirs); missing never-hashed frames fail closed | `test_a_deleted_evaluation_frame_is_still_caught_by_its_recorded_hash`, `test_an_unlabelled_frame_of_an_evaluation_sequence_is_evaluation_data` |
+| V5 | M | Whole-frame perceptual hashes matched every moment of a fixed camera (12 false leaks), pushing users to disable the check. | object-crop signatures | `test_frames_of_one_fixed_camera_are_not_false_leaks` |
+| V6 | M | Riders with unknown helmet state were dropped from label files — taught as background. | frame skipped whole | `test_a_frame_with_an_unknown_helmet_state_is_not_exported` |
+| V7 | M | Phantom fines left out of precision; a 0/0 gate blamed "plate missed" for invisible plates; class accuracy judged pillions by the vehicle's class; OCR `exact_match` and abstention meant different things per policy. | per-decision precision incl. phantoms; empty gates don't fail; per-rider class; one definition per metric | `test_field_eval.py` (four regression tests) |
+| V8 | M | `recipe_comparison` resampled three seeds with replacement, understating their spread: identical recipes promoted ~2x nominal. | Welch-t over image + seed variance (false promote 2.0% vs 2.5%) | `test_identical_recipes_are_not_promoted` |
+| V9 | M | Validation let a fully visible plate have no text (a missed fine then scored "correctly withheld") and never checked frame file names against indices. | both rejected | `test_every_schema_rule_is_enforced` |
+| V10 | L | Binary conditions counted twice ("glare" and its mirror "no glare"); size-range matching didn't prefer in-range objects; duplicate/unusable dismissals counted as incorrect; FIELD_EVALUATION said 9 val-significant comparisons (it was 11); the queue report counted val/test in the model-selected pool. | fixed; 25 comparisons | `test_binary_conditions_are_tested_once_not_mirrored`, `test_range_matching_prefers_the_in_range_object_like_coco`, `test_duplicate_and_unusable_evidence_are_not_correctness_labels` |
 
 ## What the review did not find
 

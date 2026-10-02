@@ -279,9 +279,20 @@ curl -X POST http://127.0.0.1:5000/api/violations/5/review \
 ```
 
 Body: `review_status` (required, one of `pending`/`confirmed`/`dismissed`),
-`decision` (optional), `notes` (optional). Returns
+`decision` (optional), `notes` (optional), and — so the review is also a label —
+`reason` (dismissals only: `wrong_violation`, `wrong_plate`, `wrong_vehicle`,
+`duplicate`, `evidence_unusable`, `other`) and `corrected_plate` (with
+`reason: "wrong_plate"`: the true plate, normalised). The reviewer's identity is
+stored with the decision. Returns
 `{ "message": "review recorded", "review_status": "confirmed" }`. `400` for a
-missing/invalid status; `404` for an unknown id.
+missing/invalid status, an unknown reason, a reason on a non-dismissal, or a
+corrected plate without `wrong_plate`; `404` for an unknown id.
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/violations/5/review \
+  -H "Content-Type: application/json" \
+  -d '{"review_status":"dismissed","reason":"wrong_plate","corrected_plate":"MH12AB1284"}'
+```
 
 ## POST /api/violations/&lt;id&gt;/payment
 

@@ -334,3 +334,52 @@ track forever, and the second vehicle's violation is fined under it — found by
 review, reproduced in `tests/test_pipeline_core.py`. The re-check costs a
 fraction of the lock's savings (one read in ten instead of none); the
 freshness interlock is a safety rule rather than a tuned threshold.
+
+## 25. Field data is split by group, frozen, and guarded on the way to training
+
+**Decision.** Field splits are assigned to sequences (or camera-days), never
+frames; whole cameras are EXTERNAL, named before their footage is used; the lock
+records every sequence's split and refuses renamed, removed or re-grouped
+sequences; it accumulates the byte hash of every evaluation file. Training data
+leaves only through an export that checks every image against evaluation data by
+path, byte hash (including history) and object-crop perceptual hash, and the
+trainer runs the same guard over `train` and `val`, failing if it checks nothing.
+
+**Why.** Frames of one sequence are near-duplicates, so a frame-level split
+leaks by construction; the master dataset already showed 8–10% of held-out
+images duplicating training images. A lock that can move, or a camera declared
+external after it was developed on, would quietly turn evaluation data into
+training data. Each leakage check alone has a hole (a renamed copy, a re-encode).
+
+## 26. The model never chooses which evaluation labels get fixed
+
+**Decision.** Active learning selects from training data only. Held-out labels
+are audited on a seeded, uniform-random sample, labelled without predictions.
+
+**Why.** The first run of the selector queued 77 held-out images because the
+model disagreed with their labels. Fixing only those makes the model look
+better — its favoured corrections are made, errors it shares with the labels are
+never found — which is tuning the test set through the labels.
+
+## 27. Calibration is judged out of fold, on pipeline output only
+
+**Decision.** A calibrator is adopted only if its out-of-fold Brier score beats
+the raw score's with a CI excluding zero, folds grouped by session, with ≥ 30
+correct and 30 incorrect outcomes. Labels come only from violations the
+pipeline produced (scored, with an evidence sidecar).
+
+**Why.** Fitting and scoring on the same rows adopted a calibrator on
+already-calibrated scores in ~30 of 40 simulated datasets (AUDIT W1). And the
+local database held pre-1.1.0 demo rows that look exactly like real reviews;
+the sidecar is what distinguishes pipeline output from anything typed in.
+
+## 28. No retrain without targeted data; recipes compared by seed means
+
+**Decision.** A retrain needs a measured weakness *and* data that targets it;
+recipes are compared by their seed means with images and seeds bootstrapped
+together (≥ 3 seeds each, `compare_recipes.py`).
+
+**Why.** The confirmed weaknesses (label gap, head coverings, possibly
+multi-rider scenes) need labels that don't exist; retraining without them
+repeats M1–M3. And a new seed of v1 alone was "significantly worse" by the
+single-checkpoint bootstrap (EXPERIMENTS M5).

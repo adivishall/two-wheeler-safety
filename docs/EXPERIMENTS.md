@@ -173,3 +173,58 @@ de-duplicated train `sha256:5ba9cee6da3943dd`; helmet-only subset
   runs, also pinned on a stub video by `tests/test_pipeline_integration.py`.
 - **Caveat.** Two earlier single-run benchmarks of the same config gave 32.6 and
   26.9 FPS; the repeat/interleave protocol exists because of that spread.
+
+## Field-evaluation wave
+
+### C1 — detector accuracy by measured image condition
+
+- **Question.** Does the detector degrade in the conditions a field camera
+  brings — dark, blurred, glare, dense, small — on the real held-out images?
+- **Config** (`evaluate_conditions.py`). Conditions measured from pixels and
+  boxes (`modules/image_conditions.py`), cut points fitted on val, reused on
+  test; per class, stratum vs the rest (unpaired bootstrap), small vs large
+  objects (paired); ≥ 10 instances on both sides; confirmed only if test agrees
+  in sign with its own CI excluding zero.
+- **Result** (`conditions.md`). 25 comparisons; 11 significant on val (~1
+  expected by chance); 2 replicated. Dark images: Plate +0.10 / +0.12 — but they
+  are close-up checkpoint photos with lit plates, not night CCTV. Single-rider
+  images: WithoutHelmet +0.37 / +0.18 vs the rest — on val the 2–3-rider bucket
+  is much worse (0.56 vs 0.84), on test it isn't (0.80 vs 0.80); test's
+  replication rests on 3 images with 4+ riders. Small riders harder on val, not
+  significant on test. Resolution, angle, weather: not measurable here.
+- **Decision.** Leads for the field dataset's sampling (ROADMAP #1), not facts.
+
+### D4 — calibrator selection out of fold
+
+- **Question.** Does the calibration experiment pick a calibrator when none is
+  needed?
+- **Config.** Scores that are already calibrated (label ~ Bernoulli(score)),
+  n = 80 / 150 / 300, 40 datasets each; old rule (lowest in-sample ECE) vs new
+  (out-of-fold Brier, CI excluding zero).
+- **Result.** Old rule adopted a calibrator in 33, 31 and 30 of 40; new rule
+  in 0 of 40 at every n (AUDIT W1).
+- **Decision.** New rule shipped; applied to the local database: 0 admissible
+  outcomes, NOT MEASURED (`calibration.md`).
+
+### A1 — first active-learning queue
+
+- **Config** (`select_for_labeling.py`). Detector predictions on the 5,772-image
+  de-duplicated training pool; signals and diversity as in
+  `modules/active_learning.py`; budget 150; plus a 50-image uniform-random,
+  model-blind audit of val/test.
+- **Result** (`labeling_queue.md`). 320 candidates, 150 selected;
+  contradictions / class disagreements / label gaps are 13% / 7% / 7% of the
+  queue vs 7% / 4% / 3% of candidates. A first version selected 77 held-out
+  images by model disagreement — withdrawn (DECISIONS #26).
+- **Open.** Does it beat random selection? ROADMAP #7.
+
+### M6 — v2 against the v1 recipe mean
+
+- **Config** (`compare_recipes.py`). v1 recipe = {v1, seed 1}; v2 = {v2_dedup};
+  val; images and seeds bootstrapped together.
+- **Result** (`recipe_comparison_val.md`). mAP@50 +0.041 [−0.035, +0.117];
+  WithoutHelmet +0.042 [+0.005, +0.079]; Plate −0.010 [−0.074, +0.053]
+  (Welch-t interval over image and seed variance).
+  Verdict: insufficient seeds (2 vs 1).
+- **Decision.** No promotion; one more v1 seed and two more v2 seeds settle it
+  (ROADMAP #5).

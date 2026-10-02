@@ -66,6 +66,10 @@ def parse_args(argv=None):
                     help="skip writing the model provenance manifest")
     ap.add_argument("--model-version", default="0.1.0",
                     help="semantic version recorded in the model manifest")
+    ap.add_argument("--field-dataset", action="append", default=[], metavar="DIR",
+                    help="refuse to train if any training image is (a copy or "
+                         "near-duplicate of) an evaluation frame of this field "
+                         "dataset; repeatable")
 
     # Augmentation knobs. Left as None means "use the Ultralytics default", so
     # omitting all of these reproduces the historical training behaviour exactly;
@@ -100,6 +104,16 @@ def main(argv=None) -> int:
             args.data,
         )
         return 2
+
+    for field_root in args.field_dataset:
+        from modules.field_data import LeakageError, guard_training_config
+
+        try:
+            n = guard_training_config(args.data, field_root)
+        except LeakageError as exc:
+            log.error("%s", exc)
+            return 3
+        log.info("leakage guard: %d training images checked against %s", n, field_root)
 
     from ultralytics import YOLO
 

@@ -70,9 +70,14 @@ jobs:
                      evaluate_system compare_models audit_dataset \
                      dataset_manifest train_traffic benchmark \
                      evaluate_temporal evaluate_uncertainty evaluate_robustness \
-                     audit_labels evaluate_tracking; do
+                     audit_labels evaluate_tracking evaluate_conditions \
+                     compare_recipes select_for_labeling evaluate_field \
+                     field_dataset calibrate_confidence; do
             python "$cli.py" --help > /dev/null || exit 1
           done
+          # No field dataset in CI: the field evaluation must say so, not fail.
+          python evaluate_field.py --dataset "$RUNNER_TEMP/no-field-data" \
+              --out "$RUNNER_TEMP/eval" | grep -q "NOT MEASURED"
 
       - name: Check the generated reports exist and are well-formed
         run: |

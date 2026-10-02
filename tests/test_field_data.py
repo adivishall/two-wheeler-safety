@@ -1,0 +1,422 @@
+"""Field dataset: the schema is enforced, splits are frozen per group, and
+evaluation data cannot become training data by any route the guard knows."""
+
+import json
+import os
+
+import cv2
+import field_fixture
+import pytest
+
+from modules.field_data import (
+    DEVELOPMENT,
+    EVAL_SPLITS,
+    EXTERNAL,
+    FieldDataError,
+    LeakageError,
+    assign_splits,
+    check_no_eval_leakage,
+    coverage,
+    export_training,
+    frames_in,
+    load_dataset,
+    read_lock,
+    split_of,
+    training_frames,
+)
+
+
+@pytest.fixture
+def ds(tmp_path):
+    return load_dataset(field_fixture.build(str(tmp_path / "field")), check_files=True)
+
+
+def test_a_valid_dataset_loads(ds):
+    assert set(ds.cameras) == {"camA", "camB"}
+    assert len(ds.vehicles) == 7 and len(ds.frames) == 21
+    assert ds.vehicles[("s1", "v1")].violations == {"no_helmet"}
+    assert ds.warnings == []
+
+
+def _mutate_vehicle(tmp_path, **changes):
+    vehicles = [{"sequence_id": "s1", "vehicle_id": "v1", "first_frame": 0, "last_frame": 2,
+                 "plate_text": "MH12AB1234", "plate_visibility": "full", "rider_count": 1,
+                 "helmet_states": ["no_helmet"], "violations": ["no_helmet"],
+                 "occlusion": "none", "annotator": "ann1", **changes}]
+    seqs = [{"sequence_id": "s1", "camera_id": "camA", "fps": 25, "frames_dir": "f"}]
+    return field_fixture.build(str(tmp_path / "bad"), sequences=seqs, vehicles=vehicles,
+                               frames=[], write_images=False)
+
+
+@pytest.mark.parametrize("changes, fragment", [
+    ({"rider_count": 3, "helmet_states": ["no_helmet", "helmet", "helmet"]},
+     "triple_riding must be labelled"),
+    ({"helmet_states": ["helmet"]}, "no rider is bare-headed"),
+    ({"violations": [], "helmet_states": ["no_helmet"]}, "no_helmet is not labelled"),
+    ({"plate_visibility": "none"}, "plate_text given for a plate labelled not visible"),
+    ({"annotator": ""}, "annotator is required"),
+    ({"violations": ["no_helmet", "jaywalking"]}, "unknown violation"),
+    ({"last_frame": -5}, "last_frame < first_frame"),
+])
+def test_inconsistent_vehicle_labels_are_rejected(tmp_path, changes, fragment):
+    with pytest.raises(FieldDataError) as err:
+        load_dataset(_mutate_vehicle(tmp_path, **changes))
+    assert any(fragment in issue for issue in err.value.issues), err.value.issues
+
+
+def test_frame_paths_must_stay_inside_the_dataset(tmp_path):
+    seqs = [{"sequence_id": "s1", "camera_id": "camA", "fps": 25, "frames_dir": "f"}]
+    frames = [{"sequence_id": "s1", "frame_index": 0, "frame_path": "../../etc/x.png",
+               "annotator": "a", "objects": []}]
+    root = field_fixture.build(str(tmp_path / "p"), sequences=seqs, frames=frames,
+                               write_images=False)
+    with pytest.raises(FieldDataError, match="relative and inside"):
+        load_dataset(root)
+
+
+def test_boxes_are_checked_against_the_camera(tmp_path):
+    seqs = [{"sequence_id": "s1", "camera_id": "camA", "fps": 25, "frames_dir": "f"}]
+    frames = [{"sequence_id": "s1", "frame_index": 1, "frame_path": "f/1.png", "annotator": "a",
+               "objects": [{"vehicle_id": "v1", "role": "rider", "box": [300, 10, 400, 50]}]}]
+    root = field_fixture.build(str(tmp_path / "b"), sequences=seqs, frames=frames,
+                               write_images=False)
+    with pytest.raises(FieldDataError, match="outside the camera resolution"):
+        load_dataset(root)
+
+
+def test_a_plate_the_pipeline_would_reject_is_a_warning_not_an_error(tmp_path):
+    root = _mutate_vehicle(tmp_path, plate_text="ABC 123", review_decision="accepted")
+    ds = load_dataset(root)
+    assert any("not shaped like an Indian plate" in w for w in ds.warnings)
+
+
+def test_splits_are_by_group_deterministic_and_frozen(ds, tmp_path):
+    lock = assign_splits(ds, external_cameras=["camB"], salt="t")
+    assert split_of(ds, lock, "x1") == EXTERNAL
+    before = {k: a["split"] for k, a in lock["assignments"].items()}
+    # every frame of a sequence is in its sequence's split
+    for f in ds.frames:
+        assert split_of(ds, lock, f.sequence_id) in {DEVELOPMENT, *EVAL_SPLITS}
+    # re-running with different ratios moves nothing that was already assigned
+    again = assign_splits(ds, ratios={"development": 1.0, "validation": 0.0, "held_out": 0.0})
+    assert {k: a["split"] for k, a in again["assignments"].items()} == before
+
+
+def test_new_data_never_reshuffles_old_data(tmp_path):
+    root = str(tmp_path / "grow")
+    field_fixture.build(root)
+    first = assign_splits(load_dataset(root), salt="t")
+    meta = json.load(open(os.path.join(root, "dataset.json")))
+    meta["sequences"].append({"sequence_id": "s9", "camera_id": "camA", "fps": 25,
+                              "frames_dir": "frames/s9"})
+    json.dump(meta, open(os.path.join(root, "dataset.json"), "w"))
+    grown = assign_splits(load_dataset(root))
+    for key, a in first["assignments"].items():
+        assert grown["assignments"][key]["split"] == a["split"]
+    assert "sequence:s9" in grown["assignments"]
+
+
+def test_a_camera_cannot_become_external_after_it_was_used(ds):
+    assign_splits(ds, salt="t")
+    with pytest.raises(LeakageError, match="retroactively"):
+        assign_splits(ds, external_cameras=["camA"])
+
+
+def test_a_hand_edited_lock_is_refused(ds):
+    lock = assign_splits(ds, external_cameras=["camB"], salt="t")
+    key = next(k for k, a in lock["assignments"].items() if a["split"] != DEVELOPMENT)
+    lock["assignments"][key]["split"] = DEVELOPMENT  # smuggle eval data into training
+    with open(os.path.join(ds.root, "splits.lock.json"), "w") as fh:
+        json.dump(lock, fh)
+    with pytest.raises(LeakageError, match="edited by hand"):
+        read_lock(ds.root)
+
+
+def test_camera_day_grouping_keeps_a_cameras_day_together(tmp_path):
+    root = field_fixture.build(str(tmp_path / "cd"))
+    ds = load_dataset(root)
+    lock = assign_splits(ds, group_by="camera_day", salt="t")
+    by_day: dict = {}
+    for sid, seq in ds.sequences.items():
+        by_day.setdefault((seq.camera_id, seq.day), set()).add(split_of(ds, lock, sid))
+    assert all(len(splits) == 1 for splits in by_day.values())
+
+
+def test_training_export_contains_development_frames_only(ds, tmp_path):
+    lock = assign_splits(ds, external_cameras=["camB"], salt="t")
+    manifest = export_training(ds, lock, str(tmp_path / "train"))
+    dev = frames_in(ds, lock, DEVELOPMENT)
+    assert manifest["frames"] == len(dev) > 0
+    exported = sorted(os.listdir(tmp_path / "train" / "images"))
+    assert all(name.split("_")[0] in {f.sequence_id for f in dev} for name in exported)
+    label = open(tmp_path / "train" / "labels" / exported[0].replace(".png", ".txt")).read()
+    classes = sorted(int(line.split()[0]) for line in label.splitlines())
+    assert classes == [0, 2]  # Plate, WithoutHelmet
+    assert manifest["lock_hash"] == lock["lock_hash"]
+
+
+def test_the_guard_catches_an_eval_frame_by_path_copy_and_reencode(ds, tmp_path):
+    lock = assign_splits(ds, external_cameras=["camB"], salt="t")
+    eval_frame = next(f for f in ds.frames if split_of(ds, lock, f.sequence_id) in EVAL_SPLITS)
+    src = ds.frame_file(eval_frame)
+    with pytest.raises(LeakageError, match="is an evaluation frame"):
+        check_no_eval_leakage([src], ds, lock)
+    copy = tmp_path / "renamed.png"
+    copy.write_bytes(open(src, "rb").read())
+    with pytest.raises(LeakageError, match="byte-identical"):
+        check_no_eval_leakage([str(copy)], ds, lock)
+    reenc = tmp_path / "reencoded.jpg"
+    img = cv2.imread(src)
+    cv2.imwrite(str(reenc), cv2.resize(img, (img.shape[1] // 2, img.shape[0] // 2)),
+                [cv2.IMWRITE_JPEG_QUALITY, 70])
+    W, H = field_fixture.W, field_fixture.H
+    boxes = [[o.box[0] / W, o.box[1] / H, o.box[2] / W, o.box[3] / H] for o in eval_frame.objects]
+    with pytest.raises(LeakageError, match="near-duplicate"):
+        check_no_eval_leakage([str(reenc)], ds, lock, train_boxes={str(reenc): boxes})
+    dev_frame = next(f for f in ds.frames if split_of(ds, lock, f.sequence_id) == DEVELOPMENT)
+    check_no_eval_leakage([ds.frame_file(dev_frame)], ds, lock)  # a real dev frame passes
+
+
+def test_rejected_and_uncertain_labels_are_not_trained_on(tmp_path):
+    root = field_fixture.build(str(tmp_path / "q"))
+    rows = [json.loads(line) for line in open(os.path.join(root, "frames.jsonl"))]
+    rows[0]["review_decision"] = "rejected"
+    rows[1]["label_confidence"] = "uncertain"
+    with open(os.path.join(root, "frames.jsonl"), "w") as fh:
+        fh.writelines(json.dumps(r) + "\n" for r in rows)
+    ds = load_dataset(root)
+    lock = assign_splits(ds, salt="t",
+                         ratios={"development": 1.0, "validation": 0.0, "held_out": 0.0})
+    kept = {(f.sequence_id, f.frame_index) for f in training_frames(ds, lock)}
+    assert (rows[0]["sequence_id"], 0) not in kept and (rows[1]["sequence_id"], 1) not in kept
+
+
+def test_coverage_counts_labelled_vehicles_per_condition(ds):
+    lock = assign_splits(ds, external_cameras=["camB"], salt="t")
+    cov = coverage(ds, lock)
+    assert cov[EXTERNAL]["camera"] == {"camB": 1}
+    total_night = sum(c["lighting"].get("night", 0) for c in cov.values())
+    assert total_night == 3
+
+
+def test_the_trainer_refuses_a_config_that_contains_an_eval_frame(ds, tmp_path):
+    """train_traffic.py --field-dataset runs the same guard before any training
+    starts (exit 3), so a hand-built config can't bypass export_training."""
+    import shutil
+
+    import train_traffic
+
+    lock = assign_splits(ds, external_cameras=["camB"], salt="t")
+    eval_frame = next(f for f in ds.frames if split_of(ds, lock, f.sequence_id) in EVAL_SPLITS)
+    train_dir = tmp_path / "yolo" / "train" / "images"
+    train_dir.mkdir(parents=True)
+    shutil.copyfile(ds.frame_file(eval_frame), train_dir / "innocent_name.png")
+    (tmp_path / "yolo" / "train" / "labels").mkdir()
+    (tmp_path / "yolo" / "train" / "labels" / "innocent_name.txt").write_text("")
+    data = tmp_path / "yolo" / "data.yaml"
+    data.write_text(f"path: {tmp_path / 'yolo'}\ntrain: train/images\nval: train/images\n"
+                    "names: [Plate, WithHelmet, WithoutHelmet, TripleRiding]\n")
+    assert train_traffic.main(["--data", str(data), "--field-dataset", ds.root]) == 3
+
+
+def test_field_dataset_cli_round_trip(tmp_path, capsys):
+    import field_dataset
+
+    root = field_fixture.build(str(tmp_path / "cli"))
+    assert field_dataset.main(["validate", root, "--check-files"]) == 0
+    assert field_dataset.main(["export-train", root, str(tmp_path / "o")]) == 2  # no lock yet
+    assert field_dataset.main(["assign-splits", root, "--external-camera", "camB",
+                               "--salt", "t"]) == 0
+    assert field_dataset.main(["export-train", root, str(tmp_path / "o")]) == 0
+    assert (tmp_path / "o" / "export_manifest.json").exists()
+    bad = tmp_path / "broken"
+    field_fixture.build(str(bad), schema_version="0.9", write_images=False)
+    assert field_dataset.main(["validate", str(bad)]) == 2
+    assert "schema_version" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("mutate, fragment", [
+    (lambda m, v, f: m["cameras"].append(dict(m["cameras"][0])), "duplicate"),
+    (lambda m, v, f: m["cameras"][0].update(homography=[[1, 0], [0, 1]]), "homography must be 3x3"),
+    (lambda m, v, f: m["sequences"][0].update(camera_id="nope"), "unknown camera_id"),
+    (lambda m, v, f: m["sequences"][0].update(fps=0), "fps must be > 0"),
+    (lambda m, v, f: m["sequences"][0].update(frames_dir=None), "needs video_path or frames_dir"),
+    (lambda m, v, f: m["sequences"][0].update(lighting="dim"), "lighting="),
+    (lambda m, v, f: v[0].update(vehicle_id="bad id"), "vehicle_id missing"),
+    (lambda m, v, f: v.append(dict(v[0])), "duplicate vehicle"),
+    (lambda m, v, f: f.append(dict(f[0])), "duplicate frame"),
+    (lambda m, v, f: f[0]["objects"].append({"vehicle_id": "ghost", "role": "rider",
+                                             "box": [1, 1, 5, 5]}), "no vehicle 'ghost'"),
+    (lambda m, v, f: f[0]["objects"][0].update(box=[50, 50, 10, 10]), "x1<x2"),
+    (lambda m, v, f: f[0].update(frame_index=99), "outside the vehicle's first/last frame"),
+    (lambda m, v, f: f[0]["objects"][0].update(role="driver"), "role="),
+    (lambda m, v, f: v[0].update(plate_text=""), "fully visible plate needs its plate_text"),
+    (lambda m, v, f: f[0].update(frame_path="frames/s1/000007.png"), "named by frame index"),
+])
+def test_every_schema_rule_is_enforced(tmp_path, mutate, fragment):
+    import copy
+
+    root = tmp_path / "base"
+    field_fixture.build(str(root), write_images=False)
+    meta = json.load(open(root / "dataset.json"))
+    vehicles = [json.loads(line) for line in open(root / "vehicles.jsonl")]
+    frames = [json.loads(line) for line in open(root / "frames.jsonl")]
+    meta, vehicles, frames = copy.deepcopy(meta), copy.deepcopy(vehicles), copy.deepcopy(frames)
+    mutate(meta, vehicles, frames)
+    json.dump(meta, open(root / "dataset.json", "w"))
+    with open(root / "vehicles.jsonl", "w") as fh:
+        fh.writelines(json.dumps(v) + "\n" for v in vehicles)
+    with open(root / "frames.jsonl", "w") as fh:
+        fh.writelines(json.dumps(f) + "\n" for f in frames)
+    with pytest.raises(FieldDataError) as err:
+        load_dataset(str(root))
+    assert any(fragment in issue for issue in err.value.issues), err.value.issues
+
+
+def test_invalid_json_lines_and_a_missing_dataset_are_reported(tmp_path):
+    with pytest.raises(FieldDataError, match="no dataset.json"):
+        load_dataset(str(tmp_path / "nothing"))
+    root = field_fixture.build(str(tmp_path / "j"), write_images=False)
+    with open(os.path.join(root, "vehicles.jsonl"), "a") as fh:
+        fh.write("{not json\n")
+    with pytest.raises(FieldDataError, match="invalid JSON"):
+        load_dataset(root)
+
+
+# -- holes found by the independent review ---------------------------------------
+
+def _lock_with_external(ds):
+    return assign_splits(ds, external_cameras=["camB"], salt="t")
+
+
+def _eval_frame(ds, lock):
+    return next(f for f in ds.frames if split_of(ds, lock, f.sequence_id) in EVAL_SPLITS)
+
+
+def test_a_renamed_evaluation_sequence_cannot_be_reassigned(tmp_path):
+    root = str(tmp_path / "ren")
+    field_fixture.build(root)
+    lock = _lock_with_external(load_dataset(root))
+    meta = json.load(open(os.path.join(root, "dataset.json")))
+    for seq in meta["sequences"]:
+        if seq["sequence_id"] == "x1":
+            seq["sequence_id"] = "x1_renamed"
+    json.dump(meta, open(os.path.join(root, "dataset.json"), "w"))
+    rows = [json.loads(line) for line in open(os.path.join(root, "vehicles.jsonl"))]
+    for r in rows:
+        if r["sequence_id"] == "x1":
+            r["sequence_id"] = "x1_renamed"
+    open(os.path.join(root, "vehicles.jsonl"), "w").writelines(json.dumps(r) + "\n" for r in rows)
+    rows = [json.loads(line) for line in open(os.path.join(root, "frames.jsonl"))]
+    for r in rows:
+        if r["sequence_id"] == "x1":
+            r["sequence_id"] = "x1_renamed"
+    open(os.path.join(root, "frames.jsonl"), "w").writelines(json.dumps(r) + "\n" for r in rows)
+    ds2 = load_dataset(root)
+    with pytest.raises(LeakageError, match="no longer in the dataset"):
+        assign_splits(ds2)
+    assert lock["sequences"]["x1"]["split"] == EXTERNAL
+
+
+def test_editing_a_locked_sequences_date_cannot_move_it(tmp_path):
+    root = str(tmp_path / "day")
+    field_fixture.build(root)
+    assign_splits(load_dataset(root), group_by="camera_day", salt="t")
+    meta = json.load(open(os.path.join(root, "dataset.json")))
+    meta["sequences"][0]["start_time"] = "2027-01-01T00:00:00"
+    json.dump(meta, open(os.path.join(root, "dataset.json"), "w"))
+    with pytest.raises(LeakageError, match="moved from group"):
+        assign_splits(load_dataset(root), group_by="camera_day")
+
+
+def test_a_deleted_evaluation_frame_is_still_caught_by_its_recorded_hash(ds, tmp_path):
+    lock = _lock_with_external(ds)
+    src = ds.frame_file(_eval_frame(ds, lock))
+    copy = tmp_path / "kept_copy.png"
+    copy.write_bytes(open(src, "rb").read())
+    os.remove(src)
+    with pytest.raises(LeakageError, match="byte-identical"):
+        check_no_eval_leakage([str(copy)], ds, lock)
+
+
+def test_a_missing_never_hashed_evaluation_frame_fails_closed(ds):
+    lock = _lock_with_external(ds)
+    ef = _eval_frame(ds, lock)
+    lock["eval_content"] = {}  # as if the file never existed at assignment
+    os.remove(ds.frame_file(ef))
+    with pytest.raises(LeakageError, match="never hashed"):
+        check_no_eval_leakage([], ds, lock)
+
+
+def test_an_unlabelled_frame_of_an_evaluation_sequence_is_evaluation_data(ds):
+    lock = _lock_with_external(ds)
+    ef = _eval_frame(ds, lock)
+    extra = os.path.join(os.path.dirname(ds.frame_file(ef)), "000099.png")
+    cv2.imwrite(extra, field_fixture.frame_image(999))
+    with pytest.raises(LeakageError, match="is an evaluation frame"):
+        check_no_eval_leakage([extra], ds, lock)
+
+
+def test_frames_of_one_fixed_camera_are_not_false_leaks(tmp_path):
+    """Whole-frame hashes match any two moments of a fixed camera (same
+    background). Object-level signatures only match the same objects."""
+    import numpy as np
+
+    from modules.field_data import object_signature
+
+    background = field_fixture.frame_image(1)
+    a, b = background.copy(), background.copy()
+    a[60:180, 100:160] = np.random.default_rng(2).integers(0, 255, (120, 60, 3))
+    b[40:160, 220:280] = np.random.default_rng(3).integers(0, 255, (120, 60, 3))
+    pa, pb = str(tmp_path / "a.png"), str(tmp_path / "b.png")
+    cv2.imwrite(pa, a)
+    cv2.imwrite(pb, b)
+    W, H = field_fixture.W, field_fixture.H
+    from modules.dataset_audit import dhash
+    assert bin(dhash(a) ^ dhash(b)).count("1") <= 12  # whole frames look alike
+    from modules.field_data import _signatures_match
+    sa = object_signature(pa, [[100 / W, 60 / H, 160 / W, 180 / H]])
+    sb = object_signature(pb, [[220 / W, 40 / H, 280 / W, 160 / H]])
+    assert not _signatures_match(sb, sa, 5)
+    assert _signatures_match(sa, sa, 5)
+
+
+def test_trainer_guard_reads_image_lists_and_val_and_refuses_to_check_nothing(ds, tmp_path):
+    from modules.field_data import guard_training_config
+
+    lock = _lock_with_external(ds)
+    src = ds.frame_file(_eval_frame(ds, lock))
+    dev = ds.frame_file(next(f for f in ds.frames
+                             if split_of(ds, lock, f.sequence_id) == DEVELOPMENT))
+    lst = tmp_path / "train.txt"
+    lst.write_text(f"{dev}\n{src}\n")
+    cfg = tmp_path / "list.yaml"
+    cfg.write_text(f"train: {lst}\nval: {lst}\nnames: [Plate]\n")
+    with pytest.raises(LeakageError, match="is an evaluation frame"):
+        guard_training_config(str(cfg), ds.root)
+    clean = tmp_path / "clean.txt"
+    clean.write_text(f"{dev}\n")
+    val_leak = tmp_path / "val.yaml"
+    val_leak.write_text(f"train: {clean}\nval: {lst}\nnames: [Plate]\n")
+    with pytest.raises(LeakageError):  # a held-out frame used to pick best.pt
+        guard_training_config(str(val_leak), ds.root)
+    empty = tmp_path / "empty.yaml"
+    empty.write_text(f"train: {tmp_path / 'nothing_here'}\nnames: [Plate]\n")
+    with pytest.raises(LeakageError, match="nothing was checked"):
+        guard_training_config(str(empty), ds.root)
+    ok = tmp_path / "ok.yaml"
+    ok.write_text(f"train: [{clean}]\nval: {clean}\nnames: [Plate]\n")
+    assert guard_training_config(str(ok), ds.root) == 1
+
+
+def test_a_frame_with_an_unknown_helmet_state_is_not_exported(tmp_path):
+    root = field_fixture.build(str(tmp_path / "unk"))
+    rows = [json.loads(line) for line in open(os.path.join(root, "frames.jsonl"))]
+    rows[0]["objects"][0]["helmet_state"] = "unknown"
+    open(os.path.join(root, "frames.jsonl"), "w").writelines(json.dumps(r) + "\n" for r in rows)
+    ds = load_dataset(root)
+    lock = assign_splits(ds, salt="t",
+                         ratios={"development": 1.0, "validation": 0.0, "held_out": 0.0})
+    m = export_training(ds, lock, str(tmp_path / "out"))
+    assert m["skipped_unknown_helmet_state"] == 1
+    assert m["frames"] == len(ds.frames) - 1

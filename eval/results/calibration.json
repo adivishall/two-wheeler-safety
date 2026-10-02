@@ -1,0 +1,226 @@
+{
+  "provenance": {
+    "config": {
+      "bins": 10,
+      "folds": 5
+    },
+    "environment": {
+      "chip": "Apple M4",
+      "machine": "arm64",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7"
+    },
+    "generated_at": "2026-09-29T06:22:00.446055+00:00",
+    "git": {
+      "commit": "28b4a65",
+      "dirty": false
+    },
+    "models": []
+  },
+  "report": {
+    "best": "raw",
+    "correct": 0,
+    "folds": 5,
+    "grouped": true,
+    "incorrect": 0,
+    "n": 0,
+    "raw": {
+      "brier": 0.0,
+      "ece": 0.0,
+      "mce": 0.0
+    },
+    "reason": "need >= 30 correct and incorrect outcomes; have 0 / 0",
+    "reliability_raw": [
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.1,
+        "lo": 0.0,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.2,
+        "lo": 0.1,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.3,
+        "lo": 0.2,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.4,
+        "lo": 0.3,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.5,
+        "lo": 0.4,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.6,
+        "lo": 0.5,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.7,
+        "lo": 0.6,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.8,
+        "lo": 0.7,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 0.9,
+        "lo": 0.8,
+        "mean_confidence": 0.0
+      },
+      {
+        "accuracy": 0.0,
+        "count": 0,
+        "hi": 1.0,
+        "lo": 0.9,
+        "mean_confidence": 0.0
+      }
+    ],
+    "selection": "out-of-fold Brier, bootstrap CI",
+    "threshold_table": [
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.05
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.1
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.15
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.2
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.25
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.3
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.35
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.4
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.45
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.5
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.55
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.6
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.65
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.7
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.75
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.8
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.85
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.9
+      },
+      {
+        "kept": 0,
+        "precision": null,
+        "recall": null,
+        "threshold": 0.95
+      }
+    ],
+    "verdict": "insufficient_data"
+  },
+  "source": "traffic.db"
+}

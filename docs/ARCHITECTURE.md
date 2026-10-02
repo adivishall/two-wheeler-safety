@@ -204,6 +204,15 @@ role keys configured, role-gated. See [API.md](API.md) and
 | `evaluate_temporal.py` | which confirmation rule | nothing (rates from a val report) |
 | `evaluate_ocr.py --simulate --policy-sweep` | which OCR vote thresholds | nothing |
 | `benchmark.py` | latency, throughput, per-stage profile | weights |
+| `evaluate_conditions.py` (`image_conditions`) | detector AP by measured image condition | weights + data |
+| `compare_recipes.py` | is training recipe A better than B, across seeds? | ≥ 3 checkpoints each |
+| `select_for_labeling.py` (`active_learning`) | what should a human label next? | weights + data |
+| `evaluate_field.py` (`field_data`, `field_eval`) | the whole system on labelled field footage, per condition | a field dataset |
+
+The field layer (`modules/field_data.py`) owns the one path from labelled
+footage to training data: splits frozen per sequence or camera-day, and an
+export that refuses any image that is — or copies — evaluation data
+(docs/FIELD_EVALUATION.md).
 
 Every report carries a provenance block (`modules/provenance.py`): weights
 SHA-256 and registered version, dataset content fingerprint, split fingerprint,

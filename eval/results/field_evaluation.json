@@ -1,0 +1,20 @@
+{
+  "dataset": "data/field",
+  "measured": false,
+  "provenance": {
+    "environment": {
+      "chip": "Apple M4",
+      "machine": "arm64",
+      "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+      "processor": "arm",
+      "python": "3.13.7"
+    },
+    "generated_at": "2026-09-29T05:34:05.334112+00:00",
+    "git": {
+      "commit": "6303f14",
+      "dirty": false
+    },
+    "models": []
+  },
+  "reason": "no labelled field dataset"
+}

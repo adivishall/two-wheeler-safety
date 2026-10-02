@@ -124,3 +124,57 @@ def test_save_and_load_roundtrip(tmp_path):
 
 def test_load_missing_calibrator_returns_none(tmp_path):
     assert load_calibrator(str(tmp_path / "nope.json")) is None
+
+
+# -- out-of-fold selection (the fix for in-sample calibrator selection) -------
+
+def _bernoulli_calibrated(n=400, seed=5):
+    """Scores whose raw value IS the probability of being correct."""
+    import random
+
+    rng = random.Random(seed)
+    scores = [rng.random() for _ in range(n)]
+    labels = [1 if rng.random() < s else 0 for s in scores]
+    return scores, labels
+
+
+def test_calibrated_scores_are_not_replaced_by_an_in_sample_winner():
+    """Regression: calibrators used to be fitted and scored on the same rows,
+    and the lowest in-sample ECE won. On scores that are ALREADY calibrated that
+    rule adopted a calibrator in ~30 of 40 simulated datasets (it rewards
+    fitting the noise); out-of-fold selection adopts none."""
+    scores, labels = _bernoulli_calibrated(n=300, seed=0)
+    old_rule = {"raw": expected_calibration_error(scores, labels)}
+    for name, make in (("platt", PlattCalibrator), ("isotonic", IsotonicCalibrator)):
+        cal = make().fit(scores, labels)
+        old_rule[name] = expected_calibration_error([cal.predict(x) for x in scores], labels)
+    assert min(old_rule, key=lambda k: old_rule[k]) != "raw"  # the old trap fires here
+    report = fit_and_evaluate(scores, labels)
+    assert report["best"] == "raw"
+    assert report["verdict"] == "raw_is_as_good"
+
+
+def test_too_few_outcomes_is_reported_not_calibrated():
+    scores, labels = _bernoulli_calibrated(n=40)
+    report = fit_and_evaluate(scores, labels)
+    assert report["verdict"] == "insufficient_data" and report["best"] == "raw"
+    assert "platt" not in report
+
+
+def test_grouped_folds_never_split_a_group():
+    from modules.calibration import _fold_ids
+
+    groups = [f"session{i // 7}" for i in range(70)]
+    ids = _fold_ids(70, 5, groups, seed=1)
+    for g in set(groups):
+        assert len({f for f, gg in zip(ids, groups) if gg == g}) == 1
+
+
+def test_threshold_table_trades_recall_for_precision():
+    from modules.calibration import threshold_table
+
+    scores, labels = _dataset(lambda s: s)
+    rows = threshold_table(scores, labels, [0.1, 0.5, 0.9])
+    assert rows[0]["recall"] >= rows[1]["recall"] >= rows[2]["recall"]
+    assert rows[0]["precision"] <= rows[2]["precision"]
+    assert rows[2]["kept"] < rows[0]["kept"]

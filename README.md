@@ -136,6 +136,38 @@ Apple M4, batch 1, `traffic-4class@1.0.0`
 
 One small clip with one plate on one laptop — not a claim about a camera feed.
 
+## Toward field evidence
+
+Everything past the detector above is synthetic, and the detector is measured
+only on still images. The next question is whether any of it survives real
+traffic cameras. That can't be answered without labelled footage. What exists now
+is the loop that answers it ([docs/FIELD_EVALUATION.md](docs/FIELD_EVALUATION.md),
+[docs/ROADMAP.md](docs/ROADMAP.md)):
+
+- **A field dataset layer**: a schema for camera, sequence, vehicle and frame labels
+  with annotator/reviewer provenance; splits frozen per sequence or camera-day,
+  whole cameras held out as *external*; and a training export plus a trainer
+  guard that refuse any image that is (a copy or near-duplicate of) evaluation
+  data.
+- **A field evaluation harness**: last-frame vs best-read vs temporal OCR on real
+  plate crops, and the shipped pipeline over labelled sequences per condition,
+  with every missed or wrong fine charged to the first stage that failed.
+  **NOT MEASURED** until footage exists.
+- **The detector by measured condition, on the real images**: of 25 per-class
+  comparisons, 11 cleared 95% on val and 2 replicated on test — and one of those rests on 3 test images.
+  Multi-rider scenes look harder for no-helmet on val (AP 0.56 vs 0.84) but not
+  on test: a lead, not a result.
+- **Reviews as labels**: a dismissal records the failing stage and the true
+  plate; calibration now judges out of fold (the old in-sample rule adopted a
+  calibrator on already-calibrated scores ~30 times in 40). Real outcomes: 0 —
+  **NOT MEASURED**.
+- **Active learning**: 150 training images queued by information signal, and a
+  50-image *blind*, uniform-random audit of held-out labels — the model never
+  chooses which evaluation labels get fixed.
+- **Recipes compared by seed means**: v2 (de-duplicated data) leads the v1
+  recipe by +0.041 mAP@50 [−0.035, +0.117] with 2 vs 1 seeds — no verdict yet.
+  No model was retrained: the weaknesses found need new labels, not new runs.
+
 ## What the audit found
 
 This version is the result of a hostile review of v1.0.0
@@ -190,7 +222,7 @@ applied, and a live SHA-256 check of its evidence files.
 ## Evaluate it
 
 ```bash
-pytest                                   # 602 tests, model-free, ~95% branch coverage of modules/
+pytest                                   # 712 tests, model-free, ~95% branch coverage of modules/
 python3 evaluate_pipeline.py             # pipeline metrics, error budget (no weights)
 python3 evaluate_temporal.py             # temporal-rule experiment (no weights)
 python3 evaluate_ocr.py --simulate --sweep --policy-sweep --out eval/results --name ocr_policy_simulation
@@ -234,7 +266,8 @@ API reference: [docs/API.md](docs/API.md). Security review: [docs/SECURITY.md](d
 
 - **No field validation.** No labelled video exists, so end-to-end accuracy,
   real OCR accuracy and real temporal error correlation are unmeasured; pipeline
-  results are synthetic, and synthetic inputs are clean compared with roads.
+  results are synthetic, and synthetic inputs are clean compared with roads. The
+  tooling to measure them is built (docs/FIELD_EVALUATION.md); the data isn't.
 - **WithHelmet is barely measured** (27 test instances, AP CI [0.20, 0.73]) and
   is confused by head coverings (dupatta/scarf read as a helmet), glare, and a
   person standing near a parked bike or cycling.
@@ -263,7 +296,8 @@ Full failure taxonomy and error budget: [docs/ERROR_ANALYSIS.md](docs/ERROR_ANAL
 | [END_TO_END_EVALUATION](docs/END_TO_END_EVALUATION.md) | pipeline metrics, rule-selection experiments |
 | [ERROR_ANALYSIS](docs/ERROR_ANALYSIS.md) | failure taxonomy, ownership, error budget, what to do next |
 | [EVALUATION](docs/EVALUATION.md) · [EXPERIMENTS](docs/EXPERIMENTS.md) | methodology, tools, reproducibility, performance · every experiment in one shape |
-| [AUDIT](docs/AUDIT.md) | every defect found in v1.0.0, with fix and test |
+| [FIELD_EVALUATION](docs/FIELD_EVALUATION.md) · [ROADMAP](docs/ROADMAP.md) | what is and isn't measured on real data; the next ten issues |
+| [AUDIT](docs/AUDIT.md) | every defect found, with fix and test |
 | [DATASET](docs/DATASET.md) · [MODEL_VERSIONING](docs/MODEL_VERSIONING.md) | data provenance, label coverage, model identity |
 | [API](docs/API.md) · [SECURITY](docs/SECURITY.md) · [PRIVACY](docs/PRIVACY.md) · [DEPLOYMENT](docs/DEPLOYMENT.md) | the application |
 | [TESTING](docs/TESTING.md) · [INSTALL](docs/INSTALL.md) · [DEMO](docs/DEMO.md) · [RETRAINING_LOOP](docs/RETRAINING_LOOP.md) | working on it |
