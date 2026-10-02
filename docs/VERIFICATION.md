@@ -21,7 +21,7 @@ pytest tests/test_association.py::test_hungarian_beats_greedy_nearest   # any si
 ```
 
 Measured on the review machine (macOS 26.5, Apple Silicon, Python 3.13.7): a
-clean clone to a green `pytest` took 27 s; the suite (477 tests) runs in about
+clean clone to a green `pytest` took 27 s; the suite (481 tests) runs in about
 5-10 s; branch coverage of `modules/` is 94.5%. CI runs the same gates on Ubuntu
 with Python 3.11 and 3.12 (`.github/workflows/ci.yml`).
 
