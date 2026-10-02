@@ -3,7 +3,9 @@
 `audit_dataset.py` measured two problems with the shipped training data:
 
 1. **47.7% of the training images are perceptual duplicates** of another
-   training image (11,195 files, 5,860 unique scenes, some repeated 22 times).
+   training image -- identical 64-bit dHash, i.e. distance 0 (11,195 files,
+   5,860 unique scenes, some repeated 22 times). Internal de-duplication uses
+   that exact-hash rule; ``--max-distance`` only governs held-out matching.
    The dataset's "perfect" 4,862 / 4,862 / 4,862 class balance is achieved by
    that duplication, and it hides a real imbalance in *unique* content:
 
@@ -168,7 +170,9 @@ def parse_args(argv=None):
     ap.add_argument("--out", default="datasets/train_clean",
                     help="where to materialise the cleaned split")
     ap.add_argument("--max-distance", type=int, default=5,
-                    help="dHash distance treated as a duplicate (default: 5)")
+                    help="dHash distance at which a training image counts as a "
+                         "copy of a held-out image (default: 5). Internal "
+                         "de-duplication is exact-hash only.")
     ap.add_argument("--keep-duplicates", action="store_true",
                     help="only drop held-out matches, keep internal duplicates "
                          "(ablation: isolates the leakage fix from the dedup)")
