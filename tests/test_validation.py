@@ -48,6 +48,31 @@ def test_safe_evidence_name_blocks_traversal_and_bad_types():
     assert safe_evidence_name("a\x00.jpg") is None
 
 
+def test_safe_evidence_name_rejects_markup_and_quote_characters():
+    # The stored name is echoed back by /get_fines and /api/violations and
+    # rendered into an <img src="..."> by the dashboard. A quote or angle
+    # bracket in it is an attribute break-out (stored XSS), so only the
+    # characters the pipeline itself ever writes are accepted.
+    for hostile in (
+        'x" onerror="alert(document.domain)" a=".jpg',
+        "<svg onload=alert(1)>.jpg",
+        "it's.jpg",
+        "a b.jpg",
+        "a\n.jpg",
+        "a&b.jpg",
+        "a`b.jpg",
+    ):
+        assert safe_evidence_name(hostile) is None, hostile
+    # Names the pipeline / demo / CLI actually produce still pass.
+    for ok in (
+        "MH12AB1234_no_helmet_f12_ab12cd34ef_annotated.jpg",
+        "demo_MH02DL4596.jpg",
+        "MH02DL4596_1786603781.jpg",
+        "plate-1.v2.jpeg",
+    ):
+        assert safe_evidence_name("evidence/" + ok) == ok
+
+
 def test_validate_plate():
     assert validate_plate("  mh12ab1234 ") == "MH12AB1234"
     assert validate_plate("!!") is None       # empty after normalize

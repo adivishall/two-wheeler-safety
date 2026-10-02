@@ -13,6 +13,7 @@ without a request context. Covers:
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from collections import deque
@@ -57,6 +58,9 @@ def safe_extension(filename: str, allowed: set[str], default: str) -> str:
     return ext if ext in allowed else default
 
 
+_SAFE_EVIDENCE_NAME = re.compile(r"[A-Za-z0-9._-]+")
+
+
 def safe_evidence_name(path_or_name: str | None) -> str | None:
     """Reduce a caller-supplied path to a safe evidence basename.
 
@@ -70,8 +74,12 @@ def safe_evidence_name(path_or_name: str | None) -> str | None:
         return None
     if file_extension(base) not in IMAGE_EXTENSIONS:
         return None
-    # keep only sane filename characters
-    if any(c in base for c in ("/", "\0")):
+    # Only the characters the pipeline itself writes (evidence.py builds names
+    # from [A-Za-z0-9] tokens, "_", "-" and "."). The name is echoed back by
+    # the API and rendered into HTML attributes, so a quote, angle bracket,
+    # space or control character is refused rather than stored. fullmatch, not
+    # match with "$": "$" also matches before a trailing newline.
+    if _SAFE_EVIDENCE_NAME.fullmatch(base) is None:
         return None
     return base
 

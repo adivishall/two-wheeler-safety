@@ -49,6 +49,38 @@ def test_evidence_route_blocks_traversal_and_bad_types(client):
     assert client.get("/evidence/secrets.txt").status_code == 404
 
 
+def test_detect_rejects_image_path_that_could_break_out_of_an_attribute(client):
+    # Regression: /detect stored this name verbatim, /get_fines returned it, and
+    # the plate-lookup view interpolated it into <img src="..."> unescaped, so
+    # anyone who could POST /detect (open by default) planted script for
+    # whoever looked the plate up.
+    payload = 'x" onerror="alert(document.domain)" a=".jpg'
+    r = client.post("/detect", json={
+        "plate": "MH12AB1234", "violation": "no_helmet", "image_path": payload})
+    assert r.status_code == 400
+    assert client.get("/get_fines/MH12AB1234").get_json()["fines"] == []
+
+
+def test_dashboard_escapes_every_url_and_text_attribute_it_interpolates():
+    # Static guard for the same bug class in the template: every ${...} inside
+    # a src= / href= / alt= attribute must go through escapeHtml(), because
+    # those values come from the API (and a row stored before validation was
+    # tightened can still hold markup).
+    import os
+    import re
+
+    path = os.path.join(os.path.dirname(__file__), "..", "templates", "frontend.html")
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    unescaped = []
+    for m in re.finditer(r'\b(src|href|alt)="([^"]*\$\{[^"]*)"', src):
+        for expr in re.findall(r"\$\{([^}]*)\}", m.group(2)):
+            if not expr.strip().startswith("escapeHtml("):
+                line = src.count("\n", 0, m.start()) + 1
+                unescaped.append(f"line {line}: {m.group(1)}=${{{expr}}}")
+    assert unescaped == []
+
+
 def test_error_responses_are_json_and_do_not_leak(client):
     r = client.get("/api/violations/999999")  # unknown id
     assert r.status_code == 404

@@ -1325,15 +1325,15 @@
 
                     html += `
                     <tr>
-                        <td><span class="violation-tag">${violationLabel}</span></td>
+                        <td><span class="violation-tag">${escapeHtml(violationLabel)}</span></td>
                         <td class="amount-cell">₹${f.amount}</td>
-                        <td><span class="status-pill ${statusClass}">${f.status}</span></td>
+                        <td><span class="status-pill ${statusClass}">${escapeHtml(f.status)}</span></td>
                         <td>${formatTime(f.time)}</td>
                         <td>
                             <img
                                 class="evidence"
-                                src="${f.image}"
-                                alt="Evidence for ${violationLabel}"
+                                src="${escapeHtml(f.image)}"
+                                alt="${escapeHtml("Evidence for " + violationLabel)}"
                             >
                         </td>
                     </tr>
