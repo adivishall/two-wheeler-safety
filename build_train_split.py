@@ -39,7 +39,7 @@ import json
 import os
 import sys
 
-from modules.dataset_audit import hamming, hash_directory
+from modules.dataset_audit import hamming, hash_directory, prepare_link_dir
 from modules.logging_setup import configure_logging, get_logger
 
 log = get_logger("build_train_split")
@@ -119,14 +119,23 @@ def materialise(paths: list[str], out_root: str, split: str = "train") -> int:
     """Symlink the chosen images and their labels into a YOLO split tree."""
     img_dir = os.path.join(out_root, split, "images")
     lbl_dir = os.path.join(out_root, split, "labels")
-    os.makedirs(img_dir, exist_ok=True)
-    os.makedirs(lbl_dir, exist_ok=True)
+
+    def label_for(src: str) -> str:
+        return os.path.splitext(
+            src.replace(os.sep + "images" + os.sep, os.sep + "labels" + os.sep)
+        )[0] + ".txt"
+
+    # Exactly this run's images: links an earlier run made for images that are
+    # no longer kept are removed first, or the "clean" split still holds them.
+    prepare_link_dir(img_dir, {os.path.basename(src) for src in paths})
+    prepare_link_dir(lbl_dir, {
+        os.path.splitext(os.path.basename(src))[0] + ".txt"
+        for src in paths if os.path.exists(label_for(src))
+    })
     n = 0
     for src in paths:
         base = os.path.basename(src)
-        label_src = os.path.splitext(
-            src.replace(os.sep + "images" + os.sep, os.sep + "labels" + os.sep)
-        )[0] + ".txt"
+        label_src = label_for(src)
         _link(os.path.abspath(src), os.path.join(img_dir, base))
         if os.path.exists(label_src):
             _link(os.path.abspath(label_src),

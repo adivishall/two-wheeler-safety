@@ -163,6 +163,38 @@ def test_build_clean_split_is_idempotent(tmp_path):
     assert again["kept"] == 2
 
 
+def test_rebuilding_a_clean_split_removes_images_that_are_now_leaked(tmp_path):
+    """Regression: a rerun only added links, so an image dropped on the second
+    run (e.g. a larger --max-distance) stayed in the "clean" split on disk while
+    the returned count said it was gone. Ultralytics reads the directory, not
+    the count, so the de-leaked metric would still include it."""
+    held = _write_split(str(tmp_path), "test", [5, 6, 7])
+    out_root = os.path.join(str(tmp_path), "clean")
+    build_clean_split(held, [], out_root, split_name="test")
+
+    leaked = [os.path.join(held, "img6.jpg")]
+    again = build_clean_split(held, leaked, out_root, split_name="test")
+
+    assert again["kept"] == 2
+    on_disk = sorted(os.listdir(os.path.join(out_root, "test", "images")))
+    assert on_disk == ["img5.jpg", "img7.jpg"]
+    labels = sorted(os.listdir(os.path.join(out_root, "test", "labels")))
+    assert labels == ["img5.txt", "img7.txt"]
+
+
+def test_clean_split_refuses_to_mix_with_real_files(tmp_path):
+    """The output tree is all symlinks. A regular file in it is someone's data,
+    not a stale link: refuse instead of deleting it or silently keeping it."""
+    held = _write_split(str(tmp_path), "test", [5])
+    out_root = os.path.join(str(tmp_path), "clean")
+    stray = os.path.join(out_root, "test", "images", "real.jpg")
+    os.makedirs(os.path.dirname(stray))
+    cv2.imwrite(stray, _gradient_image(42))
+    with pytest.raises(ValueError, match="real.jpg"):
+        build_clean_split(held, [], out_root, split_name="test")
+    assert os.path.isfile(stray)  # never deleted
+
+
 def test_iter_images_is_sorted_and_filters_extensions(tmp_path):
     d = tmp_path / "images"
     d.mkdir()

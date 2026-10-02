@@ -236,17 +236,20 @@ def build_clean_split(
     leaked = set(leaked_images)
     img_dir = os.path.join(out_root, split_name, "images")
     lbl_dir = os.path.join(out_root, split_name, "labels")
-    os.makedirs(img_dir, exist_ok=True)
-    os.makedirs(lbl_dir, exist_ok=True)
 
-    kept = dropped = missing_labels = 0
-    for src in iter_images(held_out_dir):
-        if src in leaked:
-            dropped += 1
-            continue
-        label_src = os.path.splitext(
-            src.replace(os.sep + "images" + os.sep, os.sep + "labels" + os.sep)
-        )[0] + ".txt"
+    images = list(iter_images(held_out_dir))
+    pairs = [(src, _label_for(src)) for src in images if src not in leaked]
+    dropped = len(images) - len(pairs)
+    # A rerun must leave exactly this run's files: drop links an earlier run
+    # made for images that are now leaked (or gone), before linking anew.
+    prepare_link_dir(img_dir, {os.path.basename(src) for src, _ in pairs})
+    prepare_link_dir(lbl_dir, {
+        os.path.splitext(os.path.basename(src))[0] + ".txt"
+        for src, lbl in pairs if os.path.exists(lbl)
+    })
+
+    kept = missing_labels = 0
+    for src, label_src in pairs:
         base = os.path.basename(src)
         _link(os.path.abspath(src), os.path.join(img_dir, base))
         if os.path.exists(label_src):
@@ -262,6 +265,37 @@ def build_clean_split(
         "dropped_leaked": dropped,
         "images_without_labels": missing_labels,
     }
+
+
+def _label_for(image_path: str) -> str:
+    """YOLO label path for an image path (``.../images/x.jpg`` -> ``.../labels/x.txt``)."""
+    return os.path.splitext(
+        image_path.replace(os.sep + "images" + os.sep, os.sep + "labels" + os.sep)
+    )[0] + ".txt"
+
+
+def prepare_link_dir(directory: str, keep: set[str]) -> None:
+    """Make ``directory`` ready to hold exactly the links named in ``keep``.
+
+    Derived splits are built entirely from symlinks, so an earlier run's link
+    that this run did not keep is stale and is removed; without that, a rerun
+    that drops an image (a larger ``--max-distance``, a grown held-out set)
+    leaves it on disk, and every tool that reads the directory still sees it.
+    Anything that is *not* a symlink was not made by this tool: refuse rather
+    than delete someone's data or quietly evaluate on it.
+    """
+    os.makedirs(directory, exist_ok=True)
+    entries = sorted(os.listdir(directory))
+    for name in entries:
+        path = os.path.join(directory, name)
+        if not os.path.islink(path):
+            raise ValueError(
+                f"{path} is not a link created by this tool; refusing to build a "
+                "derived split in a directory that holds real files"
+            )
+    for name in entries:
+        if name not in keep:
+            os.unlink(os.path.join(directory, name))
 
 
 def _link(src: str, dst: str) -> None:
