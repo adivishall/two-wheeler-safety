@@ -23,20 +23,87 @@ frame is a bundled sample photo; nothing here is a real fine.</sub>
 
 ---
 
+## Where to start reading
+
+| If you want to… | Read |
+|---|---|
+| check a claim against code, tests and result files | [docs/VERIFICATION.md](docs/VERIFICATION.md) |
+| grill the project | [docs/REVIEWER_GUIDE.md](docs/REVIEWER_GUIDE.md): ten hard questions with evidence pointers |
+| see why the pipeline is built this way | [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md), then [docs/DECISIONS.md](docs/DECISIONS.md) |
+| see what went wrong before | [docs/FAILURE_ANALYSIS.md](docs/FAILURE_ANALYSIS.md) |
+| read the code in pipeline order | `modules/video_detector.py:process_video` → `modules/association.py` → `modules/vehicle_tracker.py` → `modules/plate_recognizer.py` → `modules/violation_state.py` → `modules/confidence.py` → `modules/evidence.py` → `modules/db.py` → `app.py` |
+| contribute | [CONTRIBUTING.md](CONTRIBUTING.md); open issues labelled `good first issue` / `help wanted` |
+
+> **Branch status.** `main` is behind `feature/flagship-hardening` and the
+> stacked PR #18, which fix several defects still present here (photo route
+> fining against the last plate read, single-read plate election, duplicate
+> fines on re-entry, evaluators running a different loop from the app) and
+> revise some numbers below. [docs/VERIFICATION.md](docs/VERIFICATION.md)
+> marks each affected claim.
+
+## Reproduce
+
+**Model-free** (no weights, no dataset; about 30 s from a clean clone on a laptop):
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate      # Python 3.11-3.13
+pip install -r requirements-ci.txt -c constraints-ci.txt
+make check                      # ruff + mypy + pytest with the 90% branch-coverage gate (CI's gates)
+
+# regenerate the committed synthetic results into a scratch directory
+python3 evaluate_pipeline.py --out /tmp/eval            # eval/results/pipeline_evaluation.*, latest.json
+python3 evaluate_ocr.py --simulate --sweep --out /tmp/eval --name ocr_policy_simulation
+python3 evaluate_tracking.py --json /tmp/eval/tracking_comparison.json
+python3 evaluate_association.py --out /tmp/eval         # eval/results/association_baseline.*
+
+make demo                       # dashboard on labelled synthetic records, http://127.0.0.1:5000
+```
+
+Each evaluation reproduces its committed file under `eval/results/` exactly,
+timestamps aside (checked on macOS, Apple Silicon, Python 3.13.7). Use a
+scratch `--out` as above: the defaults overwrite the committed files.
+
+**Detector numbers** need two things the repository does not contain:
+
+- the weights `runs/detect/traffic_model-2/weights/best.pt` (not distributed;
+  a copy can be identified by the SHA-256 in
+  `models/manifests/traffic-4class.json`). Retraining with the command under
+  [Model training](#model-training) gives a different checkpoint, not these
+  weights;
+- the dataset `master_traffic_violation_dataset/` (not distributed: source and
+  licence unverified, [docs/DATASET.md](docs/DATASET.md)). Any YOLO dataset with
+  the same four classes runs through the same commands but will not reproduce
+  these numbers.
+
+With both: `pip install -r requirements.txt -c constraints-runtime.txt`, then
+`make eval-audit` and `make eval-model` (see [Evaluation](#evaluation)).
+
+## What is measured vs synthetic
+
+| Measured on real images | Synthetic only | Not measured |
+|---|---|---|
+| Detector AP / precision / recall per class on the dataset's de-leaked held-out test split (175 images); class confusions; score vs correctness; train/held-out leakage | Every pipeline number: end-to-end fine precision/recall, pipeline vs single-frame, temporal window, OCR policy, error budget, speed error, tracking ID switches, Hungarian vs greedy | OCR on real plates; fines, tracking and association on real footage; speed against ground truth; confidence calibration; streaming latency |
+
+The held-out split comes from the same pool as training, so even the first
+column says nothing about other cameras or cities. Each number's dataset,
+split, metric, model and sample size: [docs/VERIFICATION.md](docs/VERIFICATION.md) §2.
+
 ## What it does
 
 - **Helmet-violation detection** — flags riders without a helmet, with an
   explicit safeguard against the model contradicting itself on one rider.
 - **Triple-riding detection** — flags three-up on a two-wheeler.
 - **Overspeed detection** — estimates per-vehicle speed from *video time* (with
-  camera calibration) and flags vehicles over a limit.
+  camera calibration) and flags vehicles over a limit. CLI only
+  (`main.py --pixels-per-meter`, constant scale); the web app computes no speed.
 - **Number-plate OCR** — reads the plate from a tight crop, stabilized across
   frames so a single noisy frame can't set the plate a fine is written against.
 - **Vehicle tracking & association** — groups each frame's independent detections
   into per-vehicle instances and follows them with stable IDs, so a violation is
   attributed to the *right* bike.
-- **Temporal confirmation** — a violation must persist over several frames before
-  it is recorded, filtering single-frame misfires.
+- **Temporal confirmation** — in video, a violation must persist over several
+  frames before it is recorded, filtering single-frame misfires. The photo
+  route decides from one image.
 - **Confidence scoring** — every recorded violation carries a 0–1 confidence
   built from four components (detection / temporal / association / OCR).
 - **Evidence generation** — a structured package (original + annotated frame,
@@ -71,6 +138,8 @@ violation:
   structured, timestamped package with a full confidence breakdown.
 - **No duplicate fines.** A vehicle in view for 200 frames must produce at most
   one fine per violation — handled by per-(track, violation) de-duplication.
+  (Per track: a vehicle that leaves view for more than 15 frames returns as a
+  new track and can be fined again on `main`.)
 - **Safe uploads / API.** Uploads are sniffed and size-capped, paths are
   traversal-proof, the write API can require a key, and video runs as a bounded,
   cancellable background job.
@@ -135,7 +204,9 @@ mis-assigns when bikes are close together.
 `modules/plate_recognizer.py` (`PlateStabilizer`) accumulates per-frame OCR
 readings for a vehicle, normalizes them, votes across frames, and validates the
 elected plate against Indian plate *structure* before it is trusted. A fine is
-written only against this temporally-stable plate, never a single frame's read.
+written only against this voted plate. Known gap on `main`: one valid read plus
+one unreadable read is enough to elect, and an exact two-way tie elects by
+string order (see [docs/VERIFICATION.md](docs/VERIFICATION.md), row 7).
 `modules/plate_info.py` then decodes the plate's registration region (state + RTO
 district) from the public, static plate-code scheme — no external API.
 
@@ -300,7 +371,7 @@ No weights, datasets, or videos ship in the repo (all gitignored). Train first
 
 ```bash
 pip install -r requirements-ci.txt -c constraints-ci.txt   # model-free, pinned
-pytest                     # 466 tests, ~5s
+pytest                     # 481 tests, ~5-10 s
 ```
 
 The suite is **model-free by design** — heavy inference (torch/ultralytics/
@@ -320,9 +391,10 @@ helmet-contradiction bug regression). Model *accuracy* is evaluated separately
 (`Plate`, `WithHelmet`, `WithoutHelmet`, `TripleRiding`):
 
 ```bash
+# the shipped model's settings (models/manifests/traffic-4class.json)
 python3 train_traffic.py \
     --data master_traffic_violation_dataset/data.yaml \
-    --epochs 50 --imgsz 640 --batch 16 --device auto --name traffic_model
+    --epochs 15 --imgsz 640 --batch 16 --seed 0 --device mps --name traffic_model
 ```
 
 Outputs land in `runs/detect/<name>/`: `weights/best.pt` (point `MODEL_PATH` at
@@ -352,14 +424,18 @@ held-out test split** (175 images, 293 instances), `traffic-4class@1.0.0`:
 | `WithHelmet` | **0.387** | **0.519** |
 
 `WithHelmet` is the weak class, on 27 test instances — high-variance and the one
-place a wrong call becomes a wrong fine. Confidence ranks correctness well for
-`WithoutHelmet` (Spearman 1.00) and **not at all** for `TripleRiding`
-(−0.20). Full analysis, per-class error breakdown, saved failure crops and the
+place a wrong call becomes a wrong fine. A rank correlation between score bin
+and bin accuracy is 1.00 for `WithoutHelmet` and −0.20 for `TripleRiding`, but
+it is computed over at most five score bins (the `TripleRiding` value rests on
+two bins holding one prediction each), so neither is established. Numbers are
+at the operating confidence 0.25, which truncates the PR curve. Full analysis, per-class error breakdown, saved failure crops and the
 four-checkpoint A/B: **[docs/MODEL_EVALUATION.md](docs/MODEL_EVALUATION.md)**.
 
 > The held-out split was audited, not assumed: 9.8% of `test` and 8.1% of `val`
-> were near-duplicates of training images. De-leaking moved mAP@50 by +0.006 —
-> the leakage was not inflating the result. `python3 audit_dataset.py`.
+> were near-duplicates of training images. De-leaking moved mAP@50 by +0.006
+> (two point estimates on different image sets: no detectable effect).
+> `python3 audit_dataset.py`. The check misses flips and crops and does not
+> group frames by source video ([#23](https://github.com/adivishall/two-wheeler-safety/issues/23)).
 
 ### Pipeline performance — the logic on top of the detector
 
@@ -369,8 +445,10 @@ tracker, association, stabilizer and state machines — no weights needed:
 
 - **The pipeline beats a single-frame detector at every noise level.** Given
   identical detections, a naive "fine if any frame shows a violation" policy
-  averages **1.50 false positives even at zero detector noise** (precision
-  0.838); the full pipeline has **0.00** (precision 1.000). Under 10% detector
+  averages **1.50 false positives at zero injected noise** (the scenarios
+  themselves contain designed one-frame flickers; precision 0.838); the full
+  pipeline has **0.00** (precision 1.000). These evaluators re-implement the
+  per-frame loop with a 3-frame window; the app ships 5. Under 10% detector
   class-confusion noise: naive F1 0.840 vs pipeline **0.994**. Naive recall is
   always 1.000 — it fines on anything — so the entire difference is precision.
 - **End-to-end fines: precision 1.000, recall 1.000** over 8 multi-bike
@@ -383,8 +461,10 @@ tracker, association, stabilizer and state machines — no weights needed:
   30%, the shipped stabilizer **2%** — answering 51% of the time instead of 100%.
 - **Error budget:** OCR is the bottleneck at **76.8%** of measured system
   sensitivity, ahead of detector class-confusion (15.3%) and detector recall
-  (7.3%). A *corrupted* plate misattributes a fine; a *missing* one costs almost
-  nothing, because other frames recover it.
+  (7.3%). Caveat: the 30% injection rate is per *character* for OCR and per
+  *box* for the detector (a 10-character plate survives 30% per-character noise
+  intact 0.7^10 ≈ 2.8% of the time), so the shares compare different units; an
+  oracle ablation on `feature/flagship-hardening` ranks the detector first.
 - **Speed:** best MAE 11.3 km/h toward camera (homography); a constant
   pixels-per-metre calibration misses *every* overspeeder in that geometry.
 
@@ -392,13 +472,18 @@ Full report: **[docs/END_TO_END_EVALUATION.md](docs/END_TO_END_EVALUATION.md)**.
 
 ### Application performance — throughput and latency
 
-*"How fast does it run?"* Apple M4 / MPS: model load ≈ 2.9 s (one-time), single
+*"How fast does it run?"* Measured locally with `benchmark.py` on an Apple M4
+(single runs, **no committed result file**; device recorded as MPS, which the
+branch later found ran on the CPU): model load ≈ 2.9 s (one-time), single
 image inference 24.2 ms (≈41 FPS), EasyOCR on a plate crop 14.2 ms, peak RSS
 987 MB. Video throughput **50.2 FPS** with the OCR lock enabled vs 28.7 FPS
 without — **+74.9%** for 5 OCR calls instead of 120, with an identical recorded
-fine. Per-frame time is 88% YOLO and 9% OCR; everything the project wrote
-around them (tracking, association, evidence, DB, encode) is **under 2%
-combined**. Per-stage breakdown: [docs/EVALUATION.md](docs/EVALUATION.md) §6.
+fine. Per-frame time is 88% YOLO and 9% OCR; tracking, association, evidence,
+DB and encode are about 1%, and 2.4% including drawing and glue. Per-stage
+breakdown: [docs/EVALUATION.md](docs/EVALUATION.md) §6. The one committed
+latency is 28.57 ms mean over 50 test images
+(`eval/results/eval_traffic_model-2_test_clean.json`, `benchmark`). Files are
+processed offline; no streaming latency is measured.
 
 ### Running the evaluations
 
@@ -493,6 +578,35 @@ matter most:
   limiter) — appropriate for this scale, not a distributed service.
 - **Not legal enforcement** and it never resolves owner identity (see Privacy).
 
+## How This Could Be Validated Externally
+
+None of this has been done. These are the next steps that would let someone
+outside the project check the claims:
+
+- **An externally sourced, labelled evaluation set.** Footage from cameras and
+  cities outside the training pool, labelled per rider (helmet state), per
+  plate (text read by a person) and per vehicle across frames, by annotators
+  who have not seen model output, and frozen before any model runs on it.
+  Report detector AP and end-to-end fine precision/recall with intervals. The
+  labelling schema and harness exist on `feature/field-evaluation-loop`
+  ([#8](https://github.com/adivishall/two-wheeler-safety/issues/8)).
+- **Real field data, collected with consent and privacy handling.** Agreement
+  with whoever operates the cameras, notice where required, faces and
+  bystanders' plates blurred in anything shared, enforced retention limits,
+  access-controlled evidence, and review against applicable data-protection law
+  (in India, the Digital Personal Data Protection Act, 2023).
+- **A reproducible inference benchmark.** A fixed, redistributable clip with a
+  recorded hash, the pinned runtime stack, an explicit device, repeated
+  interleaved runs reported as median and spread, committed as a result file;
+  then a streaming harness for end-to-end delay and frame dropping
+  ([#16](https://github.com/adivishall/two-wheeler-safety/issues/16)).
+- **Independent error review.** Someone outside the project reviews a uniform
+  random sample of recorded violations and abstentions, blind to the confidence
+  score, with a second reviewer for agreement; and a blind audit of the
+  held-out labels ([#9](https://github.com/adivishall/two-wheeler-safety/issues/9)).
+- **Third-party reproduction of the detector numbers**, which first needs a
+  dataset whose licence permits redistribution, and published weights.
+
 ## Security
 
 - Uploads: extension allowlist + image magic-byte sniffing, server-controlled
@@ -526,8 +640,9 @@ Ordered by measured value, not by appeal:
   so this is the highest-value missing measurement by a wide margin.
 - **More `WithHelmet` data** — 27 test instances is too few to steer by, and it
   is the weakest class.
-- **Promote `traffic_model_probe`** (wins on both helmet classes) after a proper
-  version bump and evidence-trail check — the A/B evidence is already recorded.
+- ~~Promote `traffic_model_probe`~~ — the A/B that favoured it was run on the
+  test split, which cannot be used for selection; re-run on val with a paired
+  bootstrap (on `feature/flagship-hardening`) it is significantly worse.
 - **An externally-sourced test set** (different cameras/cities) for a
   generalisation estimate the current same-pool split cannot give.
 - Calibrate confidence against labelled review outcomes so a threshold has a real
@@ -565,6 +680,28 @@ cite as the generated source of truth.
 - [docs/RESUME.md](docs/RESUME.md) — measured evidence, with the command behind every number
 - [docs/INTERVIEW.md](docs/INTERVIEW.md) — 30s/60s/3-min pitches, key decisions, hard problems, likely Q&A
 - [CHANGELOG.md](CHANGELOG.md) — release notes (v1.0.0-rc1)
+- [docs/VERIFICATION.md](docs/VERIFICATION.md) — claim → code → test → how to run; ML claims with dataset, split, n and source
+- [docs/REVIEWER_GUIDE.md](docs/REVIEWER_GUIDE.md) — ten hard questions and where the evidence is
+- [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) — pipeline choices, alternatives, trade-offs
+- [docs/FAILURE_ANALYSIS.md](docs/FAILURE_ANALYSIS.md) — real bugs: symptom, root cause, fix commit, regression test
+- [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [LICENSE](LICENSE)
+
+## License
+
+The code in this repository is MIT-licensed ([LICENSE](LICENSE)). That does not
+cover:
+
+- the **dataset** (not distributed; source and licence unverified,
+  [docs/DATASET.md](docs/DATASET.md));
+- the **trained weights** (not distributed; fine-tuned from Ultralytics'
+  `yolov8n.pt`);
+- **dependencies**, under their own licences: Ultralytics (AGPL-3.0), which the
+  detector, training and evaluation code import; EasyOCR (Apache-2.0; it
+  downloads its own pretrained models on first use); OpenCV (Apache-2.0);
+  PyTorch (BSD-3-Clause); Flask (BSD-3-Clause). Check Ultralytics' AGPL-3.0
+  terms before distributing or hosting the full app. The model-free test
+  environment (`requirements-ci.txt`) does not install Ultralytics, PyTorch or
+  EasyOCR.
 
 ## Tech stack
 
